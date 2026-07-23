@@ -1,0 +1,309 @@
+import React, { useState } from 'react';
+import {
+  ShoppingCart,
+  Plus,
+  Search,
+  Filter,
+  FileSpreadsheet,
+  PackageCheck,
+  Building,
+  FileText,
+  DollarSign,
+  Undo2,
+  CheckCircle2,
+  AlertCircle,
+  Eye,
+  Edit2,
+  Printer,
+  Sparkles,
+  TrendingUp,
+  Clock,
+  CheckSquare
+} from 'lucide-react';
+import {
+  Vendor,
+  PurchaseRequisition,
+  RFQ,
+  PurchaseOrder,
+  GRN,
+  PurchaseInvoice,
+  VendorReturn,
+  ProcurementMetrics
+} from '../../types/procurement';
+import { Badge } from '../../components/ui/Badge';
+import { SearchInput } from '../../components/ui/SearchInput';
+import { StatCard } from '../../components/ui/StatCard';
+import { EmptyState } from '../../components/ui/EmptyState';
+import { formatINR, formatDate } from '../../utils/formatters';
+
+interface ProcurementModuleProps {
+  onTriggerToast: (type: 'success' | 'error' | 'info' | 'warning', title: string, desc?: string) => void;
+}
+
+export default function ProcurementModule({ onTriggerToast }: ProcurementModuleProps) {
+  const [activeTab, setActiveTab] = useState<
+    'dashboard' | 'vendors' | 'requisitions' | 'rfqs' | 'orders' | 'grn' | 'invoices' | 'returns'
+  >('dashboard');
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedPO, setSelectedPO] = useState<PurchaseOrder | null>(null);
+
+  // Mock Vendors
+  const [vendors, setVendors] = useState<Vendor[]>([
+    { id: 'VND-01', code: 'VND-HUL', name: 'Hindustan Unilever Ltd', category: 'FMCG Consumables', rating: 4.8, gstNo: '07AAACH1101A1Z8', panNo: 'AAACH1101A', contactPerson: 'Rajesh Malhotra', phone: '+91 98110 44210', email: 'orders@hul-dist.com', address: 'Plot 45, Okhla Phase 3, New Delhi', creditLimit: 2500000, paymentTerms: 'Net 30', bankDetails: { bankName: 'HDFC Bank', accountNumber: '502000124587', ifscCode: 'HDFC0000120', branchName: 'Okhla Delhi' }, status: 'Active' },
+    { id: 'VND-02', code: 'VND-BRIT', name: 'Britannia Industries', category: 'Biscuits & Bakery', rating: 4.6, gstNo: '07AABCB2202B1Z4', panNo: 'AABCB2202B', contactPerson: 'Priya Narang', phone: '+91 98711 22334', email: 'sales@britannia.com', address: 'Sector 62, Noida, UP', creditLimit: 1800000, paymentTerms: 'Net 15', bankDetails: { bankName: 'ICICI Bank', accountNumber: '000405012478', ifscCode: 'ICIC0000004', branchName: 'Noida' }, status: 'Active' }
+  ]);
+
+  // Mock Requisitions
+  const [requisitions, setRequisitions] = useState<PurchaseRequisition[]>([
+    { id: 'PR-901', code: 'PR-2026-081', departmentId: 'DEP-01', departmentName: 'Central Warehouse Logistics', requestedBy: 'Karan Anand', priority: 'High', requiredDate: '2026-07-28', status: 'Approved', itemsCount: 4, totalAmount: 450000, notes: 'Restock Surf Excel & Rin Detergent' },
+    { id: 'PR-902', code: 'PR-2026-082', departmentId: 'DEP-02', departmentName: 'Retail Supply Chain', requestedBy: 'Amit Sharma', priority: 'Critical', requiredDate: '2026-07-25', status: 'Submitted', itemsCount: 2, totalAmount: 180000, notes: 'Emergency shortage of Dove Shampoo' }
+  ]);
+
+  // Mock RFQs
+  const [rfqs, setRfqs] = useState<RFQ[]>([
+    { id: 'RFQ-10', code: 'RFQ-2026-04', title: 'Q3 Detergent Sourcing Tenders', requisitionCode: 'PR-2026-081', quoteDeadline: '2026-07-26', status: 'Evaluated', quotes: [{ vendorId: 'VND-01', vendorName: 'Hindustan Unilever Ltd', quoteAmount: 420000, deliveryDays: 3, validUntil: '2026-08-10', selected: true }] }
+  ]);
+
+  // Mock Purchase Orders
+  const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([
+    { id: 'PO-901', code: 'PO-2026-0012', vendorId: 'VND-01', vendorName: 'Hindustan Unilever Ltd', poDate: '2026-07-20', expectedDeliveryDate: '2026-07-25', approvalStatus: 'Approved', orderStatus: 'Ordered', totalAmount: 1450000, itemsCount: 12, items: [{ id: 'POI-1', productId: 'PRD-901', productCode: 'PRD-901', productName: 'Surf Excel Quick Wash 1kg', orderedQty: 500, receivedQty: 500, unitPrice: 185, totalAmount: 92500 }] },
+    { id: 'PO-902', code: 'PO-2026-0013', vendorId: 'VND-02', vendorName: 'Britannia Industries', poDate: '2026-07-21', expectedDeliveryDate: '2026-07-26', approvalStatus: 'Pending Approval', orderStatus: 'Draft', totalAmount: 380000, itemsCount: 5 }
+  ]);
+
+  // Mock Goods Receipt Notes (GRN)
+  const [grns, setGrns] = useState<GRN[]>([
+    { id: 'GRN-101', code: 'GRN-2026-098', poCode: 'PO-2026-0012', vendorName: 'Hindustan Unilever Ltd', warehouseName: 'Delhi Central Depot', receiptDate: '2026-07-22', receivedBy: 'Aman Deep', status: 'Completed', items: [{ id: 'GI-1', productId: 'PRD-901', productCode: 'PRD-901', productName: 'Surf Excel Quick Wash 1kg', orderedQty: 500, receivedQty: 500, damagedQty: 0, batchNumber: 'BAT-2026-X88', expiryDate: '2027-06-30' }] }
+  ]);
+
+  // Mock Purchase Invoices
+  const [invoices, setInvoices] = useState<PurchaseInvoice[]>([
+    { id: 'INV-501', code: 'PINV-2026-045', invoiceNumber: 'HUL-DEL-9821', poCode: 'PO-2026-0012', grnCode: 'GRN-2026-098', vendorName: 'Hindustan Unilever Ltd', invoiceDate: '2026-07-22', subtotal: 1228813, taxAmount: 221187, freightAmount: 5000, netAmount: 1455000, matchingStatus: 'Matched', status: 'Unpaid' }
+  ]);
+
+  // Mock Vendor Returns
+  const [returns, setReturns] = useState<VendorReturn[]>([
+    { id: 'RET-01', code: 'VR-2026-002', vendorName: 'Britannia Industries', grnCode: 'GRN-2026-085', returnDate: '2026-07-18', reason: 'Packaging Seal Damaged in Transit', returnAmount: 24500, creditNoteRef: 'CN-BRIT-901', status: 'Credit Note Issued' }
+  ]);
+
+  const handleApprovePO = (id: string) => {
+    setPurchaseOrders(prev => prev.map(po => {
+      if (po.id === id) {
+        return { ...po, approvalStatus: 'Approved', orderStatus: 'Ordered' };
+      }
+      return po;
+    }));
+    onTriggerToast('success', 'Purchase Order Approved', `PO ${id} was signed and dispatched to supplier.`);
+  };
+
+  return (
+    <div className="space-y-6">
+
+      {/* SECTION 1: PROCUREMENT KPI CARDS */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard title="Open Requisitions" value={requisitions.filter(r => r.status !== 'Approved').length} badgeText="Department Demand" badgeVariant="warning" subLabel="Total Active PRs" subValue={`${requisitions.length} PRs`} />
+        <StatCard title="Pending PO Approvals" value={purchaseOrders.filter(p => p.approvalStatus === 'Pending Approval').length} badgeText="Requires Signature" badgeVariant="danger" subLabel="Open Orders Value" subValue={formatINR(380000)} />
+        <StatCard title="GRN Stock Inspections" value={grns.length} badgeText="Quality Verified" badgeVariant="success" subLabel="Inspection Pass Rate" subValue="100%" />
+        <StatCard title="MTD Procurement Spend" value={formatINR(1455000)} badgeText="3-Way Matched" badgeVariant="info" subLabel="Avg Vendor Rating" subValue="4.7 ★" />
+      </div>
+
+      {/* SECTION 2: SUB-NAVIGATION TABS */}
+      <div className="bg-white p-2 rounded-lg border border-brand-border shadow-sm flex flex-wrap gap-1">
+        {[
+          { id: 'dashboard', label: 'Procurement Dashboard', icon: TrendingUp },
+          { id: 'vendors', label: 'Vendor Master', icon: Building },
+          { id: 'requisitions', label: 'Purchase Requisitions', icon: FileText },
+          { id: 'rfqs', label: 'RFQs & Tenders', icon: Sparkles },
+          { id: 'orders', label: 'Purchase Orders', icon: ShoppingCart },
+          { id: 'grn', label: 'Goods Receipts (GRN)', icon: PackageCheck },
+          { id: 'invoices', label: '3-Way Invoices', icon: DollarSign },
+          { id: 'returns', label: 'Vendor Returns', icon: Undo2 }
+        ].map(tab => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`px-3 py-2 rounded-md text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
+                isActive ? 'bg-brand-primary text-white shadow-xs' : 'text-brand-text-secondary hover:text-brand-text-primary hover:bg-brand-bg-secondary'
+              }`}
+            >
+              <Icon size={14} />
+              <span>{tab.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* TAB 1: DASHBOARD */}
+      {activeTab === 'dashboard' && (
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+          <div className="bg-white p-5 rounded-lg border border-brand-border shadow-sm xl:col-span-2 space-y-4">
+            <h4 className="text-xs font-bold text-brand-text-primary uppercase tracking-wider">Procurement Workflow Summary</h4>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs text-center">
+              <div className="p-3 bg-blue-50/50 border border-blue-100 rounded">
+                <span className="text-[10px] text-brand-text-secondary font-bold uppercase">Requisitions</span>
+                <p className="text-lg font-bold text-brand-primary">{requisitions.length}</p>
+              </div>
+              <div className="p-3 bg-amber-50/50 border border-amber-100 rounded">
+                <span className="text-[10px] text-brand-text-secondary font-bold uppercase">Active RFQs</span>
+                <p className="text-lg font-bold text-brand-warning">{rfqs.length}</p>
+              </div>
+              <div className="p-3 bg-green-50/50 border border-green-100 rounded">
+                <span className="text-[10px] text-brand-text-secondary font-bold uppercase">Purchase Orders</span>
+                <p className="text-lg font-bold text-brand-success">{purchaseOrders.length}</p>
+              </div>
+              <div className="p-3 bg-purple-50/50 border border-purple-100 rounded">
+                <span className="text-[10px] text-brand-text-secondary font-bold uppercase">Pending Invoices</span>
+                <p className="text-lg font-bold text-purple-700">{invoices.length}</p>
+              </div>
+            </div>
+          </div>
+          <div className="bg-white p-5 rounded-lg border border-brand-border shadow-sm space-y-3">
+            <h4 className="text-xs font-bold text-brand-text-primary uppercase tracking-wider">Top Rated FMCG Suppliers</h4>
+            {vendors.map(v => (
+              <div key={v.id} className="p-2.5 border rounded bg-brand-bg-secondary/40 flex justify-between items-center text-xs">
+                <div>
+                  <p className="font-bold text-brand-text-primary">{v.name}</p>
+                  <p className="text-[10px] text-brand-text-secondary">{v.category}</p>
+                </div>
+                <Badge variant="success">{v.rating} ★</Badge>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 2: VENDOR MASTER */}
+      {activeTab === 'vendors' && (
+        <div className="bg-white rounded-lg border border-brand-border shadow-sm-flat overflow-hidden">
+          <div className="p-4 border-b bg-brand-bg-secondary/10 flex justify-between items-center">
+            <SearchInput value={searchQuery} onChange={setSearchQuery} placeholder="Search vendor name, GST, code..." />
+            <button onClick={() => onTriggerToast('info', 'Vendor Master', 'Opening vendor onboarding wizard...')} className="px-3 py-1.5 bg-brand-primary text-white text-xs font-semibold rounded flex items-center gap-1 cursor-pointer">
+              <Plus size={14} /> Add Vendor
+            </button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead className="bg-brand-bg-secondary border-b text-[10px] font-bold text-brand-text-secondary uppercase">
+                <tr>
+                  <th className="p-3">Vendor Code</th>
+                  <th className="p-3">Supplier Name</th>
+                  <th className="p-3">Category</th>
+                  <th className="p-3">GSTIN</th>
+                  <th className="p-3">Contact</th>
+                  <th className="p-3 text-right">Credit Cap</th>
+                  <th className="p-3 text-center">Rating</th>
+                  <th className="p-3 text-center">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-brand-border">
+                {vendors.map(v => (
+                  <tr key={v.id} className="hover:bg-brand-bg-secondary/30">
+                    <td className="p-3 font-mono font-bold text-brand-primary">{v.code}</td>
+                    <td className="p-3 font-semibold">{v.name}</td>
+                    <td className="p-3">{v.category}</td>
+                    <td className="p-3 font-mono">{v.gstNo}</td>
+                    <td className="p-3 text-brand-text-secondary">{v.contactPerson} ({v.phone})</td>
+                    <td className="p-3 text-right font-mono font-bold">{formatINR(v.creditLimit)}</td>
+                    <td className="p-3 text-center font-bold text-amber-600">{v.rating} ★</td>
+                    <td className="p-3 text-center"><Badge variant="success">{v.status}</Badge></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 5: PURCHASE ORDERS */}
+      {activeTab === 'orders' && (
+        <div className="bg-white rounded-lg border border-brand-border shadow-sm-flat overflow-hidden">
+          <div className="p-4 border-b bg-brand-bg-secondary/10 flex justify-between items-center">
+            <SearchInput value={searchQuery} onChange={setSearchQuery} placeholder="Search PO code, supplier..." />
+            <button onClick={() => onTriggerToast('success', 'Purchase Order', 'Creating PO draft...')} className="px-3 py-1.5 bg-brand-primary text-white text-xs font-semibold rounded flex items-center gap-1 cursor-pointer">
+              <Plus size={14} /> Create Purchase Order
+            </button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead className="bg-brand-bg-secondary border-b text-[10px] font-bold text-brand-text-secondary uppercase">
+                <tr>
+                  <th className="p-3">PO Code</th>
+                  <th className="p-3">Supplier Name</th>
+                  <th className="p-3">PO Date</th>
+                  <th className="p-3">Expected Delivery</th>
+                  <th className="p-3 text-right">Total Amount</th>
+                  <th className="p-3 text-center">Approval</th>
+                  <th className="p-3 text-center">Order Status</th>
+                  <th className="p-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-brand-border">
+                {purchaseOrders.map(po => (
+                  <tr key={po.id} className="hover:bg-brand-bg-secondary/30">
+                    <td className="p-3 font-mono font-bold text-brand-primary">{po.code}</td>
+                    <td className="p-3 font-semibold">{po.vendorName}</td>
+                    <td className="p-3 text-brand-text-secondary">{po.poDate}</td>
+                    <td className="p-3 text-brand-text-secondary">{po.expectedDeliveryDate}</td>
+                    <td className="p-3 text-right font-mono font-bold">{formatINR(po.totalAmount)}</td>
+                    <td className="p-3 text-center"><Badge variant={po.approvalStatus === 'Approved' ? 'success' : 'warning'}>{po.approvalStatus}</Badge></td>
+                    <td className="p-3 text-center"><Badge variant={po.orderStatus === 'Ordered' ? 'primary' : 'neutral'}>{po.orderStatus}</Badge></td>
+                    <td className="p-3 text-right space-x-1">
+                      {po.approvalStatus !== 'Approved' && (
+                        <button onClick={() => handleApprovePO(po.id)} className="p-1 border rounded text-brand-success hover:bg-green-50 cursor-pointer" title="Approve PO Signature">
+                          <CheckSquare size={13} />
+                        </button>
+                      )}
+                      <button onClick={() => setSelectedPO(po)} className="p-1 border rounded text-brand-text-primary hover:bg-brand-bg-secondary cursor-pointer" title="Print PO Document">
+                        <Printer size={13} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* PRINT-READY PO MODAL */}
+      {selectedPO && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-lg border border-brand-border max-w-2xl w-full p-6 space-y-4 shadow-xl-flat animate-fade-in">
+            <div className="flex justify-between items-center border-b pb-3">
+              <div>
+                <h3 className="text-base font-bold text-brand-text-primary">PURCHASE ORDER: {selectedPO.code}</h3>
+                <p className="text-xs text-brand-text-secondary">Official Procurement Document for Supplier</p>
+              </div>
+              <Badge variant="success">{selectedPO.approvalStatus}</Badge>
+            </div>
+            <div className="grid grid-cols-2 gap-4 text-xs">
+              <div>
+                <strong className="block text-brand-text-secondary uppercase text-[10px]">Vendor / Supplier</strong>
+                <p className="font-bold text-brand-text-primary">{selectedPO.vendorName}</p>
+                <p>Payment Terms: Net 30</p>
+              </div>
+              <div className="text-right">
+                <strong className="block text-brand-text-secondary uppercase text-[10px]">Order Details</strong>
+                <p>PO Date: {selectedPO.poDate}</p>
+                <p>Delivery Due: {selectedPO.expectedDeliveryDate}</p>
+              </div>
+            </div>
+            <div className="border-t pt-3 flex justify-between items-center">
+              <span className="font-bold text-sm">Total PO Value: {formatINR(selectedPO.totalAmount)}</span>
+              <div className="flex gap-2">
+                <button onClick={() => setSelectedPO(null)} className="px-4 py-1.5 border text-xs font-semibold rounded hover:bg-brand-bg-secondary cursor-pointer">Close</button>
+                <button onClick={() => { setSelectedPO(null); onTriggerToast('success', 'PO Sent to Printer', 'Exported PDF layout for procurement records.'); }} className="px-4 py-1.5 bg-brand-primary text-white text-xs font-semibold rounded hover:bg-blue-700 cursor-pointer flex items-center gap-1 shadow-sm">
+                  <Printer size={13} /> Print Document
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+}
