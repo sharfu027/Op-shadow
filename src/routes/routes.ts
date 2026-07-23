@@ -2,7 +2,31 @@ export const ROUTES = {
   HOME: '/',
   DASHBOARD: '/dashboard',
   DOCS: '/docs',
-  ADMIN_SECURITY: '/admin',
+  ADMIN_SECURITY: {
+    ROOT: '/admin',
+    USERS: '/admin/users',
+    ROLES: '/admin/roles',
+    SETTINGS: '/admin/settings'
+  },
+  REPORTS: {
+    ROOT: '/reports',
+    PROCUREMENT: '/reports/procurement',
+    SALES: '/reports/sales',
+    FINANCE: '/reports/finance',
+    INVENTORY: '/reports/inventory'
+  },
+  LOGISTICS: {
+    ROOT: '/logistics',
+    VEHICLES: '/logistics/vehicles',
+    ROUTES: '/logistics/routes',
+    POD: '/logistics/pod'
+  },
+  CRM: {
+    ROOT: '/crm',
+    CUSTOMERS: '/crm/customers',
+    COMPLAINTS: '/crm/complaints',
+    TICKETS: '/crm/tickets'
+  },
   HRMS: {
     ROOT: '/hrms',
     EMPLOYEES: '/hrms/employees',

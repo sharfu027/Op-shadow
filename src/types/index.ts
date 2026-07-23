@@ -15,3 +15,7 @@ export * from './returns';
 export * from './finance';
 export * from './workflow';
 export * from './hrms';
+export * from './crm';
+export * from './logistics';
+export * from './reports';
+export * from './admin';

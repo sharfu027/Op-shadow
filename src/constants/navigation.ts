@@ -118,6 +118,28 @@ export const NAVIGATION_MENU: NavItem[] = [
       { title: 'Leave Requests', href: 'hrms/leaves', icon: 'Layers' }
     ]
   },
+  {
+    title: 'CRM & Customer Service',
+    href: 'crm',
+    icon: 'MessageSquare',
+    requiredRoles: ['Super Administrator', 'Administrator', 'Sales Manager', 'Sales Representative', 'Director'],
+    children: [
+      { title: 'Customer 360', href: 'crm/customers', icon: 'Layers' },
+      { title: 'Complaints', href: 'crm/complaints', icon: 'Layers' },
+      { title: 'Service Tickets', href: 'crm/tickets', icon: 'Layers' }
+    ]
+  },
+  {
+    title: 'Logistics & Delivery',
+    href: 'logistics',
+    icon: 'Truck',
+    requiredRoles: ['Super Administrator', 'Administrator', 'Warehouse Manager', 'Sales Manager', 'Director'],
+    children: [
+      { title: 'Fleet Vehicles', href: 'logistics/vehicles', icon: 'Layers' },
+      { title: 'Routes & Stops', href: 'logistics/routes', icon: 'Layers' },
+      { title: 'Proof of Delivery', href: 'logistics/pod', icon: 'Layers' }
+    ]
+  },
   { 
     title: 'Reports', 
     href: 'reports', 

@@ -11,3 +11,7 @@ export * from './returnsService';
 export * from './financeService';
 export * from './workflowService';
 export * from './hrmsService';
+export * from './crmService';
+export * from './logisticsService';
+export * from './reportsService';
+export * from './adminService';

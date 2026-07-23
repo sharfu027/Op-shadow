@@ -28,6 +28,10 @@ const ReturnsModule = lazy(() => import('./features/returns/ReturnsModule'));
 const FinanceModule = lazy(() => import('./features/finance/FinanceModule'));
 const WorkflowModule = lazy(() => import('./features/workflow/WorkflowModule'));
 const HrmsModule = lazy(() => import('./features/hrms/HrmsModule'));
+const CrmModule = lazy(() => import('./features/crm/CrmModule'));
+const LogisticsModule = lazy(() => import('./features/logistics/LogisticsModule'));
+const ReportsModule = lazy(() => import('./features/reports/ReportsModule'));
+const AdminModule = lazy(() => import('./features/admin/AdminModule'));
 
 function ModuleLoader() {
   return (
@@ -94,6 +98,9 @@ export default function App() {
     else if (view.startsWith('finance')) navigate(`/${view}`);
     else if (view.startsWith('workflow')) navigate(`/${view}`);
     else if (view.startsWith('hrms')) navigate(`/${view}`);
+    else if (view.startsWith('crm')) navigate(`/${view}`);
+    else if (view.startsWith('logistics')) navigate(`/${view}`);
+    else if (view.startsWith('reports')) navigate(`/${view}`);
     else if (view.startsWith('auth')) navigate(`/${view}`);
     else navigate(`/${view}`);
   };
@@ -135,7 +142,8 @@ export default function App() {
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<EnterpriseDashboard onTriggerToast={triggerToast} />} />
             <Route path="/docs" element={<DesignSystemDocs onTriggerToast={triggerToast} />} />
-            <Route path="/admin" element={<SecurityPolicyConsole onTriggerToast={triggerToast} />} />
+            <Route path="/admin" element={<AdminModule onTriggerToast={triggerToast} />} />
+            <Route path="/admin/*" element={<AdminModule onTriggerToast={triggerToast} />} />
             <Route path="/pricing" element={<PricingModule onTriggerToast={triggerToast} />} />
             <Route path="/pricing/*" element={<PricingModule onTriggerToast={triggerToast} />} />
             <Route path="/procurement" element={<ProcurementModule onTriggerToast={triggerToast} />} />
@@ -156,6 +164,12 @@ export default function App() {
             <Route path="/workflow/*" element={<WorkflowModule onTriggerToast={triggerToast} />} />
             <Route path="/hrms" element={<HrmsModule onTriggerToast={triggerToast} />} />
             <Route path="/hrms/*" element={<HrmsModule onTriggerToast={triggerToast} />} />
+            <Route path="/crm" element={<CrmModule onTriggerToast={triggerToast} />} />
+            <Route path="/crm/*" element={<CrmModule onTriggerToast={triggerToast} />} />
+            <Route path="/logistics" element={<LogisticsModule onTriggerToast={triggerToast} />} />
+            <Route path="/logistics/*" element={<LogisticsModule onTriggerToast={triggerToast} />} />
+            <Route path="/reports" element={<ReportsModule onTriggerToast={triggerToast} />} />
+            <Route path="/reports/*" element={<ReportsModule onTriggerToast={triggerToast} />} />
             <Route path="/masters/:moduleName" element={<MasterDataRouteWrapper onTriggerToast={triggerToast} />} />
             
             {/* Fallback view representing un-built module placeholders */}
