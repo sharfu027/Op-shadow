@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\INK.ERP.Domain\INK.ERP.Domain.csproj" />
+    <ProjectReference Include="..\INK.ERP.Application\INK.ERP.Application.csproj" />
+    <ProjectReference Include="..\INK.ERP.Shared\INK.ERP.Shared.csproj" />
+  </ItemGroup>
+</Project>

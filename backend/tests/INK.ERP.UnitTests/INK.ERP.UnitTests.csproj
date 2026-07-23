@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\INK.ERP.Domain\INK.ERP.Domain.csproj" />
+    <ProjectReference Include="..\..\src\INK.ERP.Application\INK.ERP.Application.csproj" />
+    <ProjectReference Include="..\..\src\INK.ERP.Shared\INK.ERP.Shared.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="FluentAssertions" />
+  </ItemGroup>
+</Project>
