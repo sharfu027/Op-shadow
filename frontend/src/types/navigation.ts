@@ -1,4 +1,4 @@
-import { UserRole } from './auth';
+import { UserPermission } from './auth';
 
 export interface NavItem {
   title: string;
@@ -6,7 +6,7 @@ export interface NavItem {
   icon: string;
   badge?: string;
   badgeVariant?: 'primary' | 'success' | 'warning' | 'danger' | 'neutral';
-  requiredRoles?: UserRole[];
+  requiredPermissions?: UserPermission[];
   children?: NavItem[];
 }
 

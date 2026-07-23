@@ -1,71 +1,91 @@
-# Enterprise FMCG ERP System
+# Enterprise FMCG Distribution ERP System
 
-Production-Grade FMCG Enterprise Resource Planning (ERP) platform built with React 19, TypeScript, Vite, Tailwind CSS, and React Router.
+A production-grade, enterprise-scale FMCG Distribution Resource Planning (ERP) platform built with a modern full-stack architecture.
 
-## GitHub Repository
-[https://github.com/sharfu027/Op-shadow](https://github.com/sharfu027/Op-shadow)
-
----
-
-## 1. Enterprise Architecture Overview
-
-The system follows a modular, FSD-inspired (Feature-Sliced Design) enterprise architecture ready for seamless ASP.NET Core 9 Clean Architecture & MediatR backend integration:
+## Repository Structure
 
 ```text
-src/
-├── api/                  # Base REST HTTP Client & Interceptors
-├── components/           # Core Layout, Guards & Shared UI Primitives
-│   ├── guards/           # RoleGuard & PermissionGuard
-│   └── ui/               # Badge, StatCard, SearchInput, EmptyState, PageHeader, ConfirmDialog
-├── constants/            # Global Constants (App, Roles, Navigation, Security)
-├── features/             # Self-contained Domain Modules
-│   ├── auth/             # Authentication & Security
-│   ├── master-data/      # Master Data Engine (12 Entities)
-│   ├── pricing/          # Pricing & Discount Engine
-│   ├── procurement/      # Procurement & Sourcing
-│   ├── warehouse/        # WMS & Hierarchy
-│   ├── inventory/        # Stock & FEFO Expiry Management
-│   ├── sfa/              # Sales Force Automation
-│   ├── o2c/              # Order-to-Cash & GST Invoicing
-│   ├── returns/          # Returns & Reverse Logistics
-│   ├── finance/          # Accounts Receivable / Payable (AR/AP)
-│   └── workflow/         # Universal Approval Workflow Engine
-├── routes/               # Central Route Mapping
-├── services/             # Service Layer Contracts & REST Client Wrappers
-├── types/                # Domain Types & DTO Contracts
-└── utils/                # Utility & Formatting Functions
+.
+├── frontend/             # React 19 + TypeScript + Vite Enterprise Web App
+│   ├── src/              # Feature-based ERP modules & shared components
+│   ├── public/           # Static assets & web manifest
+│   ├── package.json      # Dependencies & scripts
+│   ├── vite.config.ts    # Vite build configuration
+│   └── tsconfig.json     # TypeScript strict configuration
+│
+├── backend/              # ASP.NET Core 9 Clean Architecture & Web API (Coming Soon)
+│
+├── docs/                 # System Architecture, API Contracts & User Guides
+│
+├── scripts/              # CI/CD, Deployment & Local Environment Utilities
+│
+├── LICENSE               # Enterprise License Agreement
+└── README.md             # Project Overview & Getting Started Guide
 ```
 
 ---
 
-## 2. Core Modules (1 - 11)
+## 1. Frontend Web Client (`/frontend`)
 
-1. **Module 1: Authentication & Security**: JWT Authentication, Refresh Token Handling, OTP MFA, Face Biometrics, GPS Geofenced Check-in, Role-Based Access Control (RBAC), and Security Policies.
-2. **Module 2: Master Data Engine**: 12 complete entities (Company, Branch, Department, Designation, Employee, Customer, Supplier, Product Category, Brand, Product, Unit, Warehouse).
-3. **Module 3: Pricing & Promotions**: Price Lists, Customer-Specific Pricing, Region Matrix, Discount Engine, BOGO/Promotions Engine, Multi-Tax GST/VAT, and Currency Exchange Rates.
-4. **Module 4: Procurement & Sourcing**: Vendor Master, Purchase Requisitions, RFQs, Purchase Orders (Print-Ready PO preview), Goods Receipts (GRN & Inspection), 3-Way Invoice Reconciliation, Vendor Returns.
-5. **Module 5: Warehouse Management System (WMS)**: Storage Hierarchy (Zones, Aisles, Racks, Bins), Bin Capacities, Put-away Optimization, Wave/Batch Picking, Packing Weight Verification, Dispatch Staging.
-6. **Module 6: Inventory Management**: Stock Master (Available, Reserved, Allocated, Damaged), FEFO Expiry Management, Serial Lifecycle, Stock Movements, Cycle Counting, Adjustments, FIFO Valuation.
-7. **Module 7: Sales Force Automation (SFA)**: Hierarchy, Beat & Territory Planning, Geofenced GPS Check-in (12m accuracy), Face Attendance, Live Field Order Booking, Cash/UPI Collections, DCR, Expense claims, Targets & Incentives.
-8. **Module 8: Order-to-Cash (O2C)**: Sales Quotations (1-Click SO conversion), Sales Orders, Approval Matrix, Fulfillment, Proof of Delivery (POD), GST Invoices (Print Preview), Customer Sub-Ledgers, Credit/Debit Notes.
-9. **Module 9: Returns Management**: RMA Authorization, Supplier Returns, Quality Inspection & Damage Classification, Disposition Routing (Restock, Scrap, Quarantine), Replacement Orders, Refunds.
-10. **Module 10: Accounts Receivable & Accounts Payable (AR / AP)**: AR/AP Dashboards, Multi-Invoice Payment Allocation Engine, Customer/Vendor Ledgers, 5-Tier Aging Analysis (0-30, 31-60, 61-90, 91-180, 180+ Days), Bank Reconciliation.
-11. **Module 11: Approval Workflow Engine**: Cross-cutting reusable workflow designer, Multi-level matrix routing, Action handlers (Approve, Reject, Return, Delegate), Auto-escalation, Vacation Delegation Proxies, SLA Analytics.
+The frontend application is built with **React 19**, **TypeScript**, **Vite**, and **Tailwind CSS**, providing a hyper-responsive, policy-driven enterprise interface.
 
----
+### Features & Completed Modules
+1. **Authentication & Security Center (IAM v16.3)**: Policy-Driven multi-factor authentication, Biometrics, Geofencing, Device Control, Password Rules, and Security Profiles.
+2. **Master Data Engine**: 12 core FMCG entities (Companies, Branches, Departments, Employees, Customers, Suppliers, Products, Warehouses).
+3. **Pricing & Promotions Engine**: Price Lists, Volume Discounts, Customer-Specific Pricing, Promotion Rules, Taxes (GST/VAT).
+4. **Procurement & Sourcing**: PRs, RFQs, POs, GRN Receiving, 3-Way Invoice Matching, Vendor Returns.
+5. **Warehouse Management System (WMS)**: Zone/Bin Hierarchy, Putaway Optimization, Wave Picking, Packing Staging.
+6. **Inventory Control**: FEFO Expiry Tracking, FIFO Valuation, Stock Adjustments, Cycle Counting.
+7. **Sales Force Automation (SFA)**: Beat Planning, GPS Store Visits, Live Order Booking, DCR Collections.
+8. **Order-to-Cash (O2C)**: Quotations, Sales Orders, Tax Invoicing, Delivery Challans, Customer Sub-ledgers.
+9. **Returns Management**: RMA Authorization, Damage Classification, Disposition Routing, RTV.
+10. **Finance (AR/AP)**: Accounts Receivable, Accounts Payable, Payment Allocation, 5-Tier Aging, Ledger.
+11. **Approval Workflow Engine**: Reusable multi-level approval designer, SLA Routing, Delegations.
+12. **HRMS Portal**: Employee Roster, Attendance Tracking, Leave Approvals.
+13. **CRM & Customer Service**: Customer 360, Complaints, SLA Service Tickets.
+14. **Logistics & Delivery**: Fleet Management, Route Optimization, Proof of Delivery (POD).
+15. **Reports & Document Engine**: Dynamic Query Builder, Print-Ready Document Renderer.
+16. **Administration & System Settings**: Security Policies, Number Series Rules, Audit Trails.
+17. **Executive Business Intelligence (BI)**: Executive Dashboards, Sales Analytics, Financial KPI Cards.
 
-## 3. Development Commands
+### Quick Start (Frontend)
 
 ```bash
+# Navigate to the frontend workspace
+cd frontend
+
 # Install dependencies
 npm install
 
-# Start development server
+# Start the Vite development server
 npm run dev
 
-# Run TypeScript type verification
+# Run TypeScript compilation check
 npx tsc --noEmit
 
-# Production build
+# Build production bundle
 npm run build
 ```
+
+---
+
+## 2. Backend API Services (`/backend`) — Coming Soon
+
+The upcoming backend layer will be built with **ASP.NET Core 9 (C#)** using **Clean Architecture** & **MediatR CQRS**:
+
+- **Domain Layer**: Core FMCG domain entities, value objects, and domain events.
+- **Application Layer**: Use cases, CQRS commands/queries, MediatR handlers, and FluentValidation.
+- **Infrastructure Layer**: EF Core 9, PostgreSQL DB Provider, Redis Caching, SignalR Hubs.
+- **API Layer**: ASP.NET Core REST APIs, OpenApi / Swagger specifications, JWT & OAuth2 middleware.
+
+---
+
+## 3. Documentation (`/docs`)
+
+Architecture design documents, ERD schemas, and API specifications are stored in the `/docs` folder.
+
+---
+
+## 4. Environment & Deployment Scripts (`/scripts`)
+
+Automation scripts for local setup, Docker Compose deployment, and CI/CD pipelines are located in `/scripts`.

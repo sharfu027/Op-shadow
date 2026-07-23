@@ -85,12 +85,9 @@ export default function EnterpriseLayout({
 
   // Dynamic Navigation filtering based on Authentication Policy & Security Profile
   const hasPermission = (item: NavItem) => {
-    if (!item.requiredRoles) return true;
-    // Policy-driven clearance check: Allow access if role matches or if user holds security profile grants
-    if (user && user.permissions && user.permissions.length > 0) {
-      return true; // Dynamic granted permissions override
-    }
-    return item.requiredRoles.includes(activeRole);
+    if (!item.requiredPermissions || item.requiredPermissions.length === 0) return true;
+    if (!user || !user.permissions) return true;
+    return item.requiredPermissions.some(perm => user.permissions?.includes(perm));
   };
 
   const filteredMenu = navigationMenu.filter(hasPermission);

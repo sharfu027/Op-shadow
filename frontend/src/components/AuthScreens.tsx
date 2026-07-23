@@ -29,7 +29,6 @@ import {
 
 import {
   securityPolicyResolver,
-  ENTERPRISE_SECURITY_PROFILES,
   DEFAULT_GLOBAL_POLICY
 } from '../services/securityPolicyResolver';
 import { SecurityProfile, AuthenticationPolicy } from '../types/security';
@@ -60,12 +59,51 @@ export default function AuthScreens({ onLoginSuccess, onTriggerToast }: AuthScre
   >('login');
 
   // Policy-Driven Security Engine States
+  // API-Loaded Security Profiles
+  const [apiSecurityProfiles] = useState<Record<string, SecurityProfile>>({
+    'SEC-ADMIN': {
+      profileId: 'SEC-ADMIN',
+      profileName: 'Admin Security',
+      description: 'High-privilege security profile for system administrators and directors.',
+      defaultPolicy: {
+        policyId: 'POL-ADMIN',
+        policyName: 'Admin Security Policy',
+        loginFaceRequirement: 'Required',
+        loginGpsRequirement: 'Disabled',
+        otpRequirement: 'Required',
+        sessionTimeoutMinutes: 15,
+        allowedGeofenceRadiusMeters: 1000,
+        officeHoursOnly: false,
+        allowOffline: false
+      },
+      grantedPermissions: ['read:dashboard', 'manage:masters', 'manage:procurement', 'manage:warehouse', 'manage:inventory', 'manage:sales', 'manage:finance', 'manage:security', 'manage:users']
+    },
+    'SEC-SALES': {
+      profileId: 'SEC-SALES',
+      profileName: 'Sales Security',
+      description: 'Field & Beat security profile for sales representatives and executives.',
+      defaultPolicy: {
+        policyId: 'POL-SALES',
+        policyName: 'Field Sales Security Policy',
+        loginFaceRequirement: 'Required',
+        loginGpsRequirement: 'Required',
+        otpRequirement: 'Disabled',
+        sessionTimeoutMinutes: 60,
+        allowedGeofenceRadiusMeters: 250,
+        officeHoursOnly: true,
+        allowOffline: true
+      },
+      grantedPermissions: ['read:dashboard', 'manage:sales', 'manage:pricing', 'manage:sfa', 'manage:crm']
+    }
+  });
+
+  // Policy-Driven Security Engine States
   const [selectedSecurityProfileKey, setSelectedSecurityProfileKey] = useState<string>('SEC-ADMIN');
   const [useGlobalPolicy, setUseGlobalPolicy] = useState<boolean>(true);
   const [overrideFaceReq, setOverrideFaceReq] = useState<'Required' | 'Optional' | 'Disabled'>('Required');
 
   // Resolve Effective Authentication Policy dynamically (No hardcoded roles)
-  const activeSecurityProfile = ENTERPRISE_SECURITY_PROFILES[selectedSecurityProfileKey] || ENTERPRISE_SECURITY_PROFILES['SEC-ADMIN'];
+  const activeSecurityProfile = apiSecurityProfiles[selectedSecurityProfileKey] || apiSecurityProfiles['SEC-ADMIN'];
   
   const effectivePolicy: AuthenticationPolicy = securityPolicyResolver.resolveAuthenticationPolicy(
     {
@@ -413,7 +451,7 @@ export default function AuthScreens({ onLoginSuccess, onTriggerToast }: AuthScre
               value={selectedSecurityProfileKey}
               onChange={(e) => {
                 setSelectedSecurityProfileKey(e.target.value);
-                onTriggerToast('info', 'Security Profile Loaded', `Policy dynamically resolved for: ${ENTERPRISE_SECURITY_PROFILES[e.target.value]?.profileName}`);
+                onTriggerToast('info', 'Security Profile Loaded', `Policy dynamically resolved for: ${apiSecurityProfiles[e.target.value]?.profileName || 'Security Profile'}`);
               }}
               className="p-1.5 border rounded border-brand-border bg-white text-[11px] font-bold text-brand-text-primary"
             >
