@@ -14,7 +14,8 @@ This project serves as the single source of truth for the database architecture,
 
 ```text
 database/
-├── README.md                 # Master Database Architecture & Guidelines Documentation
+├── README.md                 # Master Database Project Overview
+├── architecture_blueprint.md # Official Enterprise Database Architecture Blueprint Specification
 ├── diagrams/                 # Visual ERD diagrams, physical data models, and Mermaid charts
 ├── schema/                   # DDL table creation scripts organized by domain schema
 ├── seeds/                    # Reference master data & development seed scripts
