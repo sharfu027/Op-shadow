@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { Routes, Route, useLocation, useNavigate, useParams, Navigate } from 'react-router-dom';
 import {
   Monitor,
@@ -6,24 +6,36 @@ import {
   X,
   AlertCircle,
   Info,
-  Sliders
+  Sliders,
+  Loader2
 } from 'lucide-react';
 import { UserRole, UserProfile, ToastMessage } from './types';
 import EnterpriseLayout from './components/EnterpriseLayout';
 import EnterpriseDashboard from './components/EnterpriseDashboard';
 import DesignSystemDocs from './components/DesignSystemDocs';
-import AuthScreens from './components/AuthScreens';
-import MasterDataModule from './components/MasterDataModule';
 import SecurityPolicyConsole from './components/SecurityPolicyConsole';
-import PricingModule from './features/pricing/PricingModule';
-import ProcurementModule from './features/procurement/ProcurementModule';
-import WarehouseModule from './features/warehouse/WarehouseModule';
-import InventoryModule from './features/inventory/InventoryModule';
-import SfaModule from './features/sfa/SfaModule';
-import O2CModule from './features/o2c/O2CModule';
-import ReturnsModule from './features/returns/ReturnsModule';
-import FinanceModule from './features/finance/FinanceModule';
-import WorkflowModule from './features/workflow/WorkflowModule';
+
+// Lazy-loaded Feature Modules
+const AuthScreens = lazy(() => import('./features/auth/AuthScreens'));
+const MasterDataModule = lazy(() => import('./features/master-data/MasterDataModule'));
+const PricingModule = lazy(() => import('./features/pricing/PricingModule'));
+const ProcurementModule = lazy(() => import('./features/procurement/ProcurementModule'));
+const WarehouseModule = lazy(() => import('./features/warehouse/WarehouseModule'));
+const InventoryModule = lazy(() => import('./features/inventory/InventoryModule'));
+const SfaModule = lazy(() => import('./features/sfa/SfaModule'));
+const O2CModule = lazy(() => import('./features/o2c/O2CModule'));
+const ReturnsModule = lazy(() => import('./features/returns/ReturnsModule'));
+const FinanceModule = lazy(() => import('./features/finance/FinanceModule'));
+const WorkflowModule = lazy(() => import('./features/workflow/WorkflowModule'));
+
+function ModuleLoader() {
+  return (
+    <div className="flex items-center justify-center p-12 space-x-2 text-brand-primary">
+      <Loader2 size={24} className="animate-spin" />
+      <span className="text-xs font-semibold">Loading Module...</span>
+    </div>
+  );
+}
 
 function MasterDataRouteWrapper({ onTriggerToast }: { onTriggerToast: (type: 'success' | 'error' | 'info' | 'warning', title: string, desc?: string) => void }) {
   const { moduleName } = useParams<{ moduleName: string }>();
@@ -38,139 +50,85 @@ export default function App() {
   const rawPath = location.pathname.startsWith('/') ? location.pathname.slice(1) : location.pathname;
   const activeView = rawPath || 'dashboard';
 
-  // Global simulated active user state
+  // Application User State
   const [currentUser, setCurrentUser] = useState<UserProfile>({
-    id: 'USR-0201A',
+    id: 'USR-9021',
     name: 'Siddharth Mehra',
-    email: 'siddharth.mehra@ink-fmcg.com',
+    email: 'admin@ink-fmcg.com',
     role: 'Super Administrator',
-    branch: 'Delhi Central Depot [HQ]'
+    avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=256',
+    branch: 'Delhi Central'
   });
 
-  const [responsiveLabel, setResponsiveLabel] = useState<string>('Desktop Mode');
+  // Global Toast System State
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
-  // Toast dispatch handler
   const triggerToast = (type: 'success' | 'error' | 'info' | 'warning', title: string, desc?: string) => {
-    const id = `${Date.now()}-${Math.random()}`;
-    const newToast: ToastMessage = { id, title, description: desc, type };
-    setToasts(prev => [newToast, ...prev]);
-
-    // Clear after 4s
-    setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id));
-    }, 4000);
+    const newToast: ToastMessage = {
+      id: `toast-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      type,
+      title,
+      description: desc
+    };
+    setToasts((prev) => [...prev, newToast]);
   };
 
   const removeToast = (id: string) => {
-    setToasts(prev => prev.filter(t => t.id !== id));
+    setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
-  // Switch role simulation
+  // Sync route changes
+  const handleNavigate = (view: string) => {
+    if (view === 'dashboard') navigate('/dashboard');
+    else if (view === 'docs') navigate('/docs');
+    else if (view === 'admin') navigate('/admin');
+    else if (view.startsWith('masters')) navigate(`/${view}`);
+    else if (view.startsWith('pricing')) navigate(`/${view}`);
+    else if (view.startsWith('procurement')) navigate(`/${view}`);
+    else if (view.startsWith('warehouse')) navigate(`/${view}`);
+    else if (view.startsWith('inventory')) navigate(`/${view}`);
+    else if (view.startsWith('sfa')) navigate(`/${view}`);
+    else if (view.startsWith('sales')) navigate(`/${view}`);
+    else if (view.startsWith('returns')) navigate(`/${view}`);
+    else if (view.startsWith('finance')) navigate(`/${view}`);
+    else if (view.startsWith('workflow')) navigate(`/${view}`);
+    else if (view.startsWith('auth')) navigate(`/${view}`);
+    else navigate(`/${view}`);
+  };
+
   const handleRoleChange = (role: UserRole) => {
-    setCurrentUser(prev => ({
-      ...prev,
-      role
-    }));
+    setCurrentUser((prev) => ({ ...prev, role }));
+    triggerToast('info', 'Role Switch Triggered', `Active session security permissions re-calibrated for: ${role}`);
   };
 
-  const handleNavigate = (viewId: string) => {
-    navigate('/' + viewId);
-  };
+  const isAuthRoute = location.pathname.startsWith('/auth');
 
-  // Detect and set responsive width indicators for stakeholders testing mobile layouts
-  useEffect(() => {
-    const handleResize = () => {
-      const w = window.innerWidth;
-      if (w >= 1440) setResponsiveLabel('Ultra-wide Monitor Grid (1440px+)');
-      else if (w >= 1024) setResponsiveLabel('Laptop & Desktop Container (1024px+)');
-      else if (w >= 768) setResponsiveLabel('Tablet Interface (768px - 1023px)');
-      else setResponsiveLabel('Mobile Optimization Viewport (Under 768px)');
-    };
-    
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  if (isAuthRoute) {
+    return (
+      <Suspense fallback={<ModuleLoader />}>
+        <AuthScreens
+          onLoginSuccess={(userName, role) => {
+            setCurrentUser((prev) => ({ ...prev, name: userName, role: role as UserRole }));
+            navigate('/dashboard');
+            triggerToast('success', 'Authentication Approved', `Welcome back, ${userName}! Session secured.`);
+          }}
+          onTriggerToast={triggerToast}
+        />
+      </Suspense>
+    );
+  }
 
   return (
-    <div className="min-h-screen relative bg-brand-bg-secondary text-brand-text-primary antialiased">
-      
-      {/* PERSISTENT PORTAL UTILITY BANNER (FOR STAKEHOLDERS TESTING SHELL) */}
-      <div className="bg-brand-text-primary text-white text-[11px] px-4 py-2 border-b border-brand-border flex flex-col md:flex-row md:items-center justify-between gap-2 shrink-0 z-50 relative">
-        <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-brand-success animate-pulse shrink-0" />
-          <span className="font-semibold font-mono uppercase tracking-wider">INK FMCG ERP</span>
-          <span className="text-brand-text-secondary">|</span>
-          <span className="text-gray-300">Enterprise Sales & Distribution</span>
-        </div>
-
-        {/* Workspace Mode switch triggers */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1 text-gray-300">
-            <Monitor size={12} />
-            <span className="font-medium text-[10px] mr-1">{responsiveLabel}</span>
-          </div>
-
-          <div className="flex bg-brand-bg-primary/10 rounded p-0.5 border border-white/10 text-[10px] font-bold">
-            <button
-              onClick={() => {
-                handleNavigate('dashboard');
-                triggerToast('info', 'Workspace loaded', 'FMCG Executive metrics dashboard active.');
-              }}
-              className={`px-2.5 py-1 rounded transition cursor-pointer ${
-                activeView === 'dashboard' ? 'bg-brand-primary text-white' : 'text-gray-300 hover:text-white'
-              }`}
-            >
-              1. Executive Dashboard
-            </button>
-            <button
-              onClick={() => {
-                handleNavigate('docs');
-                triggerToast('success', 'Design Docs active', 'Component Catalog loaded.');
-              }}
-              className={`px-2.5 py-1 rounded transition cursor-pointer ${
-                activeView === 'docs' ? 'bg-brand-primary text-white' : 'text-gray-300 hover:text-white'
-              }`}
-            >
-              2. Design System & Component library
-            </button>
-            <button
-              onClick={() => {
-                handleNavigate('auth/login');
-                triggerToast('warning', 'Auth scenario portal loaded', 'Simulating SSO states.');
-              }}
-              className={`px-2.5 py-1 rounded transition cursor-pointer ${
-                activeView.startsWith('auth') ? 'bg-brand-primary text-white' : 'text-gray-300 hover:text-white'
-              }`}
-            >
-              3. Simulated Auth Screens
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* RENDER ACTIVE SIMULATION SCREENS */}
-      {activeView.startsWith('auth') ? (
-        <div className="p-4 lg:p-8 max-w-7xl mx-auto">
-          <AuthScreens 
-            onLoginSuccess={(name, role) => {
-              setCurrentUser(prev => ({ ...prev, name, role: role as UserRole }));
-              handleNavigate('dashboard');
-            }}
-            onTriggerToast={triggerToast}
-          />
-        </div>
-      ) : (
-        /* RENDER INTEGRATED ERP NAVIGATION SHELL & LAYOUT */
-        <EnterpriseLayout
-          activeRole={currentUser.role}
-          onRoleChange={handleRoleChange}
-          onNavigate={handleNavigate}
-          activeView={activeView}
-          onTriggerToast={triggerToast}
-          user={currentUser}
-        >
+    <>
+      <EnterpriseLayout
+        activeRole={currentUser.role}
+        onRoleChange={handleRoleChange}
+        onNavigate={handleNavigate}
+        activeView={activeView}
+        onTriggerToast={triggerToast}
+        user={currentUser}
+      >
+        <Suspense fallback={<ModuleLoader />}>
           <Routes>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<EnterpriseDashboard onTriggerToast={triggerToast} />} />
@@ -215,51 +173,84 @@ export default function App() {
                       onClick={() => handleNavigate('docs')}
                       className="px-4 py-2 border border-brand-border text-brand-text-primary hover:bg-brand-bg-secondary text-xs font-semibold rounded-md transition cursor-pointer"
                     >
-                      Verify Component Library
+                      Inspect Design System
                     </button>
                     <button
                       onClick={() => handleNavigate('dashboard')}
-                      className="px-4 py-2 bg-brand-primary hover:bg-blue-700 text-white text-xs font-semibold rounded-md transition shadow-sm cursor-pointer"
+                      className="px-4 py-2 bg-brand-primary text-white text-xs font-semibold rounded-md hover:bg-blue-700 transition cursor-pointer shadow-xs"
                     >
-                      Return to Dashboard
+                      Return to Executive Dashboard
                     </button>
                   </div>
                 </div>
               } 
             />
           </Routes>
-        </EnterpriseLayout>
-      )}
+        </Suspense>
+      </EnterpriseLayout>
 
-      {/* DYNAMIC ABSOLUTE PORTAL TOASTS NOTIFICATIONSDRAWER */}
-      <div className="fixed bottom-6 right-6 z-50 space-y-3 max-w-sm w-full pointer-events-none">
+      {/* Floating System Role Simulator */}
+      <div className="fixed bottom-4 right-4 z-50 bg-white/95 backdrop-blur-md border border-brand-border rounded-lg shadow-xl p-3 max-w-xs flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5 text-xs font-bold text-brand-text-primary">
+            <Monitor size={14} className="text-brand-primary" />
+            <span>Role Simulator</span>
+          </div>
+          <span className="text-[10px] bg-blue-50 text-brand-primary px-1.5 py-0.5 rounded font-mono">Dev Tools</span>
+        </div>
+        <select
+          value={currentUser.role}
+          onChange={(e) => handleRoleChange(e.target.value as UserRole)}
+          className="w-full text-xs bg-brand-bg-secondary border border-brand-border rounded px-2 py-1 focus:outline-none focus:border-brand-primary font-medium"
+        >
+          <option value="Super Administrator">Super Administrator</option>
+          <option value="Administrator">Administrator</option>
+          <option value="Procurement Manager">Procurement Manager</option>
+          <option value="Warehouse Manager">Warehouse Manager</option>
+          <option value="Inventory Controller">Inventory Controller</option>
+          <option value="Sales Manager">Sales Manager</option>
+          <option value="Sales Representative">Sales Representative</option>
+          <option value="Finance Manager">Finance Manager</option>
+          <option value="Accountant">Accountant</option>
+          <option value="Branch Manager">Branch Manager</option>
+          <option value="Director">Director</option>
+        </select>
+      </div>
+
+      {/* Global Toast Container */}
+      <div className="fixed top-4 right-4 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none">
         {toasts.map((toast) => (
           <div
             key={toast.id}
-            className="pointer-events-auto bg-white rounded-lg border border-brand-border shadow-lg-flat p-4 flex gap-3 animate-slide-in"
+            className={`pointer-events-auto flex items-start justify-between p-3 rounded-lg border shadow-lg transition-all animate-slide-in text-xs ${
+              toast.type === 'success'
+                ? 'bg-white border-green-200 text-brand-text-primary'
+                : toast.type === 'error'
+                ? 'bg-white border-red-200 text-brand-text-primary'
+                : toast.type === 'warning'
+                ? 'bg-white border-amber-200 text-brand-text-primary'
+                : 'bg-white border-blue-200 text-brand-text-primary'
+            }`}
           >
-            <span className="shrink-0 mt-0.5">
-              {toast.type === 'success' ? <CheckCircle2 size={16} className="text-brand-success" /> :
-               toast.type === 'error' ? <AlertCircle size={16} className="text-brand-danger" /> :
-               toast.type === 'warning' ? <AlertCircle size={16} className="text-brand-warning" /> :
-               <Info size={16} className="text-brand-info" />}
-            </span>
-            <div className="flex-1">
-              <h5 className="text-xs font-bold text-brand-text-primary leading-tight">{toast.title}</h5>
-              {toast.description && (
-                <p className="text-[11px] text-brand-text-secondary mt-1 leading-snug">{toast.description}</p>
-              )}
+            <div className="flex items-start gap-2">
+              {toast.type === 'success' && <CheckCircle2 size={16} className="text-brand-success shrink-0 mt-0.5" />}
+              {toast.type === 'error' && <AlertCircle size={16} className="text-brand-danger shrink-0 mt-0.5" />}
+              {toast.type === 'warning' && <AlertCircle size={16} className="text-brand-warning shrink-0 mt-0.5" />}
+              {toast.type === 'info' && <Info size={16} className="text-brand-info shrink-0 mt-0.5" />}
+              <div>
+                <h4 className="font-bold">{toast.title}</h4>
+                {toast.description && <p className="text-brand-text-secondary text-[11px] mt-0.5">{toast.description}</p>}
+              </div>
             </div>
-            <button 
+            <button
               onClick={() => removeToast(toast.id)}
-              className="text-brand-text-secondary hover:text-brand-text-primary shrink-0 self-start"
+              className="text-brand-text-secondary hover:text-brand-text-primary cursor-pointer p-0.5"
             >
               <X size={14} />
             </button>
           </div>
         ))}
       </div>
-
-    </div>
+    </>
   );
 }
