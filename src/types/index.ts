@@ -14,3 +14,4 @@ export * from './o2c';
 export * from './returns';
 export * from './finance';
 export * from './workflow';
+export * from './hrms';

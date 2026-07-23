@@ -3,6 +3,12 @@ export const ROUTES = {
   DASHBOARD: '/dashboard',
   DOCS: '/docs',
   ADMIN_SECURITY: '/admin',
+  HRMS: {
+    ROOT: '/hrms',
+    EMPLOYEES: '/hrms/employees',
+    ATTENDANCE: '/hrms/attendance',
+    LEAVES: '/hrms/leaves'
+  },
   WORKFLOW: {
     ROOT: '/workflow',
     DESIGNER: '/workflow/designer',

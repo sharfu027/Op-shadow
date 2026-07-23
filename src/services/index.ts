@@ -10,3 +10,4 @@ export * from './o2cService';
 export * from './returnsService';
 export * from './financeService';
 export * from './workflowService';
+export * from './hrmsService';

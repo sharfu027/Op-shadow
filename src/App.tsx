@@ -27,6 +27,7 @@ const O2CModule = lazy(() => import('./features/o2c/O2CModule'));
 const ReturnsModule = lazy(() => import('./features/returns/ReturnsModule'));
 const FinanceModule = lazy(() => import('./features/finance/FinanceModule'));
 const WorkflowModule = lazy(() => import('./features/workflow/WorkflowModule'));
+const HrmsModule = lazy(() => import('./features/hrms/HrmsModule'));
 
 function ModuleLoader() {
   return (
@@ -92,6 +93,7 @@ export default function App() {
     else if (view.startsWith('returns')) navigate(`/${view}`);
     else if (view.startsWith('finance')) navigate(`/${view}`);
     else if (view.startsWith('workflow')) navigate(`/${view}`);
+    else if (view.startsWith('hrms')) navigate(`/${view}`);
     else if (view.startsWith('auth')) navigate(`/${view}`);
     else navigate(`/${view}`);
   };
@@ -152,6 +154,8 @@ export default function App() {
             <Route path="/finance/*" element={<FinanceModule onTriggerToast={triggerToast} />} />
             <Route path="/workflow" element={<WorkflowModule onTriggerToast={triggerToast} />} />
             <Route path="/workflow/*" element={<WorkflowModule onTriggerToast={triggerToast} />} />
+            <Route path="/hrms" element={<HrmsModule onTriggerToast={triggerToast} />} />
+            <Route path="/hrms/*" element={<HrmsModule onTriggerToast={triggerToast} />} />
             <Route path="/masters/:moduleName" element={<MasterDataRouteWrapper onTriggerToast={triggerToast} />} />
             
             {/* Fallback view representing un-built module placeholders */}

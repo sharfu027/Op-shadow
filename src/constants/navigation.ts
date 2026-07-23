@@ -107,6 +107,17 @@ export const NAVIGATION_MENU: NavItem[] = [
       { title: 'General Ledger', href: 'finance/ledger', icon: 'Layers' }
     ]
   },
+  {
+    title: 'Human Resources (HRMS)',
+    href: 'hrms',
+    icon: 'Users2',
+    requiredRoles: ['Super Administrator', 'Administrator', 'Director'],
+    children: [
+      { title: 'Employee Directory', href: 'hrms/employees', icon: 'Layers' },
+      { title: 'Attendance', href: 'hrms/attendance', icon: 'Layers' },
+      { title: 'Leave Requests', href: 'hrms/leaves', icon: 'Layers' }
+    ]
+  },
   { 
     title: 'Reports', 
     href: 'reports', 
