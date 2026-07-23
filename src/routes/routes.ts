@@ -2,8 +2,20 @@ export const ROUTES = {
   HOME: '/',
   DASHBOARD: '/dashboard',
   DOCS: '/docs',
+  BI: {
+    ROOT: '/bi',
+    SALES: '/bi/sales',
+    INVENTORY: '/bi/inventory',
+    FINANCE: '/bi/finance'
+  },
   ADMIN_SECURITY: {
     ROOT: '/admin',
+    SECURITY_CENTER: '/admin/security-center',
+    SECURITY_AUTH: '/admin/security-center/authentication',
+    SECURITY_DEVICES: '/admin/security-center/device-policy',
+    SECURITY_PASSWORDS: '/admin/security-center/password-policy',
+    SECURITY_PROFILES: '/admin/security-center/security-profiles',
+    SECURITY_OVERRIDES: '/admin/security-center/employee-overrides',
     USERS: '/admin/users',
     ROLES: '/admin/roles',
     SETTINGS: '/admin/settings'

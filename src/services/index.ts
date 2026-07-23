@@ -15,3 +15,5 @@ export * from './crmService';
 export * from './logisticsService';
 export * from './reportsService';
 export * from './adminService';
+export * from './biService';
+export * from './securityPolicyResolver';

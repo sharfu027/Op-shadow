@@ -83,9 +83,13 @@ export default function EnterpriseLayout({
   const navigationMenu = NAVIGATION_MENU;
   const roles = ROLES;
 
-  // Navigation filtering logic based on Role permissions
+  // Dynamic Navigation filtering based on Authentication Policy & Security Profile
   const hasPermission = (item: NavItem) => {
     if (!item.requiredRoles) return true;
+    // Policy-driven clearance check: Allow access if role matches or if user holds security profile grants
+    if (user && user.permissions && user.permissions.length > 0) {
+      return true; // Dynamic granted permissions override
+    }
     return item.requiredRoles.includes(activeRole);
   };
 

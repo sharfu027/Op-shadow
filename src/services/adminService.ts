@@ -10,10 +10,107 @@ import {
   NotificationTemplate,
   AuditTrailLog,
   SystemConfiguration,
-  AdminMetrics
+  AdminMetrics,
+  GlobalAuthenticationPolicy,
+  EmployeeSecurityProfile,
+  EmployeeAuthenticationOverride,
+  TemporarySecurityException,
+  RegisteredDevice,
+  SecurityDashboardMetrics
 } from '../types/admin';
 
 export const adminService = {
+  // Global Security Center Policies
+  async getSecurityPolicies(): Promise<GlobalAuthenticationPolicy[]> {
+    return apiClient.get<GlobalAuthenticationPolicy[]>('/api/v1/admin/security/policies');
+  },
+
+  async updateSecurityPolicies(policyId: string, payload: Partial<GlobalAuthenticationPolicy>): Promise<GlobalAuthenticationPolicy> {
+    return apiClient.put<GlobalAuthenticationPolicy>(`/api/v1/admin/security/policies/${policyId}`, payload);
+  },
+
+  // Security Profiles
+  async getSecurityProfiles(): Promise<EmployeeSecurityProfile[]> {
+    return apiClient.get<EmployeeSecurityProfile[]>('/api/v1/admin/security/profiles');
+  },
+
+  async createSecurityProfile(payload: Partial<EmployeeSecurityProfile>): Promise<EmployeeSecurityProfile> {
+    return apiClient.post<EmployeeSecurityProfile>('/api/v1/admin/security/profiles', payload);
+  },
+
+  async updateSecurityProfile(profileId: string, payload: Partial<EmployeeSecurityProfile>): Promise<EmployeeSecurityProfile> {
+    return apiClient.put<EmployeeSecurityProfile>(`/api/v1/admin/security/profiles/${profileId}`, payload);
+  },
+
+  // Employee Authentication Overrides
+  async getEmployeeOverrides(): Promise<EmployeeAuthenticationOverride[]> {
+    return apiClient.get<EmployeeAuthenticationOverride[]>('/api/v1/admin/security/overrides');
+  },
+
+  async updateEmployeeOverrides(overrideId: string, payload: Partial<EmployeeAuthenticationOverride>): Promise<EmployeeAuthenticationOverride> {
+    return apiClient.put<EmployeeAuthenticationOverride>(`/api/v1/admin/security/overrides/${overrideId}`, payload);
+  },
+
+  // Temporary Security Exceptions
+  async getTemporaryExceptions(): Promise<TemporarySecurityException[]> {
+    return apiClient.get<TemporarySecurityException[]>('/api/v1/admin/security/exceptions');
+  },
+
+  async createTemporarySecurityException(payload: Partial<TemporarySecurityException>): Promise<TemporarySecurityException> {
+    return apiClient.post<TemporarySecurityException>('/api/v1/admin/security/exceptions', payload);
+  },
+
+  async removeTemporarySecurityException(exceptionId: string): Promise<void> {
+    return apiClient.delete<void>(`/api/v1/admin/security/exceptions/${exceptionId}`);
+  },
+
+  // Employee Account Lifecycle Actions
+  async enableEmployee(employeeId: string): Promise<void> {
+    return apiClient.post<void>(`/api/v1/admin/employees/${employeeId}/enable`, {});
+  },
+
+  async disableEmployee(employeeId: string): Promise<void> {
+    return apiClient.post<void>(`/api/v1/admin/employees/${employeeId}/disable`, {});
+  },
+
+  async lockEmployee(employeeId: string): Promise<void> {
+    return apiClient.post<void>(`/api/v1/admin/employees/${employeeId}/lock`, {});
+  },
+
+  async unlockEmployee(employeeId: string): Promise<void> {
+    return apiClient.post<void>(`/api/v1/admin/employees/${employeeId}/unlock`, {});
+  },
+
+  async suspendEmployee(employeeId: string): Promise<void> {
+    return apiClient.post<void>(`/api/v1/admin/employees/${employeeId}/suspend`, {});
+  },
+
+  async restoreEmployee(employeeId: string): Promise<void> {
+    return apiClient.post<void>(`/api/v1/admin/employees/${employeeId}/restore`, {});
+  },
+
+  async forceLogout(employeeId: string): Promise<void> {
+    return apiClient.post<void>(`/api/v1/admin/employees/${employeeId}/force-logout`, {});
+  },
+
+  // Registered Devices
+  async getRegisteredDevices(): Promise<RegisteredDevice[]> {
+    return apiClient.get<RegisteredDevice[]>('/api/v1/admin/security/devices');
+  },
+
+  async registerDevice(payload: Partial<RegisteredDevice>): Promise<RegisteredDevice> {
+    return apiClient.post<RegisteredDevice>('/api/v1/admin/security/devices', payload);
+  },
+
+  async revokeDevice(deviceId: string): Promise<void> {
+    return apiClient.post<void>(`/api/v1/admin/security/devices/${deviceId}/revoke`, {});
+  },
+
+  // Security Metrics & Audit Logs
+  async getSecurityDashboardMetrics(): Promise<SecurityDashboardMetrics> {
+    return apiClient.get<SecurityDashboardMetrics>('/api/v1/admin/security/dashboard-metrics');
+  },
+
   // Users CRUD
   async getUsers(): Promise<UserAccount[]> {
     return apiClient.get<UserAccount[]>('/api/v1/admin/users');

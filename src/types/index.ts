@@ -19,3 +19,4 @@ export * from './crm';
 export * from './logistics';
 export * from './reports';
 export * from './admin';
+export * from './bi';

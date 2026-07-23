@@ -27,6 +27,13 @@ import {
   ChevronRight
 } from 'lucide-react';
 
+import {
+  securityPolicyResolver,
+  ENTERPRISE_SECURITY_PROFILES,
+  DEFAULT_GLOBAL_POLICY
+} from '../services/securityPolicyResolver';
+import { SecurityProfile, AuthenticationPolicy } from '../types/security';
+
 interface AuthScreensProps {
   onLoginSuccess: (userName: string, role: string) => void;
   onTriggerToast: (type: 'success' | 'error' | 'info' | 'warning', title: string, desc?: string) => void;
@@ -51,6 +58,24 @@ export default function AuthScreens({ onLoginSuccess, onTriggerToast }: AuthScre
     | 'gps-failure'
     | 'admin-override'
   >('login');
+
+  // Policy-Driven Security Engine States
+  const [selectedSecurityProfileKey, setSelectedSecurityProfileKey] = useState<string>('SEC-ADMIN');
+  const [useGlobalPolicy, setUseGlobalPolicy] = useState<boolean>(true);
+  const [overrideFaceReq, setOverrideFaceReq] = useState<'Required' | 'Optional' | 'Disabled'>('Required');
+
+  // Resolve Effective Authentication Policy dynamically (No hardcoded roles)
+  const activeSecurityProfile = ENTERPRISE_SECURITY_PROFILES[selectedSecurityProfileKey] || ENTERPRISE_SECURITY_PROFILES['SEC-ADMIN'];
+  
+  const effectivePolicy: AuthenticationPolicy = securityPolicyResolver.resolveAuthenticationPolicy(
+    {
+      useGlobalPolicy,
+      securityProfileId: selectedSecurityProfileKey,
+      employeeOverridePolicy: !useGlobalPolicy ? { loginFaceRequirement: overrideFaceReq } : undefined
+    },
+    activeSecurityProfile,
+    DEFAULT_GLOBAL_POLICY
+  );
 
   // Interactive Form States
   const [email, setEmail] = useState('admin@ink-fmcg.com');
@@ -225,8 +250,20 @@ export default function AuthScreens({ onLoginSuccess, onTriggerToast }: AuthScre
       onTriggerToast('error', 'Validation Failed', 'Please input credentials.');
       return;
     }
-    onTriggerToast('info', 'Credentials Accepted', 'Secure 2FA OTP dispatched.');
-    setActiveScreen('2fa');
+
+    onTriggerToast('info', 'Credentials Accepted', `Evaluating Policy: ${effectivePolicy.policyName}`);
+
+    // Policy Decision Engine step resolution
+    if (effectivePolicy.otpRequirement === 'Required') {
+      setActiveScreen('2fa');
+    } else if (effectivePolicy.loginFaceRequirement === 'Required') {
+      setActiveScreen('face-permission');
+    } else if (effectivePolicy.loginGpsRequirement === 'Required') {
+      setActiveScreen('gps-permission');
+    } else {
+      onTriggerToast('success', 'Policy Clearance Approved', 'No additional multi-factor verification required by policy.');
+      onLoginSuccess('Security Profile User', activeSecurityProfile.profileName);
+    }
   };
 
   const handle2faSubmit = (e: React.FormEvent) => {
@@ -236,8 +273,16 @@ export default function AuthScreens({ onLoginSuccess, onTriggerToast }: AuthScre
       onTriggerToast('error', '2FA Incomplete', 'Provide full 6-digit verification code.');
       return;
     }
-    onTriggerToast('success', 'Credentials Authenticated', 'Step 1 of 3 complete. Commencing attendance verification.');
-    setActiveScreen('face-permission');
+    onTriggerToast('success', 'OTP Verified', 'Authentication Policy step 1 verified.');
+
+    // Next step in Policy Decision Engine
+    if (effectivePolicy.loginFaceRequirement === 'Required') {
+      setActiveScreen('face-permission');
+    } else if (effectivePolicy.loginGpsRequirement === 'Required') {
+      setActiveScreen('gps-permission');
+    } else {
+      onLoginSuccess('Security Profile User', activeSecurityProfile.profileName);
+    }
   };
 
   // Face scanner permission initiation
@@ -359,6 +404,58 @@ export default function AuthScreens({ onLoginSuccess, onTriggerToast }: AuthScre
 
         {/* HIGH-FIDELITY SANDBOX CONTROLS */}
         <div className="flex flex-wrap items-center gap-4 bg-brand-bg-secondary p-3 border border-brand-border rounded-lg">
+          {/* POLICY-DRIVEN SECURITY PROFILE SELECTOR */}
+          <div className="space-y-1">
+            <span className="text-[10px] font-bold text-brand-text-primary block uppercase tracking-wider flex items-center gap-1">
+              <Shield size={12} className="text-brand-primary" /> Assigned Security Profile
+            </span>
+            <select
+              value={selectedSecurityProfileKey}
+              onChange={(e) => {
+                setSelectedSecurityProfileKey(e.target.value);
+                onTriggerToast('info', 'Security Profile Loaded', `Policy dynamically resolved for: ${ENTERPRISE_SECURITY_PROFILES[e.target.value]?.profileName}`);
+              }}
+              className="p-1.5 border rounded border-brand-border bg-white text-[11px] font-bold text-brand-text-primary"
+            >
+              <option value="SEC-ADMIN">Admin Security (Face + OTP Required)</option>
+              <option value="SEC-SALES">Sales Security (Face + GPS Required, OTP Disabled)</option>
+              <option value="SEC-WAREHOUSE">Warehouse Security (Face + GPS Required)</option>
+              <option value="SEC-FINANCE">Finance Security (OTP Required, Face Disabled)</option>
+              <option value="SEC-HR">HR Security (OTP Required)</option>
+              <option value="SEC-DRIVER">Driver Security (Face + GPS Required)</option>
+              <option value="SEC-CUSTOM">Custom / Future Employee Profile</option>
+            </select>
+          </div>
+
+          {/* POLICY OVERRIDE HIERARCHY TOGGLE */}
+          <div className="space-y-1">
+            <span className="text-[10px] font-bold text-brand-text-secondary block uppercase tracking-wider">Policy Hierarchy</span>
+            <div className="flex bg-white rounded border border-brand-border p-0.5 text-[11px] font-bold">
+              <button
+                onClick={() => {
+                  setUseGlobalPolicy(true);
+                  onTriggerToast('info', 'Policy Mode: Global System', 'Using company-wide Security Profile Policy.');
+                }}
+                className={`px-2.5 py-1 rounded transition cursor-pointer ${
+                  useGlobalPolicy ? 'bg-brand-primary text-white shadow-xs' : 'text-brand-text-secondary hover:text-brand-text-primary'
+                }`}
+              >
+                Security Profile
+              </button>
+              <button
+                onClick={() => {
+                  setUseGlobalPolicy(false);
+                  onTriggerToast('warning', 'Policy Mode: Employee Override', 'Employee override policy active.');
+                }}
+                className={`px-2.5 py-1 rounded transition cursor-pointer ${
+                  !useGlobalPolicy ? 'bg-brand-warning text-white shadow-xs' : 'text-brand-text-secondary hover:text-brand-text-primary'
+                }`}
+              >
+                Employee Override
+              </button>
+            </div>
+          </div>
+
           {/* SENSOR CONTROL */}
           <div className="space-y-1">
             <span className="text-[10px] font-bold text-brand-text-secondary block uppercase tracking-wider">Device Sensors</span>
@@ -993,10 +1090,17 @@ export default function AuthScreens({ onLoginSuccess, onTriggerToast }: AuthScre
               </div>
 
               <button
-                onClick={() => setActiveScreen('gps-permission')}
+                onClick={() => {
+                  if (effectivePolicy.loginGpsRequirement === 'Required') {
+                    setActiveScreen('gps-permission');
+                  } else {
+                    onTriggerToast('success', 'Authentication Completed', 'Policy requirements satisfied.');
+                    onLoginSuccess('Security Profile User', activeSecurityProfile.profileName);
+                  }
+                }}
                 className="w-full py-2.5 bg-brand-primary hover:bg-blue-700 text-white font-bold text-xs rounded transition shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
               >
-                Proceed to Location Geofence Check <ChevronRight size={14} />
+                {effectivePolicy.loginGpsRequirement === 'Required' ? 'Proceed to Location Geofence Check' : 'Complete Login & Enter ERP Dashboard'} <ChevronRight size={14} />
               </button>
             </div>
           )}
@@ -1264,8 +1368,8 @@ export default function AuthScreens({ onLoginSuccess, onTriggerToast }: AuthScre
 
               <button
                 onClick={() => {
-                  onTriggerToast('success', 'Attendance Signed In', 'Biometric & location ledger securely sealed.');
-                  onLoginSuccess('Siddharth Mehra', 'Super Administrator');
+                  onTriggerToast('success', 'Attendance Signed In', 'Biometric & location policy clearance verified.');
+                  onLoginSuccess('Security Profile User', activeSecurityProfile.profileName);
                 }}
                 className="w-full py-2.5 bg-brand-primary hover:bg-blue-700 text-white font-bold text-xs rounded transition shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
               >

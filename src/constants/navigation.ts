@@ -3,6 +3,17 @@ import { NavItem } from '../types';
 export const NAVIGATION_MENU: NavItem[] = [
   { title: 'Dashboard', href: 'dashboard', icon: 'TrendingUp' },
   {
+    title: 'Executive BI & Analytics',
+    href: 'bi',
+    icon: 'TrendingUp',
+    requiredRoles: ['Super Administrator', 'Administrator', 'Finance Manager', 'Sales Manager', 'Director'],
+    children: [
+      { title: 'Sales BI', href: 'bi/sales', icon: 'Layers' },
+      { title: 'Inventory Analytics', href: 'bi/inventory', icon: 'Layers' },
+      { title: 'Finance Analytics', href: 'bi/finance', icon: 'Layers' }
+    ]
+  },
+  {
     title: 'Master Data',
     href: 'masters',
     icon: 'Users2',
@@ -147,9 +158,17 @@ export const NAVIGATION_MENU: NavItem[] = [
     requiredRoles: ['Super Administrator', 'Administrator', 'Finance Manager', 'Sales Manager', 'Director']
   },
   { 
-    title: 'Administration', 
+    title: 'Administration & Security', 
     href: 'admin', 
     icon: 'Settings',
-    requiredRoles: ['Super Administrator', 'Administrator']
+    requiredRoles: ['Super Administrator', 'Administrator'],
+    children: [
+      { title: 'Security Center (IAM)', href: 'admin/security-center', icon: 'Layers' },
+      { title: 'Auth & Biometric Policies', href: 'admin/security-center/authentication', icon: 'Layers' },
+      { title: 'Device Security Policies', href: 'admin/security-center/device-policy', icon: 'Layers' },
+      { title: 'Password & Session Rules', href: 'admin/security-center/password-policy', icon: 'Layers' },
+      { title: 'Role Security Profiles', href: 'admin/security-center/security-profiles', icon: 'Layers' },
+      { title: 'Employee Overrides', href: 'admin/security-center/employee-overrides', icon: 'Layers' }
+    ]
   }
 ];

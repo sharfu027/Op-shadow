@@ -32,6 +32,7 @@ const CrmModule = lazy(() => import('./features/crm/CrmModule'));
 const LogisticsModule = lazy(() => import('./features/logistics/LogisticsModule'));
 const ReportsModule = lazy(() => import('./features/reports/ReportsModule'));
 const AdminModule = lazy(() => import('./features/admin/AdminModule'));
+const BusinessIntelligenceModule = lazy(() => import('./features/bi/BusinessIntelligenceModule'));
 
 function ModuleLoader() {
   return (
@@ -101,6 +102,7 @@ export default function App() {
     else if (view.startsWith('crm')) navigate(`/${view}`);
     else if (view.startsWith('logistics')) navigate(`/${view}`);
     else if (view.startsWith('reports')) navigate(`/${view}`);
+    else if (view.startsWith('bi')) navigate(`/${view}`);
     else if (view.startsWith('auth')) navigate(`/${view}`);
     else navigate(`/${view}`);
   };
@@ -170,6 +172,8 @@ export default function App() {
             <Route path="/logistics/*" element={<LogisticsModule onTriggerToast={triggerToast} />} />
             <Route path="/reports" element={<ReportsModule onTriggerToast={triggerToast} />} />
             <Route path="/reports/*" element={<ReportsModule onTriggerToast={triggerToast} />} />
+            <Route path="/bi" element={<BusinessIntelligenceModule onTriggerToast={triggerToast} />} />
+            <Route path="/bi/*" element={<BusinessIntelligenceModule onTriggerToast={triggerToast} />} />
             <Route path="/masters/:moduleName" element={<MasterDataRouteWrapper onTriggerToast={triggerToast} />} />
             
             {/* Fallback view representing un-built module placeholders */}

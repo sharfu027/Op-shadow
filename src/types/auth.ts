@@ -22,11 +22,18 @@ export type UserPermission =
   | 'manage:security'
   | 'manage:users';
 
+import { SecurityProfile, AuthenticationPolicy } from './security';
+
 export interface UserProfile {
   id: string;
   name: string;
   email: string;
   role: UserRole;
+  securityProfileId?: string;
+  securityProfileName?: string;
+  useGlobalPolicy?: boolean;
+  employeeOverridePolicy?: Partial<AuthenticationPolicy>;
+  assignedSecurityProfile?: SecurityProfile;
   permissions?: UserPermission[];
   avatarUrl?: string;
   branch: string;
