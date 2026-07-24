@@ -1,5 +1,5 @@
 -- =============================================================================
--- INK FMCG ENTERPRISE ERP — CUSTOMER RELATIONSHIP MANAGEMENT (CRM) SCHEMAS (v1.0)
+-- INK FMCG ENTERPRISE ERP — CUSTOMER RELATIONSHIP MANAGEMENT (CRM) SCHEMAS (v2.0 REFINED)
 -- File Name      : crm_schema.sql
 -- Target Database: PostgreSQL 16+
 -- Schema Owner   : crm
@@ -131,7 +131,7 @@ CREATE TABLE crm.communication_channels (
 );
 
 COMMENT ON TABLE crm.communication_channels IS 
-    '[LOOKUP] Interaction formats: EMAIL, PHONE, IN_PERSON, SMS, WHATSAPP.';
+    '[LOOKUP] Interaction formats: PHONE, EMAIL, SMS, WHATSAPP, PORTAL_MESSAGE, CHATBOT, VIDEO_MEETING, IN_PERSON_VISIT, VOICE_NOTE.';
 
 -- 1.9 Quotation Statuses
 CREATE TABLE crm.quotation_statuses (
@@ -307,7 +307,7 @@ CREATE TABLE crm.activities (
 COMMENT ON TABLE crm.activities IS 
     '[OPERATIONAL] Tasks, calls, and meetings linked to leads, opportunities, or customers.';
 
--- 4.2 Customer Interaction Timeline (Historical Logs)
+-- 4.2 Customer Interaction Timeline (Extended with voice notes & attachments)
 CREATE TABLE crm.customer_interactions (
     id                        UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
     customer_id               UUID         NOT NULL REFERENCES customer.customers(id) ON DELETE CASCADE,
@@ -315,11 +315,12 @@ CREATE TABLE crm.customer_interactions (
     channel_id                UUID         NOT NULL REFERENCES crm.communication_channels(id),
     interaction_time          TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
     notes                     TEXT         NOT NULL,
-    attachment_reference_hook VARCHAR(255) -- link to DMS
+    attachment_reference_hook VARCHAR(255), -- Link to DMS
+    voice_note_reference_hook VARCHAR(255)  -- Link to voice clip
 );
 
 COMMENT ON TABLE crm.customer_interactions IS 
-    '[HISTORY] Compiled chronological communication log tracking emails, visits, and phone notes.';
+    '[HISTORY] Compiled chronological communication log tracking emails, visits, chats, and voice notes.';
 
 -- =============================================================================
 -- SECTION 5 — CUSTOMER SERVICE & COMPLAINTS
@@ -450,7 +451,7 @@ CREATE TABLE crm.campaign_members (
 );
 
 COMMENT ON TABLE crm.campaign_members IS 
-    '[OPERATIONAL] target lists linking campaign headers to either leads or customers.';
+    '[OPERATIONAL] Target lists linking campaign headers to either leads or customers.';
 
 -- =============================================================================
 -- SECTION 8 — CUSTOMER INTELLIGENCE & MARKETING CONSENT
@@ -473,7 +474,7 @@ COMMENT ON TABLE crm.customer_intelligence IS
     '[FOUNDATION] Customer profiles, buying interests, and marketing opt-ins.';
 
 -- =============================================================================
--- SECTION 9 — ANALYTICS SNAPSHOTS
+-- SECTION 9 — ANALYTICS SNAPSHOTS (REFINED)
 -- =============================================================================
 
 CREATE TABLE crm.crm_snapshots (
@@ -499,13 +500,154 @@ CREATE TABLE crm.crm_snapshots (
 );
 
 COMMENT ON TABLE crm.crm_snapshots IS 
-    '[HISTORY] daily logs tracking pipeline values, active cases, and ROI metrics.';
+    '[HISTORY] Daily logs tracking pipeline values, active cases, and ROI metrics.';
 
 -- =============================================================================
--- SECTION 10 — INDEX STRATEGY (B-TREE FOREIGNS & COMPOSITE COVERING)
+-- SECTION 10 — TIMELINES & ASSIGNMENT AUDITING (v2.0 ADDITIONS)
 -- =============================================================================
 
--- 10.1 B-Tree Indexes on all Foreign Keys
+-- 10.1 Opportunity Stage Transitions (Immutable Lifecycle history)
+CREATE TABLE crm.opportunity_lifecycle_history (
+    id                   UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    opportunity_id       UUID         NOT NULL REFERENCES crm.opportunities(id) ON DELETE CASCADE,
+    stage_id             UUID         NOT NULL REFERENCES crm.opportunity_stages(id) ON DELETE CASCADE,
+    effective_from       TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
+    effective_to         TIMESTAMPTZ,
+    changed_by_user_id   UUID         REFERENCES iam.users(id) ON DELETE SET NULL,
+    comments             TEXT,
+
+    CONSTRAINT chk_opp_lifecycle_dates CHECK (effective_to IS NULL OR effective_to >= effective_from)
+);
+
+COMMENT ON TABLE crm.opportunity_lifecycle_history IS 
+    '[HISTORY] Transition details auditing pipeline velocity and stage times.';
+
+-- 10.2 Lead Assignment History
+CREATE TABLE crm.lead_assignment_history (
+    id                         UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    lead_id                    UUID         NOT NULL REFERENCES crm.leads(id) ON DELETE CASCADE,
+    previous_owner_employee_id UUID         REFERENCES employee.employees(id) ON DELETE SET NULL,
+    new_owner_employee_id      UUID         REFERENCES employee.employees(id) ON DELETE SET NULL,
+    assignment_reason          TEXT,
+    assignment_timestamp       TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
+    approved_by_user_id        UUID         REFERENCES iam.users(id) ON DELETE SET NULL,
+    assignment_source          VARCHAR(100) NOT NULL DEFAULT 'MANUAL' -- MANUAL, AI_ROUTING, ROUND_ROBIN
+);
+
+COMMENT ON TABLE crm.lead_assignment_history IS 
+    '[HISTORY] Detailed audits mapping lead delegations, ownership swaps, and routing triggers.';
+
+-- 10.3 Campaign Performance & ROI History
+CREATE TABLE crm.campaign_performance_history (
+    id                     UUID          PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    campaign_id            UUID          NOT NULL REFERENCES crm.campaigns(id) ON DELETE CASCADE,
+    snapshot_date          DATE          NOT NULL DEFAULT CURRENT_DATE,
+    
+    budgeted_cost          NUMERIC(12,4) NOT NULL,
+    actual_cost            NUMERIC(12,4) NOT NULL,
+    response_count         INT           NOT NULL DEFAULT 0,
+    conversion_rate_pct    NUMERIC(5,2),
+    roi_pct                NUMERIC(5,2),
+    
+    calculation_timestamp  TIMESTAMPTZ   NOT NULL DEFAULT clock_timestamp(),
+
+    CONSTRAINT chk_camp_perf_cost CHECK (budgeted_cost >= 0.0000 AND actual_cost >= 0.0000),
+    CONSTRAINT chk_camp_perf_responses CHECK (response_count >= 0)
+);
+
+COMMENT ON TABLE crm.campaign_performance_history IS 
+    '[HISTORY] Performance metrics tracking cost revisions and returns on investment.';
+
+-- 10.4 Quotation Approval History (Multi-level approvals)
+CREATE TABLE crm.quotation_approval_history (
+    id                     UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    quotation_id           UUID         NOT NULL REFERENCES crm.quotations(id) ON DELETE CASCADE,
+    approval_level         INT          NOT NULL,
+    approver_employee_id   UUID         NOT NULL REFERENCES employee.employees(id) ON DELETE CASCADE,
+    decision               VARCHAR(20)  NOT NULL, -- APPROVED, REJECTED, DELEGATED
+    comments               TEXT,
+    decision_timestamp     TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
+    workflow_stage         VARCHAR(50)  NOT NULL,
+
+    CONSTRAINT chk_qapprove_level CHECK (approval_level >= 1),
+    CONSTRAINT chk_qapprove_decision CHECK (decision IN ('APPROVED', 'REJECTED', 'DELEGATED'))
+);
+
+COMMENT ON TABLE crm.quotation_approval_history IS 
+    '[HISTORY] Quotation workflow logs tracking supervisor approvals.';
+
+-- 10.5 Service Case Lifecycle History (Escalations)
+CREATE TABLE crm.service_case_lifecycle_history (
+    id                     UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    service_case_id        UUID         NOT NULL REFERENCES crm.service_cases(id) ON DELETE CASCADE,
+    status_id              UUID         NOT NULL REFERENCES crm.case_statuses(id) ON DELETE CASCADE,
+    effective_from         TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
+    effective_to           TIMESTAMPTZ,
+    comments               TEXT,
+    changed_by_user_id     UUID         REFERENCES iam.users(id) ON DELETE SET NULL,
+
+    CONSTRAINT chk_case_lifecycle_dates CHECK (effective_to IS NULL OR effective_to >= effective_from)
+);
+
+COMMENT ON TABLE crm.service_case_lifecycle_history IS 
+    '[HISTORY] Detailed transition timeline tracking case reviews and escalations.';
+
+-- 10.6 Customer Satisfaction History (CSAT surveys)
+CREATE TABLE crm.customer_satisfaction_history (
+    id                     UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    customer_id            UUID         NOT NULL REFERENCES customer.customers(id) ON DELETE CASCADE,
+    service_case_id        UUID         REFERENCES crm.service_cases(id) ON DELETE SET NULL,
+    survey_name            VARCHAR(150) NOT NULL,
+    rating                 INT          NOT NULL,
+    feedback               TEXT,
+    response_date          DATE         NOT NULL DEFAULT CURRENT_DATE,
+
+    CONSTRAINT chk_csat_hist CHECK (rating BETWEEN 1 AND 5)
+);
+
+COMMENT ON TABLE crm.customer_satisfaction_history IS 
+    '[HISTORY] Survey result records tracking customer feedback and ticket metrics.';
+
+-- 10.7 CRM Audit Event Timeline
+CREATE TABLE crm.crm_audit_event_timeline (
+    id                   UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    event_type           VARCHAR(100) NOT NULL, -- LEAD_CREATED, OPPORTUNITY_UPDATED, QUOTATION_APPROVED, CAMPAIGN_LAUNCHED, CAMPAIGN_CLOSED, COMPLAINT_ESCALATED, SERVICE_CASE_CLOSED, PREFERENCE_UPDATED, CONSENT_UPDATED
+    source_document_type VARCHAR(50)  NOT NULL, -- LEAD, OPPORTUNITY, QUOTATION, CAMPAIGN, CASE, INTELLIGENCE
+    source_document_id   UUID         NOT NULL,
+    event_timestamp      TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
+    performed_by_user_id UUID         REFERENCES iam.users(id) ON DELETE SET NULL,
+    payload              JSONB,
+
+    created_at_utc       TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp()
+);
+
+COMMENT ON TABLE crm.crm_audit_event_timeline IS 
+    '[HISTORY] Immutable master audit timeline logging lead conversions and consent approvals.';
+
+-- 10.8 CRM SLA Monitoring
+CREATE TABLE crm.crm_sla_monitoring (
+    id                      UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    sla_type                VARCHAR(50)  NOT NULL, -- LEAD_RESPONSE, OPP_FOLLOWUP, QUOTE_APPROVAL, COMPLAINT_RESOLUTION, SERVICE_REQUEST
+    source_document_id      UUID         NOT NULL,
+    target_duration_minutes INT          NOT NULL,
+    actual_duration_minutes INT,
+    is_breached             BOOLEAN      GENERATED ALWAYS AS (actual_duration_minutes > target_duration_minutes) STORED,
+    breach_reason           TEXT,
+    created_at_utc          TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
+
+    CONSTRAINT chk_crm_sla_target CHECK (target_duration_minutes > 0),
+    CONSTRAINT chk_crm_sla_actual CHECK (actual_duration_minutes IS NULL OR actual_duration_minutes >= 0),
+    CONSTRAINT chk_crm_sla_type CHECK (sla_type IN ('LEAD_RESPONSE', 'OPP_FOLLOWUP', 'QUOTE_APPROVAL', 'COMPLAINT_RESOLUTION', 'SERVICE_REQUEST'))
+);
+
+COMMENT ON TABLE crm.crm_sla_monitoring IS 
+    '[OPERATIONAL] Timers checking response delays against target SLA rules.';
+
+-- =============================================================================
+-- SECTION 11 — INDEX STRATEGY (B-TREE FOREIGNS & COMPOSITE COVERING)
+-- =============================================================================
+
+-- 11.1 B-Tree Indexes on all Foreign Keys
 CREATE INDEX idx_lead_source_fk                ON crm.leads (lead_source_id);
 CREATE INDEX idx_lead_status_fk                ON crm.leads (lead_status_id);
 CREATE INDEX idx_lead_employee_fk              ON crm.leads (assigned_employee_id);
@@ -550,13 +692,42 @@ CREATE INDEX idx_member_customer_fk            ON crm.campaign_members (customer
 
 CREATE INDEX idx_intel_customer_fk             ON crm.customer_intelligence (customer_id);
 
--- 10.2 Composite Indexes (Covering common CRM pipeline queries)
+-- v2.0 Indexes
+CREATE INDEX idx_opp_lh_opp_fk                 ON crm.opportunity_lifecycle_history (opportunity_id);
+CREATE INDEX idx_opp_lh_stage_fk               ON crm.opportunity_lifecycle_history (stage_id);
+CREATE INDEX idx_opp_lh_user_fk                ON crm.opportunity_lifecycle_history (changed_by_user_id);
+
+CREATE INDEX idx_lead_ah_lead_fk               ON crm.lead_assignment_history (lead_id);
+CREATE INDEX idx_lead_ah_prev_fk               ON crm.lead_assignment_history (previous_owner_employee_id);
+CREATE INDEX idx_lead_ah_new_fk                ON crm.lead_assignment_history (new_owner_employee_id);
+CREATE INDEX idx_lead_ah_user_fk               ON crm.lead_assignment_history (approved_by_user_id);
+
+CREATE INDEX idx_camp_ph_campaign_fk           ON crm.campaign_performance_history (campaign_id);
+
+CREATE INDEX idx_qapprove_h_quote_fk           ON crm.quotation_approval_history (quotation_id);
+CREATE INDEX idx_qapprove_h_emp_fk             ON crm.quotation_approval_history (approver_employee_id);
+
+CREATE INDEX idx_case_lh_case_fk               ON crm.service_case_lifecycle_history (service_case_id);
+CREATE INDEX idx_case_lh_status_fk             ON crm.service_case_lifecycle_history (status_id);
+CREATE INDEX idx_case_lh_user_fk               ON crm.service_case_lifecycle_history (changed_by_user_id);
+
+CREATE INDEX idx_csat_h_customer_fk            ON crm.customer_satisfaction_history (customer_id);
+CREATE INDEX idx_csat_h_case_fk                ON crm.customer_satisfaction_history (service_case_id);
+
+CREATE INDEX idx_caudit_user_fk                ON crm.crm_audit_event_timeline (performed_by_user_id);
+
+CREATE INDEX idx_sla_monitor_fk                ON crm.crm_sla_monitoring (source_document_id);
+
+-- 11.2 Composite Indexes (Covering common CRM pipeline queries)
 CREATE INDEX idx_opportunity_pipeline_comp     ON crm.opportunities (stage_id, expected_close_date, forecast_amount);
 CREATE INDEX idx_activities_schedule_comp      ON crm.activities (assigned_employee_id, scheduled_start, activity_status_id);
 CREATE INDEX idx_cases_sla_comp                ON crm.service_cases (status_id, priority_id, sla_due_time);
 
--- 10.3 Partial Indexes (Optimizing active/hot records)
+-- 11.3 Partial Indexes (Optimizing active/hot records)
 CREATE INDEX idx_leads_active                 ON crm.leads (id) WHERE lead_status_id = 'c1251910-1849-43c2-bf72-4d2cf99a80e6'; -- references NEW status ID
 CREATE INDEX idx_opportunities_open            ON crm.opportunities (id) WHERE stage_id NOT IN ('c1251910-1849-43c2-bf72-4d2cf99a80e7', 'c1251910-1849-43c2-bf72-4d2cf99a80e8'); -- references WON/LOST IDs
 CREATE INDEX idx_cases_open                    ON crm.service_cases (id) WHERE status_id != 'c1251910-1849-43c2-bf72-4d2cf99a80e9'; -- references CLOSED status ID
 CREATE INDEX idx_quotes_active                 ON crm.quotations (id) WHERE status_id = 'c1251910-1849-43c2-bf72-4d2cf99a80fa'; -- references SENT status ID
+CREATE INDEX idx_sla_breached_crm              ON crm.crm_sla_monitoring (source_document_id) WHERE is_breached = TRUE;
+CREATE INDEX idx_csat_low_ratings              ON crm.customer_satisfaction_history (customer_id) WHERE rating <= 2;
+CREATE INDEX idx_campaign_active_runs          ON crm.campaigns (id) WHERE campaign_status_id = 'c1251910-1849-43c2-bf72-4d2cf99a80fb'; -- references ACTIVE campaign status ID
