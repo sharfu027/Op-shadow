@@ -33,6 +33,7 @@ const LogisticsModule = lazy(() => import('./features/logistics/LogisticsModule'
 const ReportsModule = lazy(() => import('./features/reports/ReportsModule'));
 const AdminModule = lazy(() => import('./features/admin/AdminModule'));
 const BusinessIntelligenceModule = lazy(() => import('./features/bi/BusinessIntelligenceModule'));
+const SupplierModule = lazy(() => import('./features/supplier/SupplierManagementModule'));
 
 function ModuleLoader() {
   return (
@@ -149,6 +150,7 @@ export default function App() {
             <Route path="/pricing" element={<PricingModule onTriggerToast={triggerToast} />} />
             <Route path="/pricing/*" element={<PricingModule onTriggerToast={triggerToast} />} />
             <Route path="/procurement" element={<ProcurementModule onTriggerToast={triggerToast} />} />
+            <Route path="/procurement/suppliers" element={<SupplierModule onTriggerToast={triggerToast} />} />
             <Route path="/procurement/*" element={<ProcurementModule onTriggerToast={triggerToast} />} />
             <Route path="/warehouse" element={<WarehouseModule onTriggerToast={triggerToast} />} />
             <Route path="/warehouse/*" element={<WarehouseModule onTriggerToast={triggerToast} />} />

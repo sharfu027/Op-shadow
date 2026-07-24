@@ -45,6 +45,7 @@ export const NAVIGATION_MENU: NavItem[] = [
     icon: 'ShoppingCart',
     requiredPermissions: ['manage:procurement'],
     children: [
+      { title: 'Supplier Management', href: 'procurement/suppliers', icon: 'Layers', requiredPermissions: ['manage:procurement'] },
       { title: 'Purchase Requisition', href: 'procurement/requisition', icon: 'Layers', requiredPermissions: ['manage:procurement'] },
       { title: 'RFQ', href: 'procurement/rfq', icon: 'Layers', requiredPermissions: ['manage:procurement'] },
       { title: 'Supplier Quotations', href: 'procurement/quotations', icon: 'Layers', requiredPermissions: ['manage:procurement'] },

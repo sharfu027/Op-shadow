@@ -42,7 +42,7 @@ interface ProcurementModuleProps {
 
 export default function ProcurementModule({ onTriggerToast }: ProcurementModuleProps) {
   const [activeTab, setActiveTab] = useState<
-    'dashboard' | 'vendors' | 'requisitions' | 'rfqs' | 'orders' | 'grn' | 'invoices' | 'returns'
+    'dashboard' | 'suppliers' | 'requisitions' | 'rfqs' | 'orders' | 'grn' | 'invoices' | 'returns'
   >('dashboard');
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -111,7 +111,7 @@ export default function ProcurementModule({ onTriggerToast }: ProcurementModuleP
       <div className="bg-white p-2 rounded-lg border border-brand-border shadow-sm flex flex-wrap gap-1">
         {[
           { id: 'dashboard', label: 'Procurement Dashboard', icon: TrendingUp },
-          { id: 'vendors', label: 'Vendor Master', icon: Building },
+          { id: 'suppliers', label: 'Supplier Management', icon: Building },
           { id: 'requisitions', label: 'Purchase Requisitions', icon: FileText },
           { id: 'rfqs', label: 'RFQs & Tenders', icon: Sparkles },
           { id: 'orders', label: 'Purchase Orders', icon: ShoppingCart },
@@ -175,44 +175,25 @@ export default function ProcurementModule({ onTriggerToast }: ProcurementModuleP
         </div>
       )}
 
-      {/* TAB 2: VENDOR MASTER */}
-      {activeTab === 'vendors' && (
-        <div className="bg-white rounded-lg border border-brand-border shadow-sm-flat overflow-hidden">
-          <div className="p-4 border-b bg-brand-bg-secondary/10 flex justify-between items-center">
-            <SearchInput value={searchQuery} onChange={setSearchQuery} placeholder="Search vendor name, GST, code..." />
-            <button onClick={() => onTriggerToast('info', 'Vendor Master', 'Opening vendor onboarding wizard...')} className="px-3 py-1.5 bg-brand-primary text-white text-xs font-semibold rounded flex items-center gap-1 cursor-pointer">
-              <Plus size={14} /> Add Vendor
-            </button>
+      {/* TAB 2: SUPPLIER MANAGEMENT REDIRECT */}
+      {activeTab === 'suppliers' && (
+        <div className="bg-white p-12 text-center rounded-lg border border-brand-border shadow-sm space-y-4">
+          <div className="w-16 h-16 rounded-full bg-blue-50 text-brand-primary flex items-center justify-center mx-auto">
+            <Building size={24} />
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead className="bg-brand-bg-secondary border-b text-[10px] font-bold text-brand-text-secondary uppercase">
-                <tr>
-                  <th className="p-3">Vendor Code</th>
-                  <th className="p-3">Supplier Name</th>
-                  <th className="p-3">Category</th>
-                  <th className="p-3">GSTIN</th>
-                  <th className="p-3">Contact</th>
-                  <th className="p-3 text-right">Credit Cap</th>
-                  <th className="p-3 text-center">Rating</th>
-                  <th className="p-3 text-center">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-brand-border">
-                {vendors.map(v => (
-                  <tr key={v.id} className="hover:bg-brand-bg-secondary/30">
-                    <td className="p-3 font-mono font-bold text-brand-primary">{v.code}</td>
-                    <td className="p-3 font-semibold">{v.name}</td>
-                    <td className="p-3">{v.category}</td>
-                    <td className="p-3 font-mono">{v.gstNo}</td>
-                    <td className="p-3 text-brand-text-secondary">{v.contactPerson} ({v.phone})</td>
-                    <td className="p-3 text-right font-mono font-bold">{formatINR(v.creditLimit)}</td>
-                    <td className="p-3 text-center font-bold text-amber-600">{v.rating} ★</td>
-                    <td className="p-3 text-center"><Badge variant="success">{v.status}</Badge></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="max-w-md mx-auto space-y-1">
+            <h3 className="text-base font-bold text-brand-text-primary">Supplier Management Upgrade</h3>
+            <p className="text-xs text-brand-text-secondary">
+              Supplier Management has been upgraded. Click here to open the full Supplier Management module.
+            </p>
+          </div>
+          <div className="flex justify-center gap-2">
+            <button
+              onClick={() => onTriggerToast('info', 'Navigating to Supplier Management', 'Use the sidebar: Procurement → Supplier Management')}
+              className="px-4 py-2 bg-brand-primary text-white text-xs font-semibold rounded-md hover:bg-blue-700 transition cursor-pointer shadow-xs"
+            >
+              Open Supplier Management
+            </button>
           </div>
         </div>
       )}
