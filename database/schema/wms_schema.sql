@@ -1,5 +1,5 @@
 -- =============================================================================
--- INK FMCG ENTERPRISE ERP — WAREHOUSE OPERATIONS (WMS) SCHEMAS (v1.0)
+-- INK FMCG ENTERPRISE ERP — WAREHOUSE OPERATIONS (WMS) SCHEMAS (v2.0 REFINED)
 -- File Name      : wms_schema.sql
 -- Target Database: PostgreSQL 16+
 -- Schema Owner   : wms
@@ -347,7 +347,8 @@ CREATE TABLE wms.bin_locks (
     CONSTRAINT chk_bin_lock_type CHECK (lock_type IN ('INBOUND_LOCK', 'OUTBOUND_LOCK', 'FULL_FREEZE', 'SYSTEM_RESERVED'))
 );
 
-COMMENT ON TABLE wms.bin_locks (id) IS 'System locks disabling allocations to specific bins during audits.';
+COMMENT ON TABLE wms.bin_locks IS 
+    '[OPERATIONAL] System locks disabling allocations to specific bins during audits.';
 
 -- 5.2 Bin Capacity Monitoring (Dynamic volume/weight checkpoints)
 CREATE TABLE wms.bin_capacity_monitoring (
@@ -664,10 +665,218 @@ COMMENT ON TABLE wms.dispatch_loading_tasks IS
     '[OPERATIONAL] Loading task executions mapping shipping carton scan verification to vehicles.';
 
 -- =============================================================================
--- SECTION 12 — INDEX STRATEGY (B-TREE FOREIGNS & COMPOSITE COVERING)
+-- SECTION 12 — AUDITING & TIMELINES (v2.0 ADDITIONS)
 -- =============================================================================
 
--- 12.1 B-Tree Indexes on all Foreign Keys
+-- 12.1 Warehouse Event Timeline (Master Execution Log)
+CREATE TABLE wms.warehouse_event_timeline (
+    id                  UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    warehouse_id        UUID         NOT NULL REFERENCES warehouse.warehouses(id) ON DELETE CASCADE,
+    event_type          VARCHAR(100) NOT NULL, -- RECEIVE_START, RECEIVE_END, UNLOAD_END, QUALITY_START, QUALITY_END, PUTAWAY_START, PUTAWAY_END, PICK_START, PICK_END, PACK_START, PACK_END, LOAD_START, LOAD_END, DISPATCH_RELEASE, TASK_CANCEL, TASK_REASSIGN
+    source_document_type VARCHAR(50)  NOT NULL, -- PO, SO, COUNT, TRANSFER
+    source_document_id  UUID         NOT NULL,
+    event_timestamp     TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
+    employee_id         UUID         REFERENCES employee.employees(id) ON DELETE SET NULL,
+    payload             JSONB,
+
+    created_at_utc      TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp()
+);
+
+COMMENT ON TABLE wms.warehouse_event_timeline IS 
+    '[HISTORY] Compiled chronological master timeline for executive warehouse dashboard metrics.';
+
+-- 12.2 Equipment Assignment History
+CREATE TABLE wms.equipment_assignment_history (
+    id                   UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    equipment_id         UUID         NOT NULL REFERENCES warehouse.warehouse_equipment(id) ON DELETE CASCADE,
+    operator_employee_id UUID         NOT NULL REFERENCES employee.employees(id) ON DELETE CASCADE,
+    assigned_at_utc      TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
+    released_at_utc      TIMESTAMPTZ,
+    assignment_reason    TEXT         NOT NULL,
+
+    -- Concurrency and Auditing
+    row_version          INT          NOT NULL DEFAULT 1,
+    created_at_utc       TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
+
+    CONSTRAINT chk_equip_assign_dates CHECK (released_at_utc IS NULL OR released_at_utc >= assigned_at_utc)
+);
+
+COMMENT ON TABLE wms.equipment_assignment_history IS 
+    '[HISTORY] Audit log mapping equipment usage and operators.';
+
+-- 12.3 Labor Assignment History
+CREATE TABLE wms.labor_assignment_history (
+    id                     UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    employee_id            UUID         NOT NULL REFERENCES employee.employees(id) ON DELETE CASCADE,
+    warehouse_task_id      UUID         NOT NULL REFERENCES wms.warehouse_tasks(id) ON DELETE CASCADE,
+    assigned_at_utc        TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
+    completed_at_utc       TIMESTAMPTZ,
+    reassignment_reason    TEXT,
+    supervisor_employee_id UUID         REFERENCES employee.employees(id) ON DELETE SET NULL,
+
+    CONSTRAINT chk_labor_assign_dates CHECK (completed_at_utc IS NULL OR completed_at_utc >= assigned_at_utc)
+);
+
+COMMENT ON TABLE wms.labor_assignment_history IS 
+    '[HISTORY] Timeline log tracking worker task performance and supervisor oversight.';
+
+-- 12.4 Dock Occupancy History
+CREATE TABLE wms.dock_occupancy_history (
+    id                    UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    dock_location_id      UUID         NOT NULL REFERENCES warehouse.storage_locations(id) ON DELETE CASCADE,
+    receiving_session_id  UUID         REFERENCES wms.receiving_sessions(id) ON DELETE SET NULL,
+    vehicle_plate_number  VARCHAR(50)  NOT NULL,
+    
+    arrival_time          TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
+    docked_at_utc         TIMESTAMPTZ,
+    unload_start_at_utc   TIMESTAMPTZ,
+    unload_end_at_utc     TIMESTAMPTZ,
+    load_start_at_utc     TIMESTAMPTZ,
+    load_end_at_utc       TIMESTAMPTZ,
+    departure_time        TIMESTAMPTZ,
+    
+    delay_reason          TEXT,
+
+    CONSTRAINT chk_dock_occupancy_dates CHECK (departure_time IS NULL OR departure_time >= arrival_time)
+);
+
+COMMENT ON TABLE wms.dock_occupancy_history IS 
+    '[HISTORY] Detailed metrics tracking dock utilization and delay bottlenecks.';
+
+-- 12.5 Warehouse Exception Registry (Unified exceptions mapping)
+CREATE TABLE wms.warehouse_exception_registry (
+    id                     UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    warehouse_id           UUID         NOT NULL REFERENCES warehouse.warehouses(id) ON DELETE CASCADE,
+    exception_category     VARCHAR(50)  NOT NULL, -- RECEIVING, PUTAWAY, PICKING, PACKING, LOADING, CYCLE_COUNT, DAMAGE, SAFETY
+    severity               VARCHAR(20)  NOT NULL, -- LOW, MEDIUM, HIGH, CRITICAL
+    reported_at_utc        TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
+    reported_by_employee_id UUID         REFERENCES employee.employees(id) ON DELETE SET NULL,
+    description            TEXT         NOT NULL,
+    resolution             TEXT,
+    resolved_at_utc        TIMESTAMPTZ,
+    owner_employee_id      UUID         REFERENCES employee.employees(id) ON DELETE SET NULL,
+
+    CONSTRAINT chk_exception_severity CHECK (severity IN ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL')),
+    CONSTRAINT chk_exception_category CHECK (exception_category IN ('RECEIVING', 'PUTAWAY', 'PICKING', 'PACKING', 'LOADING', 'CYCLE_COUNT', 'DAMAGE', 'SAFETY')),
+    CONSTRAINT chk_exception_dates CHECK (resolved_at_utc IS NULL OR resolved_at_utc >= reported_at_utc)
+);
+
+COMMENT ON TABLE wms.warehouse_exception_registry IS 
+    '[OPERATIONAL] Unified repository logging execution anomalies and safety events.';
+
+-- 12.6 Task Lifecycle history (Transition timeline)
+CREATE TABLE wms.task_lifecycle_history (
+    id                     UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    warehouse_task_id      UUID         NOT NULL REFERENCES wms.warehouse_tasks(id) ON DELETE CASCADE,
+    task_status_id         UUID         NOT NULL REFERENCES wms.warehouse_task_statuses(id) ON DELETE CASCADE,
+    effective_from         TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
+    effective_to           TIMESTAMPTZ,
+    comments               TEXT,
+    changed_by_user_id     UUID         REFERENCES iam.users(id) ON DELETE SET NULL,
+
+    CONSTRAINT chk_task_lifecycle_dates CHECK (effective_to IS NULL OR effective_to >= effective_from)
+);
+
+COMMENT ON TABLE wms.task_lifecycle_history IS 
+    '[HISTORY] Chronological logs of changes made to WMS queue execution statuses.';
+
+-- 12.7 SLA Monitoring
+CREATE TABLE wms.sla_monitoring (
+    id                      UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    warehouse_task_id       UUID         NOT NULL REFERENCES wms.warehouse_tasks(id) ON DELETE CASCADE,
+    sla_type                VARCHAR(50)  NOT NULL, -- RECEIVING, PUTAWAY, PICKING, PACKING, LOADING
+    target_duration_minutes INT          NOT NULL,
+    actual_duration_minutes INT,
+    is_breached             BOOLEAN      GENERATED ALWAYS AS (actual_duration_minutes > target_duration_minutes) STORED,
+    breach_reason           TEXT,
+    created_at_utc          TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
+
+    CONSTRAINT chk_sla_target CHECK (target_duration_minutes > 0),
+    CONSTRAINT chk_sla_actual CHECK (actual_duration_minutes IS NULL OR actual_duration_minutes >= 0),
+    CONSTRAINT chk_sla_type CHECK (sla_type IN ('RECEIVING', 'PUTAWAY', 'PICKING', 'PACKING', 'LOADING'))
+);
+
+COMMENT ON TABLE wms.sla_monitoring IS 
+    '[OPERATIONAL] Task execution duration monitors mapping targets against breaches.';
+
+-- 12.8 Capacity Daily snapshots (Historical utilization tracking)
+CREATE TABLE wms.daily_capacity_snapshots (
+    id                   UUID          PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    snapshot_date        DATE          NOT NULL DEFAULT CURRENT_DATE,
+    warehouse_id         UUID          NOT NULL REFERENCES warehouse.warehouses(id) ON DELETE CASCADE,
+    zone_id              UUID          REFERENCES warehouse.warehouse_operational_areas(id) ON DELETE CASCADE,
+    storage_location_id  UUID          REFERENCES warehouse.storage_locations(id) ON DELETE CASCADE, -- bin reference
+    
+    max_capacity_kg      NUMERIC(12,4) NOT NULL,
+    utilized_capacity_kg  NUMERIC(12,4) NOT NULL,
+    utilization_pct      NUMERIC(5,2)  GENERATED ALWAYS AS (ROUND((utilized_capacity_kg / max_capacity_kg) * 100.00, 2)) STORED,
+    created_at_utc       TIMESTAMPTZ   NOT NULL DEFAULT clock_timestamp(),
+
+    CONSTRAINT uq_daily_capacity_snap UNIQUE (snapshot_date, warehouse_id, zone_id, storage_location_id),
+    CONSTRAINT chk_cap_snap_max CHECK (max_capacity_kg > 0.0000),
+    CONSTRAINT chk_cap_snap_util CHECK (utilized_capacity_kg >= 0.0000)
+);
+
+COMMENT ON TABLE wms.daily_capacity_snapshots IS 
+    '[HISTORY] Snapshots of storage capacities at Bin, Zone, and Warehouse levels.';
+
+-- 12.9 Dispatch Verification (Outbound checklist gating)
+CREATE TABLE wms.dispatch_verification (
+    id                            UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    dispatch_loading_task_id      UUID         NOT NULL REFERENCES wms.dispatch_loading_tasks(id) ON DELETE CASCADE,
+    seal_number                   VARCHAR(100) NOT NULL,
+    
+    vehicle_inspection_passed     BOOLEAN      NOT NULL DEFAULT FALSE,
+    vehicle_inspection_notes      TEXT,
+    final_verification_passed     BOOLEAN      NOT NULL DEFAULT FALSE,
+    
+    verifier_employee_id          UUID         REFERENCES employee.employees(id) ON DELETE SET NULL,
+    photo_reference_hook          VARCHAR(255),
+    
+    departure_approved            BOOLEAN      NOT NULL DEFAULT FALSE,
+    departure_approved_by_user_id UUID         REFERENCES iam.users(id) ON DELETE SET NULL,
+    departure_approved_at_utc     TIMESTAMPTZ,
+
+    created_at_utc                TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
+
+    CONSTRAINT uq_dispatch_ver_task UNIQUE (dispatch_loading_task_id)
+);
+
+COMMENT ON TABLE wms.dispatch_verification IS 
+    '[OPERATIONAL] Dispatch checklist registers verifying vehicle safety, final pallet check, verifiers, and approvals.';
+
+-- 12.10 Warehouse KPIs Analytics Snapshot
+CREATE TABLE wms.warehouse_kpis_snapshot (
+    id                    UUID          PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    recorded_date         DATE          NOT NULL DEFAULT CURRENT_DATE,
+    warehouse_id          UUID          NOT NULL REFERENCES warehouse.warehouses(id) ON DELETE CASCADE,
+    
+    receiving_kpi_score   NUMERIC(5,2),
+    putaway_kpi_score     NUMERIC(5,2),
+    picking_kpi_score     NUMERIC(5,2),
+    packing_kpi_score     NUMERIC(5,2),
+    loading_kpi_score     NUMERIC(5,2),
+    
+    calculation_version   INT           NOT NULL DEFAULT 1,
+    aggregation_period    VARCHAR(50)   NOT NULL DEFAULT 'DAILY', -- DAILY, WEEKLY, MONTHLY
+    calculation_source    VARCHAR(100)  NOT NULL DEFAULT 'SYSTEM_BATCH',
+    execution_timestamp   TIMESTAMPTZ   NOT NULL DEFAULT clock_timestamp(),
+
+    created_at_utc        TIMESTAMPTZ   NOT NULL DEFAULT clock_timestamp(),
+
+    CONSTRAINT uq_wms_kpi_snapshot UNIQUE (recorded_date, warehouse_id, calculation_version),
+    CONSTRAINT chk_wms_kpi_calc_ver CHECK (calculation_version >= 1),
+    CONSTRAINT chk_wms_kpi_period CHECK (aggregation_period IN ('DAILY', 'WEEKLY', 'MONTHLY'))
+);
+
+COMMENT ON TABLE wms.warehouse_kpis_snapshot IS 
+    '[HISTORY] Aggregated daily warehouse scores auditing operational metrics.';
+
+-- =============================================================================
+-- SECTION 13 — INDEX STRATEGY (B-TREE FOREIGNS & COMPOSITE COVERING)
+-- =============================================================================
+
+-- 13.1 B-Tree Indexes on all Foreign Keys
 CREATE INDEX idx_tasks_warehouse_fk            ON wms.warehouse_tasks (warehouse_id);
 CREATE INDEX idx_tasks_type_fk                 ON wms.warehouse_tasks (task_type_id);
 CREATE INDEX idx_tasks_status_fk               ON wms.warehouse_tasks (task_status_id);
@@ -753,14 +962,51 @@ CREATE INDEX idx_dispatch_dock_fk              ON wms.dispatch_loading_tasks (do
 CREATE INDEX idx_dispatch_pack_fk              ON wms.dispatch_loading_tasks (packing_session_id);
 CREATE INDEX idx_dispatch_user_fk              ON wms.dispatch_loading_tasks (verified_by_user_id);
 
--- 12.2 Composite Indexes (Covering filter queries)
+-- v2.0 Indexes
+CREATE INDEX idx_timeline_warehouse_fk         ON wms.warehouse_event_timeline (warehouse_id);
+CREATE INDEX idx_timeline_employee_fk          ON wms.warehouse_event_timeline (employee_id);
+
+CREATE INDEX idx_equip_hist_equip_fk           ON wms.equipment_assignment_history (equipment_id);
+CREATE INDEX idx_equip_hist_employee_fk        ON wms.equipment_assignment_history (operator_employee_id);
+
+CREATE INDEX idx_labor_hist_employee_fk        ON wms.labor_assignment_history (employee_id);
+CREATE INDEX idx_labor_hist_task_fk            ON wms.labor_assignment_history (warehouse_task_id);
+CREATE INDEX idx_labor_hist_super_fk           ON wms.labor_assignment_history (supervisor_employee_id);
+
+CREATE INDEX idx_dock_hist_dock_fk             ON wms.dock_occupancy_history (dock_location_id);
+CREATE INDEX idx_dock_hist_session_fk          ON wms.dock_occupancy_history (receiving_session_id);
+
+CREATE INDEX idx_excep_reg_warehouse_fk        ON wms.warehouse_exception_registry (warehouse_id);
+CREATE INDEX idx_excep_reg_reporter_fk         ON wms.warehouse_exception_registry (reported_by_employee_id);
+CREATE INDEX idx_excep_reg_owner_fk            ON wms.warehouse_exception_registry (owner_employee_id);
+
+CREATE INDEX idx_lifecycle_hist_task_fk        ON wms.task_lifecycle_history (warehouse_task_id);
+CREATE INDEX idx_lifecycle_hist_status_fk      ON wms.task_lifecycle_history (task_status_id);
+CREATE INDEX idx_lifecycle_hist_user_fk        ON wms.task_lifecycle_history (changed_by_user_id);
+
+CREATE INDEX idx_sla_task_fk                   ON wms.sla_monitoring (warehouse_task_id);
+
+CREATE INDEX idx_cap_snap_warehouse_fk         ON wms.daily_capacity_snapshots (warehouse_id);
+CREATE INDEX idx_cap_snap_zone_fk              ON wms.daily_capacity_snapshots (zone_id);
+CREATE INDEX idx_cap_snap_loc_fk               ON wms.daily_capacity_snapshots (storage_location_id);
+
+CREATE INDEX idx_dispatch_ver_task_fk          ON wms.dispatch_verification (dispatch_loading_task_id);
+CREATE INDEX idx_dispatch_ver_verifier_fk      ON wms.dispatch_verification (verifier_employee_id);
+CREATE INDEX idx_dispatch_ver_user_fk          ON wms.dispatch_verification (departure_approved_by_user_id);
+
+CREATE INDEX idx_wms_kpi_warehouse_fk          ON wms.warehouse_kpis_snapshot (warehouse_id);
+
+-- 13.2 Composite Indexes (Covering filter queries)
 CREATE INDEX idx_tasks_queue_comp              ON wms.warehouse_tasks (warehouse_id, task_status_id, priority_id);
 CREATE INDEX idx_putaway_override_comp         ON wms.putaway_tasks (source_bin_id, is_override);
 CREATE INDEX idx_count_variance_comp           ON wms.cycle_count_results (cycle_count_task_id, is_approved);
+CREATE INDEX idx_capacity_daily_comp           ON wms.daily_capacity_snapshots (snapshot_date, warehouse_id, zone_id);
 
--- 12.3 Partial Indexes (Optimizing active/hot records)
+-- 13.3 Partial Indexes (Optimizing active/hot records)
 CREATE INDEX idx_tasks_active_in_progress      ON wms.warehouse_tasks (warehouse_id) WHERE task_status_id = 'c1251910-1849-43c2-bf72-4d2cf99a80e1'; -- references active IN_PROGRESS ID
 CREATE INDEX idx_bin_locks_active              ON wms.bin_locks (storage_location_id) WHERE is_active = TRUE;
 CREATE INDEX idx_pick_wave_unreleased          ON wms.pick_waves (warehouse_id) WHERE is_released = FALSE;
 CREATE INDEX idx_recv_exception_pending        ON wms.receiving_exceptions (receiving_task_id) WHERE action_taken IS NULL;
 CREATE INDEX idx_bin_remaining_weight_low      ON wms.bin_capacity_monitoring (storage_location_id) WHERE remaining_weight_kg < 50.0000;
+CREATE INDEX idx_sla_breached_tasks            ON wms.sla_monitoring (warehouse_task_id) WHERE is_breached = TRUE;
+CREATE INDEX idx_exceptions_unresolved         ON wms.warehouse_exception_registry (warehouse_id) WHERE resolved_at_utc IS NULL;
