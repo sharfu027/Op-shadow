@@ -1,5 +1,5 @@
 -- =============================================================================
--- INK FMCG ENTERPRISE ERP — SALES MANAGEMENT SCHEMAS (v1.0)
+-- INK FMCG ENTERPRISE ERP — SALES MANAGEMENT SCHEMAS (v2.0 REFINED)
 -- File Name      : sales_schema.sql
 -- Target Database: PostgreSQL 16+
 -- Schema Owner   : sales
@@ -43,7 +43,7 @@ CREATE TABLE sales.sales_order_statuses (
 );
 
 COMMENT ON TABLE sales.sales_order_statuses IS 
-    '[LOOKUP] Lifecycle status of a sales order: DRAFT, PENDING_APPROVAL, APPROVED, ALLOCATED, DISPATCHED, DELIVERED, INVOICED, CANCELLED, ON_HOLD.';
+    '[LOOKUP] Lifecycle status of a sales order: DRAFT, SUBMITTED, PENDING_APPROVAL, APPROVED, RELEASED, ALLOCATED, PARTIALLY_ALLOCATED, PICKING, PACKED, DISPATCHED, DELIVERED, CLOSED, CANCELLED, REJECTED, EXPIRED.';
 
 -- 1.3 Sales Order Types
 CREATE TABLE sales.sales_order_types (
@@ -388,7 +388,7 @@ COMMENT ON TABLE sales.sales_order_revisions IS
     '[HISTORY] Immutable snapshot revisions archiving order modifications over time.';
 
 -- =============================================================================
--- SECTION 4 — ORDER ALLOCATION & RESERVATIONS
+-- SECTION 4 — ORDER ALLOCATION & RESERVATIONS (REFINED)
 -- =============================================================================
 
 -- 4.1 Order Allocations
@@ -430,8 +430,47 @@ CREATE TABLE sales.order_allocation_history (
 COMMENT ON TABLE sales.order_allocation_history IS 
     '[HISTORY] Detailed audit logs tracking reservation allocations, releases, and backorder splits.';
 
+-- 4.3 Sales Inventory Reservations (Unified tracking)
+CREATE TABLE sales.sales_inventory_reservations (
+    id                     UUID          PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    sales_order_line_id    UUID          NOT NULL REFERENCES sales.sales_order_lines(id) ON DELETE CASCADE,
+    warehouse_id           UUID          NOT NULL REFERENCES warehouse.warehouses(id),
+    requested_quantity     NUMERIC(18,4) NOT NULL,
+    reserved_quantity      NUMERIC(18,4) NOT NULL DEFAULT 0.0000,
+    status                 VARCHAR(50)   NOT NULL DEFAULT 'REQUESTED', -- REQUESTED, RESERVED, RELEASED, EXPIRED, CONSUMED, CANCELLED
+
+    row_version            INT           NOT NULL DEFAULT 1,
+    created_at_utc         TIMESTAMPTZ   NOT NULL DEFAULT clock_timestamp(),
+    created_by_user_id     UUID          REFERENCES iam.users(id) ON DELETE SET NULL,
+    last_modified_at_utc   TIMESTAMPTZ   NOT NULL DEFAULT clock_timestamp(),
+    last_modified_by_user_id UUID        REFERENCES iam.users(id) ON DELETE SET NULL,
+
+    CONSTRAINT chk_sales_reserve_qty CHECK (requested_quantity > 0.0000),
+    CONSTRAINT chk_sales_reserve_bound CHECK (reserved_quantity >= 0.0000 AND reserved_quantity <= requested_quantity),
+    CONSTRAINT chk_sales_reserve_status CHECK (status IN ('REQUESTED', 'RESERVED', 'RELEASED', 'EXPIRED', 'CONSUMED', 'CANCELLED'))
+);
+
+COMMENT ON TABLE sales.sales_inventory_reservations IS 
+    '[OPERATIONAL] Active system locks requesting or holding specific product batches for sales lines.';
+
+-- 4.4 Sales Reservation History
+CREATE TABLE sales.sales_reservation_history (
+    id                  UUID          PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    reservation_id      UUID          NOT NULL REFERENCES sales.sales_inventory_reservations(id) ON DELETE CASCADE,
+    event_timestamp     TIMESTAMPTZ   NOT NULL DEFAULT clock_timestamp(),
+    event_status        VARCHAR(50)   NOT NULL,
+    quantity            NUMERIC(18,4) NOT NULL,
+    processed_by_user_id UUID         REFERENCES iam.users(id) ON DELETE SET NULL,
+    notes               TEXT,
+
+    CONSTRAINT chk_sales_res_hist_status CHECK (event_status IN ('REQUESTED', 'RESERVED', 'RELEASED', 'EXPIRED', 'CONSUMED', 'CANCELLED'))
+);
+
+COMMENT ON TABLE sales.sales_reservation_history IS 
+    '[HISTORY] Logs tracing lifecycle state shifts of inventory reservation requests.';
+
 -- =============================================================================
--- SECTION 5 — DELIVERY SCHEDULING
+-- SECTION 5 — DELIVERY & FULFILLMENT TIMELINES
 -- =============================================================================
 
 -- 5.1 Delivery Schedules
@@ -483,8 +522,26 @@ CREATE TABLE sales.delivery_schedule_lines (
 COMMENT ON TABLE sales.delivery_schedule_lines IS 
     '[OPERATIONAL] Line items scheduled for shipping in a specific delivery run.';
 
+-- 5.3 Fulfillment Event History
+CREATE TABLE sales.fulfillment_event_history (
+    id                   UUID          PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    sales_order_id       UUID          NOT NULL REFERENCES sales.sales_orders(id) ON DELETE CASCADE,
+    sales_order_line_id  UUID          REFERENCES sales.sales_order_lines(id) ON DELETE CASCADE,
+    event_type           VARCHAR(100)  NOT NULL, -- PICK_START, PICK_END, PACKED, LOADED, DEPARTED, ARRIVED, DELIVERED, FAIL, REFUSED, PARTIAL
+    event_timestamp      TIMESTAMPTZ   NOT NULL DEFAULT clock_timestamp(),
+    employee_id          UUID          REFERENCES employee.employees(id) ON DELETE SET NULL,
+    warehouse_id         UUID          REFERENCES warehouse.warehouses(id) ON DELETE SET NULL,
+    comments             TEXT,
+
+    -- Concurrency and Auditing
+    created_at_utc       TIMESTAMPTZ   NOT NULL DEFAULT clock_timestamp()
+);
+
+COMMENT ON TABLE sales.fulfillment_event_history IS 
+    '[HISTORY] Detailed warehouse timelines mapping dispatch milestones (picking, packing, refusal states).';
+
 -- =============================================================================
--- SECTION 6 — PRICING SNAPSHOTS
+-- SECTION 6 — PRICING & DISCOUNTS SNAPSHOTS
 -- =============================================================================
 
 CREATE TABLE sales.order_line_pricing_snapshots (
@@ -500,6 +557,12 @@ CREATE TABLE sales.order_line_pricing_snapshots (
     price_source              VARCHAR(100)  NOT NULL, -- DYNAMIC_ENGINE, PROMOTION_GRID, CONTRACT, MANUAL_OVERRIDE
     calculated_tax_amount     NUMERIC(18,4) NOT NULL DEFAULT 0.0000,
     
+    -- Refinement: Pricing Decision Trace
+    pricing_rule_priority     INT           NOT NULL DEFAULT 1,
+    selection_rationale       TEXT,
+    applied_promotion_id      UUID,         -- references sales.promotions(id) added after table compilation
+    applied_contract_id       UUID,         -- references sales.sales_contracts(id) added after table compilation
+
     created_at_utc            TIMESTAMPTZ   NOT NULL DEFAULT clock_timestamp(),
 
     CONSTRAINT chk_price_base CHECK (base_product_price >= 0.0000),
@@ -566,6 +629,8 @@ CREATE TABLE sales.sales_contract_lines (
     CONSTRAINT chk_contract_line_consumed CHECK (consumed_quantity >= 0.0000),
     CONSTRAINT chk_contract_line_price CHECK (unit_price >= 0.0000)
 );
+
+ALTER TABLE sales.order_line_pricing_snapshots ADD CONSTRAINT fk_price_snap_contract FOREIGN KEY (applied_contract_id) REFERENCES sales.sales_contracts(id) ON DELETE SET NULL;
 
 COMMENT ON TABLE sales.sales_contract_lines IS 
     '[FOUNDATION] Approved products, prices, and quantities covered under commercial contracts.';
@@ -635,14 +700,16 @@ CREATE TABLE sales.promotion_campaigns (
     start_date           DATE         NOT NULL,
     end_date             DATE         NOT NULL,
     is_active            BOOLEAN      NOT NULL DEFAULT TRUE,
+    campaign_version     INT          NOT NULL DEFAULT 1,
 
     -- Auditing
     created_at_utc       TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
     created_by_user_id   UUID         REFERENCES iam.users(id) ON DELETE SET NULL,
-    last_modified_at_utc   TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
+    last_modified_at_utc TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
 
     CONSTRAINT uq_campaign_code UNIQUE (campaign_code),
-    CONSTRAINT chk_campaign_dates CHECK (end_date >= start_date)
+    CONSTRAINT chk_campaign_dates CHECK (end_date >= start_date),
+    CONSTRAINT chk_campaign_version CHECK (campaign_version >= 1)
 );
 
 COMMENT ON TABLE sales.promotion_campaigns IS 
@@ -659,6 +726,7 @@ CREATE TABLE sales.promotions (
     discount_pct         NUMERIC(5,2),
     discount_amount      NUMERIC(18,4),
     is_active            BOOLEAN       NOT NULL DEFAULT TRUE,
+    promotion_version    INT           NOT NULL DEFAULT 1,
 
     -- Auditing
     created_at_utc       TIMESTAMPTZ   NOT NULL DEFAULT clock_timestamp(),
@@ -667,8 +735,11 @@ CREATE TABLE sales.promotions (
 
     CONSTRAINT uq_promotion_code UNIQUE (promotion_code),
     CONSTRAINT chk_promo_discount_pct CHECK (discount_pct IS NULL OR (discount_pct >= 0.00 AND discount_pct <= 100.00)),
-    CONSTRAINT chk_promo_discount_amt CHECK (discount_amount IS NULL OR discount_amount >= 0.0000)
+    CONSTRAINT chk_promo_discount_amt CHECK (discount_amount IS NULL OR discount_amount >= 0.0000),
+    CONSTRAINT chk_promo_version CHECK (promotion_version >= 1)
 );
+
+ALTER TABLE sales.order_line_pricing_snapshots ADD CONSTRAINT fk_price_snap_promo FOREIGN KEY (applied_promotion_id) REFERENCES sales.promotions(id) ON DELETE SET NULL;
 
 COMMENT ON TABLE sales.promotions IS 
     '[FOUNDATION] Specific discount structures like BOGO, multi-buy breaks, and percent cuts.';
@@ -696,19 +767,97 @@ CREATE TABLE sales.promotion_product_rules (
     product_id           UUID          REFERENCES product.products(id) ON DELETE CASCADE,
     product_category_id  UUID,         -- links product categories
     minimum_quantity     NUMERIC(18,4) NOT NULL DEFAULT 1.0000,
+    rule_version         INT           NOT NULL DEFAULT 1,
 
     CONSTRAINT chk_promo_rule_qty CHECK (minimum_quantity > 0.0000),
-    CONSTRAINT chk_promo_rule_target CHECK (product_id IS NOT NULL OR product_category_id IS NOT NULL)
+    CONSTRAINT chk_promo_rule_target CHECK (product_id IS NOT NULL OR product_category_id IS NOT NULL),
+    CONSTRAINT chk_promo_rule_ver CHECK (rule_version >= 1)
 );
 
 COMMENT ON TABLE sales.promotion_product_rules IS 
     '[FOUNDATION] Product mapping rules mapping item quantity thresholds for discount grids.';
 
+-- 9.5 Promotion Application History
+CREATE TABLE sales.promotion_application_history (
+    id                      UUID          PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    sales_order_line_id     UUID          NOT NULL REFERENCES sales.sales_order_lines(id) ON DELETE CASCADE,
+    campaign_id             UUID          REFERENCES sales.promotion_campaigns(id) ON DELETE SET NULL,
+    campaign_version        INT           NOT NULL,
+    promotion_id            UUID          REFERENCES sales.promotions(id) ON DELETE SET NULL,
+    promotion_version       INT           NOT NULL,
+    rule_version            INT           NOT NULL,
+    applied_discount_amount NUMERIC(18,4) NOT NULL,
+    approved_by_user_id     UUID          REFERENCES iam.users(id) ON DELETE SET NULL,
+    effective_from          DATE          NOT NULL,
+    effective_to            DATE,
+
+    created_at_utc          TIMESTAMPTZ   NOT NULL DEFAULT clock_timestamp(),
+
+    CONSTRAINT chk_promo_hist_amt CHECK (applied_discount_amount >= 0.0000),
+    CONSTRAINT chk_promo_hist_dates CHECK (effective_to IS NULL OR effective_to >= effective_from)
+);
+
+COMMENT ON TABLE sales.promotion_application_history IS 
+    '[HISTORY] Immutable audit trail of exactly which promotion logic version was applied to an order line.';
+
 -- =============================================================================
--- SECTION 10 — SALES APPROVAL WORKFLOW
+-- SECTION 10 — SALES CONFIGURATIONS & PREFERENCES (NEW v2.0)
 -- =============================================================================
 
--- 10.1 Approval Requests Envelope
+-- 10.1 Sales Channel Configuration
+CREATE TABLE sales.sales_channel_configurations (
+    id                          UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    sales_channel_id            UUID         NOT NULL REFERENCES sales.sales_channels(id) ON DELETE CASCADE,
+    approval_workflow_required  BOOLEAN      NOT NULL DEFAULT FALSE,
+    default_warehouse_id        UUID         REFERENCES warehouse.warehouses(id) ON DELETE SET NULL,
+    pricing_strategy            VARCHAR(100) NOT NULL DEFAULT 'STANDARD',
+    credit_policy               VARCHAR(100) NOT NULL DEFAULT 'STRICT',
+    reservation_strategy        VARCHAR(100) NOT NULL DEFAULT 'FIFO',
+    fulfillment_strategy        VARCHAR(100) NOT NULL DEFAULT 'FULL',
+
+    -- Concurrency and Auditing
+    row_version                 INT          NOT NULL DEFAULT 1,
+    created_at_utc              TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
+    created_by_user_id          UUID         REFERENCES iam.users(id) ON DELETE SET NULL,
+    last_modified_at_utc        TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
+    last_modified_by_user_id    UUID         REFERENCES iam.users(id) ON DELETE SET NULL,
+
+    CONSTRAINT uq_channel_config UNIQUE (sales_channel_id)
+);
+
+COMMENT ON TABLE sales.sales_channel_configurations IS 
+    '[FOUNDATION] Configuration parameters linking pricing, workflows, and credit policies to specific sales routes.';
+
+-- 10.2 Customer Fulfillment Preferences
+CREATE TABLE sales.customer_order_preferences (
+    id                              UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    customer_id                     UUID         NOT NULL REFERENCES customer.customers(id) ON DELETE CASCADE,
+    preferred_warehouse_id          UUID         REFERENCES warehouse.warehouses(id) ON DELETE SET NULL,
+    preferred_carrier_id            UUID         REFERENCES supplier.suppliers(id) ON DELETE SET NULL,
+    preferred_delivery_window_start TIME,
+    preferred_delivery_window_end   TIME,
+    packaging_preference            VARCHAR(100),
+    special_instructions            TEXT,
+
+    -- Concurrency and Auditing
+    row_version                     INT          NOT NULL DEFAULT 1,
+    created_at_utc                  TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
+    created_by_user_id              UUID         REFERENCES iam.users(id) ON DELETE SET NULL,
+    last_modified_at_utc            TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
+    last_modified_by_user_id        UUID         REFERENCES iam.users(id) ON DELETE SET NULL,
+
+    CONSTRAINT uq_customer_pref UNIQUE (customer_id),
+    CONSTRAINT chk_pref_delivery_window CHECK (preferred_delivery_window_end IS NULL OR preferred_delivery_window_start IS NULL OR preferred_delivery_window_end > preferred_delivery_window_start)
+);
+
+COMMENT ON TABLE sales.customer_order_preferences IS 
+    '[FOUNDATION] Reusable customer fulfillment defaults governing carrier routes, packaging, and warehouses.';
+
+-- =============================================================================
+-- SECTION 11 — WORKFLOWS & CHRONOLOGICAL HISTORY
+-- =============================================================================
+
+-- 11.1 Approval Requests Envelope
 CREATE TABLE sales.approval_requests (
     id                   UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
     document_type        VARCHAR(50)  NOT NULL, -- QUOTATION, SALES_ORDER, RETURN, CONTRACT
@@ -726,7 +875,7 @@ CREATE TABLE sales.approval_requests (
 COMMENT ON TABLE sales.approval_requests IS 
     '[FOUNDATION] Workflow approval headers gating quotes or orders exceeding margin guidelines.';
 
--- 10.2 Approval Decisions
+-- 11.2 Approval Decisions
 CREATE TABLE sales.approval_decisions (
     id                   UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
     approval_request_id  UUID         NOT NULL REFERENCES sales.approval_requests(id) ON DELETE CASCADE,
@@ -741,7 +890,7 @@ CREATE TABLE sales.approval_decisions (
 COMMENT ON TABLE sales.approval_decisions IS 
     '[FOUNDATION] Operational workflow reviews logged by designated credit or sales controllers.';
 
--- 10.3 Approval Delegations
+-- 11.3 Approval Delegations
 CREATE TABLE sales.approval_delegations (
     id                            UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
     original_approver_employee_id UUID         NOT NULL REFERENCES employee.employees(id),
@@ -759,7 +908,7 @@ CREATE TABLE sales.approval_delegations (
 COMMENT ON TABLE sales.approval_delegations IS 
     '[FOUNDATION] Delegation mappings routing workflows when approval owners are absent.';
 
--- 10.4 Approval Escalations
+-- 11.4 Approval Escalations
 CREATE TABLE sales.approval_escalations (
     id                         UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
     approval_request_id        UUID         NOT NULL REFERENCES sales.approval_requests(id) ON DELETE CASCADE,
@@ -774,8 +923,61 @@ CREATE TABLE sales.approval_escalations (
 COMMENT ON TABLE sales.approval_escalations IS 
     '[FOUNDATION] Workflow escalations routing requests to higher management tiers upon SLA expiry.';
 
+-- 11.5 Order Status / Lifecycle History (Transition timeline)
+CREATE TABLE sales.sales_order_lifecycle_history (
+    id                     UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    sales_order_id         UUID         NOT NULL REFERENCES sales.sales_orders(id) ON DELETE CASCADE,
+    sales_order_status_id  UUID         NOT NULL REFERENCES sales.sales_order_statuses(id),
+    effective_from         TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
+    effective_to           TIMESTAMPTZ,
+    reason                 TEXT,
+    changed_by_user_id     UUID         REFERENCES iam.users(id) ON DELETE SET NULL,
+
+    CONSTRAINT chk_order_lifecycle_dates CHECK (effective_to IS NULL OR effective_to >= effective_from)
+);
+
+COMMENT ON TABLE sales.sales_order_lifecycle_history IS 
+    '[HISTORY] Detailed transition ledger recording order status shifts (picking -> packing -> dispatched).';
+
+-- 11.6 Sales Order Holds History
+CREATE TABLE sales.sales_order_hold_history (
+    id                     UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    sales_order_id         UUID         NOT NULL REFERENCES sales.sales_orders(id) ON DELETE CASCADE,
+    hold_type              VARCHAR(50)  NOT NULL, -- CREDIT_HOLD, ORDER_HOLD, DELIVERY_HOLD, CUSTOMER_HOLD
+    reason                 TEXT         NOT NULL,
+    applied_by_user_id     UUID         REFERENCES iam.users(id) ON DELETE SET NULL,
+    released_by_user_id    UUID         REFERENCES iam.users(id) ON DELETE SET NULL,
+    start_time             TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
+    end_time               TIMESTAMPTZ,
+    comments               TEXT,
+
+    CONSTRAINT chk_order_hold_dates CHECK (end_time IS NULL OR end_time >= start_time),
+    CONSTRAINT chk_order_hold_type CHECK (hold_type IN ('CREDIT_HOLD', 'ORDER_HOLD', 'DELIVERY_HOLD', 'CUSTOMER_HOLD'))
+);
+
+COMMENT ON TABLE sales.sales_order_hold_history IS 
+    '[HISTORY] Detailed log auditing order credit holds and release approvals.';
+
+-- 11.7 Generic Sales Event Chronology Timeline
+CREATE TABLE sales.sales_event_timeline (
+    id                  UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    company_id          UUID         NOT NULL REFERENCES organization.companies(id) ON DELETE CASCADE,
+    customer_id         UUID         NOT NULL REFERENCES customer.customers(id) ON DELETE CASCADE,
+    event_type          VARCHAR(100) NOT NULL, -- QUOTE_CREATE, QUOTE_APPROVE, ORDER_CREATE, ORDER_RELEASE, ALLOC_COMPLETE, SHIP_CREATE, DELIV_COMPLETE, RETURN_CREATE, RETURN_CLOSE
+    document_type       VARCHAR(50)  NOT NULL, -- QUOTATION, SALES_ORDER, SHIPMENT, RETURN
+    document_id         UUID         NOT NULL,
+    event_timestamp     TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
+    processed_by_user_id UUID        REFERENCES iam.users(id) ON DELETE SET NULL,
+    payload             JSONB,
+
+    CONSTRAINT chk_sales_evt_timeline_doc CHECK (document_type IN ('QUOTATION', 'SALES_ORDER', 'SHIPMENT', 'RETURN'))
+);
+
+COMMENT ON TABLE sales.sales_event_timeline IS 
+    '[HISTORY] Compiled chronological master timeline for executive sales dashboard metrics.';
+
 -- =============================================================================
--- SECTION 11 — SALES ANALYTICS FOUNDATION
+-- SECTION 12 — SALES ANALYTICS FOUNDATION
 -- =============================================================================
 
 CREATE TABLE sales.sales_kpis_snapshot (
@@ -793,25 +995,33 @@ CREATE TABLE sales.sales_kpis_snapshot (
     cancellation_rate_pct NUMERIC(5,2),
     conversion_rate_pct   NUMERIC(5,2),
     
+    -- Refinement: Versioning & Execution Audit
+    calculation_version   INT           NOT NULL DEFAULT 1,
+    aggregation_period    VARCHAR(50)   NOT NULL DEFAULT 'DAILY', -- DAILY, WEEKLY, MONTHLY
+    calculation_source    VARCHAR(100)  NOT NULL DEFAULT 'SYSTEM_BATCH',
+    execution_timestamp   TIMESTAMPTZ   NOT NULL DEFAULT clock_timestamp(),
+
     created_at_utc        TIMESTAMPTZ   NOT NULL DEFAULT clock_timestamp(),
 
-    CONSTRAINT uq_sales_kpi_snapshot UNIQUE (recorded_date, territory_id, sales_channel_id),
+    CONSTRAINT uq_sales_kpi_snapshot UNIQUE (recorded_date, territory_id, sales_channel_id, calculation_version),
     CONSTRAINT chk_kpi_orders CHECK (total_orders_count >= 0),
     CONSTRAINT chk_kpi_rev CHECK (revenue_amount >= 0.0000),
     CONSTRAINT chk_kpi_cost CHECK (cost_amount >= 0.0000),
     CONSTRAINT chk_kpi_fill CHECK (fill_rate_pct IS NULL OR (fill_rate_pct >= 0.00 AND fill_rate_pct <= 100.00)),
     CONSTRAINT chk_kpi_cancel CHECK (cancellation_rate_pct IS NULL OR (cancellation_rate_pct >= 0.00 AND cancellation_rate_pct <= 100.00)),
-    CONSTRAINT chk_kpi_convert CHECK (conversion_rate_pct IS NULL OR (conversion_rate_pct >= 0.00 AND conversion_rate_pct <= 100.00))
+    CONSTRAINT chk_kpi_convert CHECK (conversion_rate_pct IS NULL OR (conversion_rate_pct >= 0.00 AND conversion_rate_pct <= 100.00)),
+    CONSTRAINT chk_kpi_calc_ver CHECK (calculation_version >= 1),
+    CONSTRAINT chk_kpi_period CHECK (aggregation_period IN ('DAILY', 'WEEKLY', 'MONTHLY'))
 );
 
 COMMENT ON TABLE sales.sales_kpis_snapshot IS 
     '[HISTORY] Compiled historical sales analytics tracking channel performance metrics.';
 
 -- =============================================================================
--- SECTION 12 — INDEX STRATEGY (B-TREE FOREIGNS & COMPOSITE COVERING)
+-- SECTION 13 — INDEX STRATEGY (B-TREE FOREIGNS & COMPOSITE COVERING)
 -- =============================================================================
 
--- 12.1 B-Tree Indexes on all Foreign Keys
+-- 13.1 B-Tree Indexes on all Foreign Keys
 CREATE INDEX idx_quote_company_fk             ON sales.sales_quotations (company_id);
 CREATE INDEX idx_quote_customer_fk            ON sales.sales_quotations (customer_id);
 CREATE INDEX idx_quote_status_fk              ON sales.sales_quotations (quotation_status_id);
@@ -846,15 +1056,29 @@ CREATE INDEX idx_alloc_hist_line_fk           ON sales.order_allocation_history 
 CREATE INDEX idx_alloc_hist_warehouse_fk      ON sales.order_allocation_history (warehouse_id);
 CREATE INDEX idx_alloc_hist_user_fk           ON sales.order_allocation_history (processed_by_user_id);
 
+CREATE INDEX idx_sales_res_line_fk            ON sales.sales_inventory_reservations (sales_order_line_id);
+CREATE INDEX idx_sales_res_warehouse_fk       ON sales.sales_inventory_reservations (warehouse_id);
+CREATE INDEX idx_sales_res_user_fk            ON sales.sales_inventory_reservations (created_by_user_id);
+
+CREATE INDEX idx_sales_res_hist_parent_fk     ON sales.sales_reservation_history (reservation_id);
+CREATE INDEX idx_sales_res_hist_user_fk       ON sales.sales_reservation_history (processed_by_user_id);
+
 CREATE INDEX idx_deliv_sched_order_fk         ON sales.delivery_schedules (sales_order_id);
 CREATE INDEX idx_deliv_sched_site_fk          ON sales.delivery_schedules (customer_site_id);
 CREATE INDEX idx_deliv_sched_carrier_fk       ON sales.delivery_schedules (carrier_id);
 CREATE INDEX idx_deliv_sched_status_fk        ON sales.delivery_schedules (shipment_status_id);
 
 CREATE INDEX idx_deliv_line_sched_fk          ON sales.delivery_schedule_lines (delivery_schedule_id);
-CREATE INDEX idx_deliv_line_order_line_fk     ON sales.delivery_schedule_lines (sales_order_line_id);
+CREATE INDEX INDEX idx_deliv_line_order_line_fk ON sales.delivery_schedule_lines (sales_order_line_id);
+
+CREATE INDEX idx_fulfillment_hist_order_fk    ON sales.fulfillment_event_history (sales_order_id);
+CREATE INDEX idx_fulfillment_hist_line_fk     ON sales.fulfillment_event_history (sales_order_line_id);
+CREATE INDEX idx_fulfillment_hist_employee_fk ON sales.fulfillment_event_history (employee_id);
+CREATE INDEX idx_fulfillment_hist_warehouse_fk ON sales.fulfillment_event_history (warehouse_id);
 
 CREATE INDEX idx_price_snap_line_fk           ON sales.order_line_pricing_snapshots (sales_order_line_id);
+CREATE INDEX idx_price_snap_promo_fk          ON sales.order_line_pricing_snapshots (applied_promotion_id);
+CREATE INDEX idx_price_snap_contract_fk       ON sales.order_line_pricing_snapshots (applied_contract_id);
 
 CREATE INDEX idx_contract_company_fk          ON sales.sales_contracts (company_id);
 CREATE INDEX idx_contract_customer_fk         ON sales.sales_contracts (customer_id);
@@ -888,6 +1112,20 @@ CREATE INDEX idx_eligibility_segment_fk       ON sales.promotion_customer_eligib
 CREATE INDEX idx_promo_rule_promo_fk          ON sales.promotion_product_rules (promotion_id);
 CREATE INDEX idx_promo_rule_product_fk         ON sales.promotion_product_rules (product_id);
 
+CREATE INDEX idx_promo_app_hist_line_fk       ON sales.promotion_application_history (sales_order_line_id);
+CREATE INDEX idx_promo_app_hist_campaign_fk   ON sales.promotion_application_history (campaign_id);
+CREATE INDEX idx_promo_app_hist_promo_fk      ON sales.promotion_application_history (promotion_id);
+CREATE INDEX idx_promo_app_hist_user_fk       ON sales.promotion_application_history (approved_by_user_id);
+
+CREATE INDEX idx_channel_config_channel_fk    ON sales.sales_channel_configurations (sales_channel_id);
+CREATE INDEX idx_channel_config_warehouse_fk  ON sales.sales_channel_configurations (default_warehouse_id);
+CREATE INDEX idx_channel_config_user_fk       ON sales.sales_channel_configurations (created_by_user_id);
+
+CREATE INDEX idx_cust_pref_customer_fk        ON sales.customer_order_preferences (customer_id);
+CREATE INDEX idx_cust_pref_warehouse_fk       ON sales.customer_order_preferences (preferred_warehouse_id);
+CREATE INDEX idx_cust_pref_carrier_fk         ON sales.customer_order_preferences (preferred_carrier_id);
+CREATE INDEX idx_cust_pref_user_fk            ON sales.customer_order_preferences (created_by_user_id);
+
 CREATE INDEX idx_approval_status_fk           ON sales.approval_requests (approval_status_id);
 CREATE INDEX idx_approval_user_fk             ON sales.approval_requests (created_by_user_id);
 
@@ -902,19 +1140,33 @@ CREATE INDEX idx_escalation_request_fk        ON sales.approval_escalations (app
 CREATE INDEX idx_escalation_from_fk           ON sales.approval_escalations (escalated_from_approver_id);
 CREATE INDEX idx_escalation_to_fk             ON sales.approval_escalations (escalated_to_approver_id);
 
+CREATE INDEX idx_lifecycle_hist_order_fk      ON sales.sales_order_lifecycle_history (sales_order_id);
+CREATE INDEX idx_lifecycle_hist_status_fk     ON sales.sales_order_lifecycle_history (sales_order_status_id);
+CREATE INDEX idx_lifecycle_hist_user_fk       ON sales.sales_order_lifecycle_history (changed_by_user_id);
+
+CREATE INDEX idx_order_hold_hist_order_fk     ON sales.sales_order_hold_history (sales_order_id);
+CREATE INDEX idx_order_hold_hist_applied_fk   ON sales.sales_order_hold_history (applied_by_user_id);
+CREATE INDEX idx_order_hold_hist_released_fk  ON sales.sales_order_hold_history (released_by_user_id);
+
+CREATE INDEX idx_timeline_company_fk          ON sales.sales_event_timeline (company_id);
+CREATE INDEX idx_timeline_customer_fk         ON sales.sales_event_timeline (customer_id);
+CREATE INDEX idx_timeline_user_fk             ON sales.sales_event_timeline (processed_by_user_id);
+
 CREATE INDEX idx_kpi_territory_fk             ON sales.sales_kpis_snapshot (territory_id);
 CREATE INDEX idx_kpi_channel_fk               ON sales.sales_kpis_snapshot (sales_channel_id);
 
--- 12.2 Composite Indexes (Covering filter queries)
+-- 13.2 Composite Indexes (Covering filter queries)
 CREATE INDEX idx_order_status_type_comp       ON sales.sales_orders (order_status_id, order_type_id);
 CREATE INDEX idx_order_line_full_qty_comp     ON sales.sales_order_lines (sales_order_id, fulfillment_status_id, quantity_ordered);
 CREATE INDEX idx_eligibility_group_comp       ON sales.promotion_customer_eligibility (promotion_id, customer_category_id, customer_segment_id);
 CREATE INDEX idx_quote_customer_status_comp   ON sales.sales_quotations (customer_id, quotation_status_id);
 
--- 12.3 Partial Indexes (Optimizing active/hot records)
+-- 13.3 Partial Indexes (Optimizing active/hot records)
 CREATE INDEX idx_order_credit_holds           ON sales.sales_orders (customer_id) WHERE is_credit_hold = TRUE AND is_deleted = FALSE;
 CREATE INDEX idx_order_order_holds            ON sales.sales_orders (customer_id) WHERE is_order_hold = TRUE AND is_deleted = FALSE;
 CREATE INDEX idx_deliv_sched_holds            ON sales.delivery_schedules (sales_order_id) WHERE is_delivery_hold = TRUE AND is_deleted = FALSE;
 CREATE INDEX idx_promo_active_campaign        ON sales.promotions (campaign_id) WHERE is_active = TRUE;
 CREATE INDEX idx_delegation_active_today      ON sales.approval_delegations (original_approver_employee_id) WHERE is_active = TRUE AND end_date >= CURRENT_DATE;
 CREATE INDEX idx_order_backordered_lines      ON sales.sales_order_lines (product_id) WHERE quantity_backordered > 0.0000;
+CREATE INDEX idx_res_active_locks             ON sales.sales_inventory_reservations (sales_order_line_id) WHERE status = 'RESERVED';
+CREATE INDEX idx_timeline_recent_events       ON sales.sales_event_timeline (event_timestamp) WHERE event_timestamp >= CURRENT_DATE - INTERVAL '30 days';
