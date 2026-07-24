@@ -1,5 +1,5 @@
 -- =============================================================================
--- INK FMCG ENTERPRISE ERP — PROCUREMENT SCHEMAS (v1.0)
+-- INK FMCG ENTERPRISE ERP — PROCUREMENT SCHEMAS (v2.0 - Refined)
 -- File Name      : procurement_schema.sql
 -- Target Database: PostgreSQL 16+
 -- Schema Owner   : procurement
@@ -292,6 +292,73 @@ CREATE TABLE procurement.freight_terms (
 
 COMMENT ON TABLE procurement.freight_terms IS 
     '[LOOKUP] Freight terms: PREPAID, COLLECT, PREPAID_AND_ADD, THIRD_PARTY_BILLING.';
+
+-- 1.18 GRN Stages (NEW in v2.0 - Multi-stage receiving workflow)
+CREATE TABLE procurement.grn_stages (
+    id             UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    code           VARCHAR(50)  NOT NULL,
+    name           VARCHAR(100) NOT NULL,
+    description    TEXT,
+    is_active      BOOLEAN      NOT NULL DEFAULT TRUE,
+    display_order  INT          NOT NULL DEFAULT 1,
+    created_at_utc TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
+
+    CONSTRAINT uq_grn_stages_code UNIQUE (code),
+    CONSTRAINT chk_grn_stages_code_upper CHECK (code = upper(code))
+);
+
+COMMENT ON TABLE procurement.grn_stages IS 
+    '[LOOKUP] Stages in receiving workflow: ARRIVAL, DOCK_ASSIGNMENT, UNLOADING, INSPECTION, ACCEPTED, REJECTED, PUT_AWAY_READY, CLOSED.';
+
+-- 1.19 Three-Way Matching Statuses (NEW in v2.0)
+CREATE TABLE procurement.matching_statuses (
+    id             UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    code           VARCHAR(50)  NOT NULL,
+    name           VARCHAR(100) NOT NULL,
+    description    TEXT,
+    is_active      BOOLEAN      NOT NULL DEFAULT TRUE,
+    display_order  INT          NOT NULL DEFAULT 1,
+    created_at_utc TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
+
+    CONSTRAINT uq_matching_statuses_code UNIQUE (code),
+    CONSTRAINT chk_matching_statuses_code_upper CHECK (code = upper(code))
+);
+
+COMMENT ON TABLE procurement.matching_statuses IS 
+    '[LOOKUP] Statuses for the PO-GRN-Invoice three-way matcher: UNMATCHED, PARTIALLY_MATCHED, MATCHED, DISCREPANCY, BYPASSED.';
+
+-- 1.20 Three-Way Match Exception Reasons (NEW in v2.0)
+CREATE TABLE procurement.matching_exception_reasons (
+    id             UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    code           VARCHAR(50)  NOT NULL,
+    name           VARCHAR(100) NOT NULL,
+    description    TEXT,
+    is_active      BOOLEAN      NOT NULL DEFAULT TRUE,
+    created_at_utc TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
+
+    CONSTRAINT uq_matching_exceptions_code UNIQUE (code),
+    CONSTRAINT chk_matching_exceptions_code_upper CHECK (code = upper(code))
+);
+
+COMMENT ON TABLE procurement.matching_exception_reasons IS 
+    '[LOOKUP] Explanatory exception reason code when matching differences fail tolerance rules.';
+
+-- 1.21 Appointment Statuses (NEW in v2.0)
+CREATE TABLE procurement.appointment_statuses (
+    id             UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    code           VARCHAR(50)  NOT NULL,
+    name           VARCHAR(100) NOT NULL,
+    description    TEXT,
+    is_active      BOOLEAN      NOT NULL DEFAULT TRUE,
+    display_order  INT          NOT NULL DEFAULT 1,
+    created_at_utc TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
+
+    CONSTRAINT uq_appointment_statuses_code UNIQUE (code),
+    CONSTRAINT chk_appointment_statuses_code_upper CHECK (code = upper(code))
+);
+
+COMMENT ON TABLE procurement.appointment_statuses IS 
+    '[LOOKUP] Receipt schedule appointment status: SCHEDULED, ARRIVED, DELAYED, IN_PROGRESS, COMPLETED, NO_SHOW, CANCELLED.';
 
 -- =============================================================================
 -- SECTION 2 — CORE PROCUREMENT POLICIES
@@ -594,10 +661,10 @@ CREATE TABLE procurement.rfqs (
     
     -- Concurrency and Auditing
     row_version                INT           NOT NULL DEFAULT 1,
-    created_at_utc             TIMESTAMPTZ   NOT NULL DEFAULT clock_timestamp(),
+    created_at_utc               TIMESTAMPTZ   NOT NULL DEFAULT clock_timestamp(),
     created_by_user_id         UUID          REFERENCES iam.users(id) ON DELETE SET NULL,
     last_modified_at_utc       TIMESTAMPTZ   NOT NULL DEFAULT clock_timestamp(),
-    last_modified_by_user_id   UUID          REFERENCES iam.users(id) ON DELETE SET NULL,
+    last_modified_by_user_id     UUID          REFERENCES iam.users(id) ON DELETE SET NULL,
     is_deleted                 BOOLEAN       NOT NULL DEFAULT FALSE,
     deleted_at_utc             TIMESTAMPTZ,
     deleted_by_user_id         UUID          REFERENCES iam.users(id) ON DELETE SET NULL,
@@ -682,6 +749,12 @@ CREATE TABLE procurement.supplier_quotations (
     freight_terms_snapshot       TEXT,
     payment_terms_id             UUID          REFERENCES supplier.payment_terms(id),
     freight_term_id              UUID          REFERENCES procurement.freight_terms(id),
+    
+    -- Incoterm Snapshots (NEW in v2.0 - Preserved at award time)
+    incoterm_code                VARCHAR(10),
+    incoterm_version             VARCHAR(10),
+    incoterm_named_place         VARCHAR(200),
+    incoterm_risk_transfer_point VARCHAR(200),
     
     -- Summaries
     total_quotation_amount       NUMERIC(18,4) NOT NULL DEFAULT 0.00,
@@ -856,12 +929,26 @@ CREATE TABLE procurement.purchase_orders (
     supplier_id                  UUID          NOT NULL REFERENCES supplier.suppliers(id),
     supplier_site_id             UUID          NOT NULL REFERENCES supplier.supplier_sites(id),
     
+    -- Snapshotted Supplier Performance at Award Time (NEW in v2.0 - Audit & compliance validation)
+    award_supplier_overall_rating NUMERIC(3,2) NOT NULL,
+    award_supplier_risk_level    INT           NOT NULL, -- Risk Score (1-5)
+    award_supplier_otd_pct       NUMERIC(5,2)  NOT NULL, -- On-time delivery %
+    award_supplier_quality_score NUMERIC(5,2)  NOT NULL, -- Quality assurance %
+    award_supplier_defect_pct    NUMERIC(5,2)  NOT NULL, -- Product defect %
+    award_supplier_compliance_pct NUMERIC(5,2) NOT NULL, -- Compliance check pass %
+    
     -- Terms Snapshots
     payment_terms_snapshot       TEXT,
     freight_terms_snapshot       TEXT,
     payment_terms_id             UUID          REFERENCES supplier.payment_terms(id),
     freight_term_id              UUID          REFERENCES procurement.freight_terms(id),
     incoterm_id                  UUID          REFERENCES supplier.incoterms_codes(id),
+    
+    -- Incoterm Snapshots (NEW in v2.0 - Preserved at award time)
+    incoterm_code                VARCHAR(10),
+    incoterm_version             VARCHAR(10),
+    incoterm_named_place         VARCHAR(200),
+    incoterm_risk_transfer_point VARCHAR(200),
     
     -- Currency
     currency_code                VARCHAR(3)    NOT NULL,
@@ -890,8 +977,8 @@ CREATE TABLE procurement.purchase_orders (
     created_by_user_id           UUID          REFERENCES iam.users(id) ON DELETE SET NULL,
     last_modified_at_utc         TIMESTAMPTZ   NOT NULL DEFAULT clock_timestamp(),
     last_modified_by_user_id     UUID          REFERENCES iam.users(id) ON DELETE SET NULL,
-    is_deleted                       BOOLEAN       NOT NULL DEFAULT FALSE,
-    deleted_at_utc                   TIMESTAMPTZ,
+    is_deleted                   BOOLEAN       NOT NULL DEFAULT FALSE,
+    deleted_at_utc               TIMESTAMPTZ,
     deleted_by_user_id               UUID          REFERENCES iam.users(id) ON DELETE SET NULL,
 
     CONSTRAINT uq_purchase_orders_code UNIQUE (po_code, revision_number),
@@ -907,7 +994,7 @@ CREATE TABLE procurement.purchase_orders (
 COMMENT ON TABLE procurement.purchase_orders IS 
     '[OPERATIONAL] Binding commercial purchasing order raised to suppliers.';
 
--- 8.2 PO Lines
+-- 8.2 PO Lines (REFINED in v2.0 - Added matching status registry fields)
 CREATE TABLE procurement.purchase_order_lines (
     id                               UUID          PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
     purchase_order_id                UUID          NOT NULL REFERENCES procurement.purchase_orders(id) ON DELETE CASCADE,
@@ -943,11 +1030,16 @@ CREATE TABLE procurement.purchase_order_lines (
     line_status_id                   UUID          NOT NULL REFERENCES procurement.purchase_order_statuses(id),
     remarks                          TEXT,
 
+    -- Three-Way Match Quantities (NEW in v2.0)
+    qty_received                     NUMERIC(18,4) NOT NULL DEFAULT 0.0000,
+    qty_invoiced                     NUMERIC(18,4) NOT NULL DEFAULT 0.0000,
+    matching_status_id               UUID          NOT NULL REFERENCES procurement.matching_statuses(id),
+
     -- Auditing
     created_at_utc                   TIMESTAMPTZ   NOT NULL DEFAULT clock_timestamp(),
     created_by_user_id               UUID          REFERENCES iam.users(id) ON DELETE SET NULL,
     last_modified_at_utc             TIMESTAMPTZ   NOT NULL DEFAULT clock_timestamp(),
-    last_modified_by_user_id         UUID          REFERENCES iam.users(id) ON DELETE SET NULL,
+    last_modified_by_user_id     UUID          REFERENCES iam.users(id) ON DELETE SET NULL,
 
     CONSTRAINT uq_po_lines UNIQUE (purchase_order_id, line_number),
     CONSTRAINT chk_po_lines_qty CHECK (quantity > 0.0000),
@@ -959,7 +1051,8 @@ CREATE TABLE procurement.purchase_order_lines (
         discount_amount >= 0.00 AND
         tax_amount >= 0.00 AND
         net_amount >= 0.00
-    )
+    ),
+    CONSTRAINT chk_po_lines_matching CHECK (qty_received >= 0.0000 AND qty_invoiced >= 0.0000)
 );
 
 COMMENT ON TABLE procurement.purchase_order_lines IS 
@@ -1074,7 +1167,7 @@ COMMENT ON TABLE procurement.purchase_order_amendments IS
 -- 8.8 Immutable PO Revisions Snapshot
 CREATE TABLE procurement.po_revisions (
     id                         UUID          PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
-    purchase_order_id          UUID          NOT NULL,
+    purchase_order_id          UUID          NOT NULL REFERENCES procurement.purchase_orders(id) ON DELETE CASCADE,
     revision_number            INT           NOT NULL,
     po_payload_json            JSONB         NOT NULL, -- Complete header + lines snapshot
     archived_at_utc            TIMESTAMPTZ   NOT NULL DEFAULT clock_timestamp(),
@@ -1103,10 +1196,56 @@ COMMENT ON TABLE procurement.po_status_history IS
     '[HISTORY] State transition logging record for PO document lifecycle.';
 
 -- =============================================================================
--- SECTION 9 — GOODS RECEIPT NOTE (GRN) SUB-SYSTEM
+-- SECTION 9 — RECEIVING APPOINTMENTS (NEW in v2.0 - Warehouse Scheduling)
 -- =============================================================================
 
--- 9.1 GRN Header
+CREATE TABLE procurement.receiving_appointments (
+    id                         UUID          PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    appointment_number         VARCHAR(50)   NOT NULL,
+    
+    -- Target Warehouse Destination
+    warehouse_id               UUID          NOT NULL REFERENCES warehouse.warehouses(id),
+    receiving_dock             VARCHAR(50)   NOT NULL,
+    
+    -- Logistic Details
+    carrier_name               VARCHAR(100)  NOT NULL,
+    vehicle_number             VARCHAR(50)   NOT NULL,
+    driver_name                VARCHAR(100)  NOT NULL,
+    driver_license             VARCHAR(50)   NOT NULL,
+    
+    -- Scheduled Windows
+    arrival_window_start       TIMESTAMPTZ   NOT NULL,
+    arrival_window_end         TIMESTAMPTZ   NOT NULL,
+    departure_window_start     TIMESTAMPTZ   NOT NULL,
+    departure_window_end       TIMESTAMPTZ   NOT NULL,
+    
+    appointment_status_id      UUID          NOT NULL REFERENCES procurement.appointment_statuses(id),
+    remarks                    TEXT,
+
+    -- Concurrency and Auditing
+    row_version                INT           NOT NULL DEFAULT 1,
+    created_at_utc             TIMESTAMPTZ   NOT NULL DEFAULT clock_timestamp(),
+    created_by_user_id         UUID          REFERENCES iam.users(id) ON DELETE SET NULL,
+    last_modified_at_utc       TIMESTAMPTZ   NOT NULL DEFAULT clock_timestamp(),
+    last_modified_by_user_id     UUID          REFERENCES iam.users(id) ON DELETE SET NULL,
+    is_deleted                 BOOLEAN       NOT NULL DEFAULT FALSE,
+    deleted_at_utc             TIMESTAMPTZ,
+    deleted_by_user_id         UUID          REFERENCES iam.users(id) ON DELETE SET NULL,
+
+    CONSTRAINT uq_receiving_appointments UNIQUE (appointment_number),
+    CONSTRAINT chk_recv_appointment_arr CHECK (arrival_window_end > arrival_window_start),
+    CONSTRAINT chk_recv_appointment_dep CHECK (departure_window_end > departure_window_start),
+    CONSTRAINT chk_recv_appointment_flow CHECK (departure_window_start >= arrival_window_end)
+);
+
+COMMENT ON TABLE procurement.receiving_appointments IS 
+    '[OPERATIONAL] Scheduled arrival slots mapping carriers and drivers to specific receiving warehouse docks.';
+
+-- =============================================================================
+-- SECTION 10 — GOODS RECEIPT NOTE (GRN) SUB-SYSTEM
+-- =============================================================================
+
+-- 10.1 GRN Header (REFINED in v2.0 - Linked appointments and workflow stages)
 CREATE TABLE procurement.grns (
     id                           UUID          PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
     grn_code                     VARCHAR(50)   NOT NULL,
@@ -1130,6 +1269,10 @@ CREATE TABLE procurement.grns (
     gate_entry_time              TIMESTAMPTZ,
     vehicle_number               VARCHAR(50),
     
+    -- Workflow Mapping Extensions
+    receiving_appointment_id     UUID          REFERENCES procurement.receiving_appointments(id) ON DELETE SET NULL,
+    grn_stage_id                 UUID          NOT NULL REFERENCES procurement.grn_stages(id),
+    
     receipt_status_id            UUID          NOT NULL REFERENCES procurement.receipt_statuses(id),
     remarks                      TEXT,
 
@@ -1139,8 +1282,8 @@ CREATE TABLE procurement.grns (
     created_by_user_id           UUID          REFERENCES iam.users(id) ON DELETE SET NULL,
     last_modified_at_utc         TIMESTAMPTZ   NOT NULL DEFAULT clock_timestamp(),
     last_modified_by_user_id     UUID          REFERENCES iam.users(id) ON DELETE SET NULL,
-    is_deleted                       BOOLEAN       NOT NULL DEFAULT FALSE,
-    deleted_at_utc                   TIMESTAMPTZ,
+    is_deleted                   BOOLEAN       NOT NULL DEFAULT FALSE,
+    deleted_at_utc               TIMESTAMPTZ,
     deleted_by_user_id               UUID          REFERENCES iam.users(id) ON DELETE SET NULL,
 
     CONSTRAINT uq_grns_code UNIQUE (grn_code)
@@ -1149,7 +1292,7 @@ CREATE TABLE procurement.grns (
 COMMENT ON TABLE procurement.grns IS 
     '[OPERATIONAL] Goods Receipt Note documentation raised on physical inventory delivery.';
 
--- 9.2 GRN Lines
+-- 10.2 GRN Lines
 CREATE TABLE procurement.grn_lines (
     id                               UUID          PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
     grn_id                           UUID          NOT NULL REFERENCES procurement.grns(id) ON DELETE CASCADE,
@@ -1193,7 +1336,7 @@ CREATE TABLE procurement.grn_lines (
 COMMENT ON TABLE procurement.grn_lines IS 
     '[OPERATIONAL] Received items quantity, batch, and QA disposition outcomes.';
 
--- 9.3 Quality Hold Tracking
+-- 10.3 Quality Hold Tracking
 CREATE TABLE procurement.quality_holds (
     id                           UUID          PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
     grn_line_id                  UUID          NOT NULL REFERENCES procurement.grn_lines(id) ON DELETE CASCADE,
@@ -1216,7 +1359,7 @@ CREATE TABLE procurement.quality_holds (
 COMMENT ON TABLE procurement.quality_holds IS 
     '[OPERATIONAL] Quarantine hold records on batches failing receiving rules or requiring lab tests.';
 
--- 9.4 Receiving Exceptions Log (Damage/Short/Over detailing)
+-- 10.4 Receiving Exceptions Log (Damage/Short/Over detailing)
 CREATE TABLE procurement.receiving_exceptions (
     id                         UUID          PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
     grn_line_id                UUID          NOT NULL REFERENCES procurement.grn_lines(id) ON DELETE CASCADE,
@@ -1235,7 +1378,7 @@ CREATE TABLE procurement.receiving_exceptions (
 COMMENT ON TABLE procurement.receiving_exceptions IS 
     '[OPERATIONAL] Case logs documenting damaged boxes, leaking seals, or missing carton issues.';
 
--- 9.5 Goods QA Lab Inspections
+-- 10.5 Goods QA Lab Inspections
 CREATE TABLE procurement.grn_inspections (
     id                         UUID          PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
     grn_line_id                UUID          NOT NULL REFERENCES procurement.grn_lines(id) ON DELETE CASCADE,
@@ -1258,10 +1401,45 @@ COMMENT ON TABLE procurement.grn_inspections IS
     '[OPERATIONAL] Formal Quality Assurance test logging sheet for received food items.';
 
 -- =============================================================================
--- SECTION 10 — PURCHASE RETURNS (RTV) SUB-SYSTEM
+-- SECTION 11 — THREE-WAY MATCHING LEDGER (NEW in v2.0 - Settle Reconciliation)
 -- =============================================================================
 
--- 10.1 Return Header
+CREATE TABLE procurement.three_way_match_ledger (
+    id                         UUID          PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    
+    -- PO/GRN Targets
+    po_line_id                 UUID          NOT NULL REFERENCES procurement.purchase_order_lines(id) ON DELETE CASCADE,
+    grn_line_id                UUID          NOT NULL REFERENCES procurement.grn_lines(id) ON DELETE CASCADE,
+    
+    -- Future invoice linkage point (owned by Finance later)
+    invoice_line_id            UUID,
+    
+    expected_quantity          NUMERIC(18,4) NOT NULL,
+    received_quantity          NUMERIC(18,4) NOT NULL,
+    invoiced_quantity          NUMERIC(18,4) NOT NULL DEFAULT 0.0000,
+    
+    matching_status_id         UUID          NOT NULL REFERENCES procurement.matching_statuses(id),
+    quantity_difference        NUMERIC(18,4) GENERATED ALWAYS AS (expected_quantity - received_quantity) STORED,
+    
+    exception_reason_id        UUID          REFERENCES procurement.matching_exception_reasons(id),
+    is_cleared                 BOOLEAN       NOT NULL DEFAULT FALSE,
+    cleared_at_utc             TIMESTAMPTZ,
+    cleared_by_employee_id     UUID          REFERENCES employee.employees(id),
+    
+    created_at_utc             TIMESTAMPTZ   NOT NULL DEFAULT clock_timestamp(),
+    created_by_user_id         UUID          REFERENCES iam.users(id) ON DELETE SET NULL,
+
+    CONSTRAINT chk_matching_ledger_qty CHECK (expected_quantity >= 0.0000 AND received_quantity >= 0.0000 AND invoiced_quantity >= 0.0000)
+);
+
+COMMENT ON TABLE procurement.three_way_match_ledger IS 
+    '[OPERATIONAL] Ledger to reconcile quantity matching variances between PO expectation, GRN receipt, and invoice billing.';
+
+-- =============================================================================
+-- SECTION 12 — PURCHASE RETURNS (RTV) SUB-SYSTEM
+-- =============================================================================
+
+-- 12.1 Return Header
 CREATE TABLE procurement.purchase_returns (
     id                           UUID          PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
     return_code                  VARCHAR(50)   NOT NULL,
@@ -1287,7 +1465,7 @@ CREATE TABLE procurement.purchase_returns (
     created_by_user_id           UUID          REFERENCES iam.users(id) ON DELETE SET NULL,
     last_modified_at_utc         TIMESTAMPTZ   NOT NULL DEFAULT clock_timestamp(),
     last_modified_by_user_id     UUID          REFERENCES iam.users(id) ON DELETE SET NULL,
-    is_deleted                       BOOLEAN       NOT NULL DEFAULT FALSE,
+    is_deleted                   BOOLEAN       NOT NULL DEFAULT FALSE,
     deleted_at_utc                   TIMESTAMPTZ,
     deleted_by_user_id               UUID          REFERENCES iam.users(id) ON DELETE SET NULL,
 
@@ -1298,7 +1476,7 @@ CREATE TABLE procurement.purchase_returns (
 COMMENT ON TABLE procurement.purchase_returns IS 
     '[OPERATIONAL] Return To Vendor (RTV) document claiming refunds or replacement stocks.';
 
--- 10.2 Return Lines
+-- 12.2 Return Lines
 CREATE TABLE procurement.purchase_return_lines (
     id                         UUID          PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
     purchase_return_id         UUID          NOT NULL REFERENCES procurement.purchase_returns(id) ON DELETE CASCADE,
@@ -1330,7 +1508,7 @@ CREATE TABLE procurement.purchase_return_lines (
 COMMENT ON TABLE procurement.purchase_return_lines IS 
     '[OPERATIONAL] Returned item detail listings with value and validation reason links.';
 
--- 10.3 Dispatch Shipment Details
+-- 12.3 Dispatch Shipment Details
 CREATE TABLE procurement.purchase_return_shipments (
     id                         UUID          PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
     purchase_return_id         UUID          NOT NULL REFERENCES procurement.purchase_returns(id) ON DELETE CASCADE,
@@ -1351,10 +1529,10 @@ COMMENT ON TABLE procurement.purchase_return_shipments IS
     '[OPERATIONAL] Logistics carrier tracking for returned shipments dispatched back to vendors.';
 
 -- =============================================================================
--- SECTION 11 — PROCUREMENT CONTRACTS (BLANKET AGREEMENTS)
+-- SECTION 13 — PROCUREMENT CONTRACTS (REFINED in v2.0 - Added consumption tracking)
 -- =============================================================================
 
--- 11.1 Blanket Purchase Agreements
+-- 13.1 Blanket Purchase Agreements
 CREATE TABLE procurement.contracts (
     id                         UUID          PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
     contract_code              VARCHAR(50)   NOT NULL,
@@ -1371,6 +1549,16 @@ CREATE TABLE procurement.contracts (
     agreement_value_committed  NUMERIC(18,4) NOT NULL,
     agreement_value_actual     NUMERIC(18,4) NOT NULL DEFAULT 0.0000,
     
+    -- Consumption Tracking (NEW in v2.0)
+    contract_quantity          NUMERIC(18,4),
+    consumed_quantity          NUMERIC(18,4) NOT NULL DEFAULT 0.0000,
+    remaining_quantity         NUMERIC(18,4) GENERATED ALWAYS AS (contract_quantity - consumed_quantity) STORED,
+    
+    contract_amount            NUMERIC(18,4) NOT NULL,
+    consumed_amount            NUMERIC(18,4) NOT NULL DEFAULT 0.0000,
+    remaining_amount           NUMERIC(18,4) GENERATED ALWAYS AS (contract_amount - consumed_amount) STORED,
+    
+    is_renewal_ready           BOOLEAN       NOT NULL DEFAULT FALSE,
     payment_terms_id           UUID          NOT NULL REFERENCES supplier.payment_terms(id),
     
     is_active                  BOOLEAN       NOT NULL DEFAULT TRUE,
@@ -1389,13 +1577,17 @@ CREATE TABLE procurement.contracts (
     CONSTRAINT uq_proc_contracts_code UNIQUE (contract_code),
     CONSTRAINT chk_proc_contracts_dates CHECK (end_date >= start_date),
     CONSTRAINT chk_proc_contracts_comm CHECK (agreement_value_committed >= 0.00),
-    CONSTRAINT chk_proc_contracts_act CHECK (agreement_value_actual >= 0.00)
+    CONSTRAINT chk_proc_contracts_act CHECK (agreement_value_actual >= 0.00),
+    CONSTRAINT chk_proc_contracts_qty CHECK (contract_quantity IS NULL OR contract_quantity >= 0.0000),
+    CONSTRAINT chk_proc_contracts_cons_qty CHECK (consumed_quantity >= 0.0000),
+    CONSTRAINT chk_proc_contracts_amt CHECK (contract_amount >= 0.0000),
+    CONSTRAINT chk_proc_contracts_cons_amt CHECK (consumed_amount >= 0.0000)
 );
 
 COMMENT ON TABLE procurement.contracts IS 
     '[FOUNDATION] Long-term trade agreement registries mapping fixed prices and obligations.';
 
--- 11.2 Blanket Contract Lines
+-- 13.2 Blanket Contract Lines (REFINED in v2.0 - Added consumption tracking)
 CREATE TABLE procurement.contract_lines (
     id                         UUID          PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
     contract_id                UUID          NOT NULL REFERENCES procurement.contracts(id) ON DELETE CASCADE,
@@ -1403,28 +1595,38 @@ CREATE TABLE procurement.contract_lines (
     product_id                 UUID          NOT NULL REFERENCES product.products(id),
     product_variant_id         UUID          REFERENCES product.product_variants(id),
     
+    uom_id                     UUID          NOT NULL REFERENCES product.product_units_of_measure(id),
+    agreed_price               NUMERIC(18,4) NOT NULL,
+    
+    -- Quantity details
     committed_quantity         NUMERIC(18,4) NOT NULL,
     released_quantity          NUMERIC(18,4) NOT NULL DEFAULT 0.0000,
-    agreed_price               NUMERIC(18,4) NOT NULL,
-    uom_id                     UUID          NOT NULL REFERENCES product.product_units_of_measure(id),
+    remaining_quantity         NUMERIC(18,4) GENERATED ALWAYS AS (committed_quantity - released_quantity) STORED,
+    
+    -- Value details
+    committed_amount           NUMERIC(18,4) NOT NULL,
+    released_amount            NUMERIC(18,4) NOT NULL DEFAULT 0.0000,
+    remaining_amount           NUMERIC(18,4) GENERATED ALWAYS AS (committed_amount - released_amount) STORED,
 
     created_at_utc             TIMESTAMPTZ   NOT NULL DEFAULT clock_timestamp(),
 
     CONSTRAINT uq_contract_lines UNIQUE (contract_id, product_id, product_variant_id),
     CONSTRAINT chk_contract_lines_qty CHECK (committed_quantity > 0.0000),
     CONSTRAINT chk_contract_lines_rel CHECK (released_quantity >= 0.0000),
-    CONSTRAINT chk_contract_lines_price CHECK (agreed_price >= 0.0000)
+    CONSTRAINT chk_contract_lines_price CHECK (agreed_price >= 0.0000),
+    CONSTRAINT chk_contract_lines_amt CHECK (committed_amount >= 0.0000),
+    CONSTRAINT chk_contract_lines_rel_amt CHECK (released_amount >= 0.0000)
 );
 
 COMMENT ON TABLE procurement.contract_lines IS 
     '[FOUNDATION] Specific products and pricing agreed under the parent blanket contract.';
 
--- Add the missing circular foreign key from purchase_orders back to contracts
+-- Add circular foreign key from purchase_orders back to contracts
 ALTER TABLE procurement.purchase_orders
     ADD CONSTRAINT fk_purchase_orders_contract FOREIGN KEY (contract_id)
     REFERENCES procurement.contracts(id) ON DELETE SET NULL;
 
--- 11.3 Renewal Logs
+-- 13.3 Renewal Logs
 CREATE TABLE procurement.contract_renewals (
     id                         UUID          PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
     contract_id                UUID          NOT NULL REFERENCES procurement.contracts(id) ON DELETE CASCADE,
@@ -1443,7 +1645,66 @@ COMMENT ON TABLE procurement.contract_renewals IS
     '[HISTORY] Audit logs of contract validity date extensions and reviews.';
 
 -- =============================================================================
--- SECTION 12 — LANDED COST FOUNDATION
+-- SECTION 14 — STRATEGIC SUPPLIER CAPACITY RESERVATION (NEW in v2.0)
+-- =============================================================================
+
+CREATE TABLE procurement.supplier_capacity_reservations (
+    id                         UUID          PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    supplier_id                UUID          NOT NULL REFERENCES supplier.suppliers(id),
+    supplier_site_id           UUID          NOT NULL REFERENCES supplier.supplier_sites(id),
+    
+    effective_date             DATE          NOT NULL,
+    expiry_date                DATE          NOT NULL,
+    
+    -- Capacity metrics
+    monthly_capacity           NUMERIC(18,4) NOT NULL, -- Total capacity (e.g. units/crates)
+    reserved_capacity          NUMERIC(18,4) NOT NULL DEFAULT 0.0000, -- Future planning hold
+    committed_capacity         NUMERIC(18,4) NOT NULL DEFAULT 0.0000, -- Locked in active POs
+    available_capacity         NUMERIC(18,4) GENERATED ALWAYS AS (monthly_capacity - reserved_capacity - committed_capacity) STORED,
+
+    -- Concurrency and Auditing
+    row_version                INT           NOT NULL DEFAULT 1,
+    created_at_utc             TIMESTAMPTZ   NOT NULL DEFAULT clock_timestamp(),
+    created_by_user_id         UUID          REFERENCES iam.users(id) ON DELETE SET NULL,
+    last_modified_at_utc       TIMESTAMPTZ   NOT NULL DEFAULT clock_timestamp(),
+    last_modified_by_user_id     UUID          REFERENCES iam.users(id) ON DELETE SET NULL,
+
+    CONSTRAINT uq_capacity_reservations UNIQUE (supplier_id, supplier_site_id, effective_date),
+    CONSTRAINT chk_capacity_dates CHECK (expiry_date >= effective_date),
+    CONSTRAINT chk_capacity_vals CHECK (monthly_capacity >= 0.0000 AND reserved_capacity >= 0.0000 AND committed_capacity >= 0.0000)
+);
+
+COMMENT ON TABLE procurement.supplier_capacity_reservations IS 
+    '[FOUNDATION] Track monthly production capacities reserved at supplier sites for supply chain safety planning.';
+
+-- =============================================================================
+-- SECTION 15 — PROCUREMENT CALENDAR FOUNDATION (NEW in v2.0)
+-- =============================================================================
+
+CREATE TABLE procurement.procurement_calendar_events (
+    id                         UUID          PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    event_type                 VARCHAR(50)   NOT NULL, -- 'SUPPLIER_HOLIDAY', 'BLACKOUT_PERIOD', 'CONTRACT_RENEWAL', 'PROCUREMENT_EVENT'
+    
+    supplier_id                UUID          REFERENCES supplier.suppliers(id),
+    supplier_site_id           UUID          REFERENCES supplier.supplier_sites(id),
+    
+    start_date                 DATE          NOT NULL,
+    end_date                   DATE          NOT NULL,
+    title                      VARCHAR(200)  NOT NULL,
+    description                TEXT,
+
+    created_at_utc             TIMESTAMPTZ   NOT NULL DEFAULT clock_timestamp(),
+    created_by_user_id         UUID          REFERENCES iam.users(id) ON DELETE SET NULL,
+
+    CONSTRAINT chk_proc_cal_dates CHECK (end_date >= start_date),
+    CONSTRAINT chk_proc_cal_type CHECK (event_type IN ('SUPPLIER_HOLIDAY', 'BLACKOUT_PERIOD', 'CONTRACT_RENEWAL', 'PROCUREMENT_EVENT'))
+);
+
+COMMENT ON TABLE procurement.procurement_calendar_events IS 
+    '[FOUNDATION] Procurement planning calendar events (holidays, blackout periods, lead time offsets).';
+
+-- =============================================================================
+-- SECTION 16 — LANDED COST FOUNDATION
 -- =============================================================================
 
 CREATE TABLE procurement.po_landed_costs (
@@ -1480,70 +1741,296 @@ COMMENT ON TABLE procurement.po_landed_costs IS
     '[OPERATIONAL] Capitalized landed charges mapped to a PO or GRN for split cost profiling.';
 
 -- =============================================================================
--- SECTION 13 — DOCUMENT ATTACHMENTS
+-- SECTION 17 — ENTERPRISE DOCUMENT MANAGEMENT REGISTRY (NEW in v2.0)
 -- =============================================================================
 
-CREATE TABLE procurement.procurement_attachments (
+-- 17.1 Document Registry (DM Header)
+CREATE TABLE procurement.document_registry (
     id                         UUID          PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    registry_code              VARCHAR(50)   NOT NULL,
     document_type              VARCHAR(50)   NOT NULL, -- 'REQUISITION', 'RFQ', 'QUOTATION', 'PO', 'GRN', 'RETURN', 'CONTRACT'
     document_id                UUID          NOT NULL,
+    title                      VARCHAR(200)  NOT NULL,
+    description                TEXT,
+
+    -- Concurrency and Auditing
+    row_version                INT           NOT NULL DEFAULT 1,
+    created_at_utc             TIMESTAMPTZ   NOT NULL DEFAULT clock_timestamp(),
+    created_by_user_id         UUID          REFERENCES iam.users(id) ON DELETE SET NULL,
+    last_modified_at_utc       TIMESTAMPTZ   NOT NULL DEFAULT clock_timestamp(),
+    last_modified_by_user_id     UUID          REFERENCES iam.users(id) ON DELETE SET NULL,
+
+    CONSTRAINT uq_document_registry_code UNIQUE (registry_code),
+    CONSTRAINT chk_doc_registry_type CHECK (document_type IN ('REQUISITION', 'RFQ', 'QUOTATION', 'PO', 'GRN', 'RETURN', 'CONTRACT'))
+);
+
+COMMENT ON TABLE procurement.document_registry IS 
+    '[FOUNDATION] Centralised document envelope metadata registry mapped to procurement assets.';
+
+-- 17.2 Document Versions
+CREATE TABLE procurement.document_versions (
+    id                         UUID          PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    document_registry_id       UUID          NOT NULL REFERENCES procurement.document_registry(id) ON DELETE CASCADE,
+    version_number             INT           NOT NULL,
     
-    attachment_type_id         UUID          NOT NULL REFERENCES procurement.procurement_document_types(id),
     file_name                  VARCHAR(255)  NOT NULL,
     file_path                  TEXT          NOT NULL,
     file_size_bytes            BIGINT        NOT NULL,
     file_mime_type             VARCHAR(100)  NOT NULL,
+    file_hash_sha256           VARCHAR(64)   NOT NULL, -- Integrity hash check
+    
+    approval_status_id         UUID          NOT NULL REFERENCES procurement.approval_statuses(id),
+    is_latest                  BOOLEAN       NOT NULL DEFAULT TRUE,
 
     created_at_utc             TIMESTAMPTZ   NOT NULL DEFAULT clock_timestamp(),
     created_by_user_id         UUID          REFERENCES iam.users(id) ON DELETE SET NULL,
 
-    CONSTRAINT chk_proc_attach_size CHECK (file_size_bytes > 0),
-    CONSTRAINT chk_proc_attach_doctype CHECK (document_type IN ('REQUISITION', 'RFQ', 'QUOTATION', 'PO', 'GRN', 'RETURN', 'CONTRACT'))
+    CONSTRAINT uq_document_versions UNIQUE (document_registry_id, version_number),
+    CONSTRAINT chk_doc_version_num CHECK (version_number >= 1),
+    CONSTRAINT chk_doc_file_size CHECK (file_size_bytes > 0)
 );
 
-COMMENT ON TABLE procurement.procurement_attachments IS 
-    '[FOUNDATION] Centralised mapping reference linking files (S3, blob) to specific workflow documents.';
+COMMENT ON TABLE procurement.document_versions IS 
+    '[FOUNDATION] Document file revisions histories mapping file hash checksums and verification status.';
 
 -- =============================================================================
--- SECTION 14 — INDEX STRATEGY (PERFORMANCE & REPORTING)
+-- SECTION 18 — PROCUREMENT KPI ANALYTICS SNAPSHOTS (NEW in v2.0)
 -- =============================================================================
 
--- Requisitions
-CREATE INDEX idx_reqs_status_branch              ON procurement.purchase_requisitions (requisition_status_id, branch_id);
-CREATE INDEX idx_reqs_requester                  ON procurement.purchase_requisitions (requested_by_employee_id);
-CREATE INDEX idx_req_lines_product               ON procurement.purchase_requisition_lines (product_id, product_variant_id);
-CREATE INDEX idx_req_lines_warehouse             ON procurement.purchase_requisition_lines (destination_warehouse_id);
+CREATE TABLE procurement.procurement_kpis_snapshot (
+    id                         UUID          PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    
+    purchase_order_id          UUID          NOT NULL REFERENCES procurement.purchase_orders(id) ON DELETE CASCADE,
+    supplier_id                UUID          NOT NULL REFERENCES supplier.suppliers(id),
+    
+    -- Calculated KPIs Snapshots
+    po_cycle_time_hours        NUMERIC(10,2),
+    supplier_lead_time_days    NUMERIC(5,2),
+    approval_duration_hours    NUMERIC(10,2),
+    savings_achieved_inr       NUMERIC(18,4),
+    fill_rate_pct              NUMERIC(5,2),
+    delivery_accuracy_pct      NUMERIC(5,2),
+    
+    recorded_date              DATE          NOT NULL DEFAULT CURRENT_DATE,
+    created_at_utc             TIMESTAMPTZ   NOT NULL DEFAULT clock_timestamp(),
 
--- RFQ & Quotation Sourcing Indexes
-CREATE INDEX idx_rfqs_status_deadline            ON procurement.rfqs (rfq_status_id, submission_deadline DESC);
-CREATE INDEX idx_rfq_lines_product               ON procurement.rfq_lines (product_id);
-CREATE INDEX idx_invitations_supplier            ON procurement.supplier_invitations (supplier_id);
-CREATE INDEX idx_quotes_supplier_rfq             ON procurement.supplier_quotations (supplier_id, rfq_id);
-CREATE INDEX idx_quotes_status                   ON procurement.supplier_quotations (quotation_status_id);
+    CONSTRAINT chk_kpi_recorded_date UNIQUE (purchase_order_id, recorded_date)
+);
 
--- Purchase Orders
-CREATE INDEX idx_po_supplier_branch              ON procurement.purchase_orders (supplier_id, branch_id);
-CREATE INDEX idx_po_status_date                  ON procurement.purchase_orders (po_status_id, po_date DESC);
-CREATE INDEX idx_po_lines_product                ON procurement.purchase_order_lines (product_id, product_variant_id);
-CREATE INDEX idx_po_lines_warehouse              ON procurement.purchase_order_lines (destination_warehouse_id);
-CREATE INDEX idx_po_deliv_sched_warehouse        ON procurement.po_delivery_schedules (warehouse_id, promised_date);
+COMMENT ON TABLE procurement.procurement_kpis_snapshot IS 
+    '[HISTORY] Compiled, static analytics measurements snapshotted per PO for performance reporting logs.';
 
--- GRN Receiving
-CREATE INDEX idx_grn_po_receipt                  ON procurement.grns (purchase_order_id, receipt_date DESC);
-CREATE INDEX idx_grn_status_warehouse            ON procurement.grns (receipt_status_id, warehouse_id);
-CREATE INDEX idx_grn_lines_product               ON procurement.grn_lines (product_id, product_variant_id);
-CREATE INDEX idx_grn_lines_batch                 ON procurement.grn_lines (batch_id) WHERE batch_id IS NOT NULL;
-CREATE INDEX idx_qa_holds_batch                  ON procurement.quality_holds (batch_number) WHERE released_date IS NULL;
+-- =============================================================================
+-- SECTION 19 — INDEX STRATEGY (PERFORMANCE & REPORTING - REFINED v2.0)
+-- =============================================================================
 
--- Returns
-CREATE INDEX idx_rtv_supplier_status             ON procurement.purchase_returns (supplier_id, return_status_id);
-CREATE INDEX idx_rtv_lines_product               ON procurement.purchase_return_lines (product_id);
+-- 1. FOREIGN KEY B-TREE INDEXES (Mandatory v2.0)
+CREATE INDEX idx_reqs_status_fk                  ON procurement.purchase_requisitions (requisition_status_id);
+CREATE INDEX idx_reqs_company_fk                 ON procurement.purchase_requisitions (company_id);
+CREATE INDEX idx_reqs_branch_fk                  ON procurement.purchase_requisitions (branch_id);
+CREATE INDEX idx_reqs_department_fk              ON procurement.purchase_requisitions (department_id);
+CREATE INDEX idx_reqs_cost_center_fk             ON procurement.purchase_requisitions (cost_center_id);
+CREATE INDEX idx_reqs_requester_fk               ON procurement.purchase_requisitions (requested_by_employee_id);
 
--- Contracts
-CREATE INDEX idx_contracts_supplier_dates        ON procurement.contracts (supplier_id, start_date, end_date) WHERE is_active = TRUE;
-CREATE INDEX idx_contract_lines_product          ON procurement.contract_lines (product_id, product_variant_id);
+CREATE INDEX idx_req_lines_req_fk                ON procurement.purchase_requisition_lines (purchase_requisition_id);
+CREATE INDEX idx_req_lines_product_fk            ON procurement.purchase_requisition_lines (product_id);
+CREATE INDEX idx_req_lines_variant_fk            ON procurement.purchase_requisition_lines (product_variant_id);
+CREATE INDEX idx_req_lines_uom_fk                ON procurement.purchase_requisition_lines (uom_id);
+CREATE INDEX idx_req_lines_warehouse_fk          ON procurement.purchase_requisition_lines (destination_warehouse_id);
+CREATE INDEX idx_req_lines_status_fk             ON procurement.purchase_requisition_lines (line_status_id);
 
--- Landed costs & attachments
-CREATE INDEX idx_landed_costs_po                 ON procurement.po_landed_costs (purchase_order_id) WHERE purchase_order_id IS NOT NULL;
-CREATE INDEX idx_landed_costs_grn                ON procurement.po_landed_costs (grn_id) WHERE grn_id IS NOT NULL;
-CREATE INDEX idx_attachments_doc                 ON procurement.procurement_attachments (document_type, document_id);
+CREATE INDEX idx_req_alloc_line_fk               ON procurement.requisition_line_allocations (purchase_requisition_line_id);
+CREATE INDEX idx_req_alloc_cost_center_fk        ON procurement.requisition_line_allocations (cost_center_id);
+
+CREATE INDEX idx_req_comm_req_fk                 ON procurement.requisition_comments (purchase_requisition_id);
+CREATE INDEX idx_req_comm_employee_fk            ON procurement.requisition_comments (commented_by_employee_id);
+
+CREATE INDEX idx_req_hist_req_fk                 ON procurement.requisition_status_history (purchase_requisition_id);
+CREATE INDEX idx_req_hist_status_fk              ON procurement.requisition_status_history (status_id);
+CREATE INDEX idx_req_hist_employee_fk            ON procurement.requisition_status_history (changed_by_employee_id);
+
+CREATE INDEX idx_app_req_status_fk               ON procurement.approval_requests (approval_status_id);
+CREATE INDEX idx_app_req_cost_center_fk          ON procurement.approval_requests (cost_center_id);
+CREATE INDEX idx_app_dec_req_fk                  ON procurement.approval_decisions (approval_request_id);
+CREATE INDEX idx_app_dec_status_fk               ON procurement.approval_decisions (decision_status_id);
+CREATE INDEX idx_app_dec_employee_fk             ON procurement.approval_decisions (approver_employee_id);
+CREATE INDEX idx_app_del_delegator_fk            ON procurement.approval_delegations (delegator_employee_id);
+CREATE INDEX idx_app_del_delegatee_fk            ON procurement.approval_delegations (delegatee_employee_id);
+CREATE INDEX idx_app_esc_req_fk                  ON procurement.approval_escalations (approval_request_id);
+
+CREATE INDEX idx_rfqs_status_fk                  ON procurement.rfqs (rfq_status_id);
+CREATE INDEX idx_rfqs_buyer_fk                   ON procurement.rfqs (buyer_employee_id);
+CREATE INDEX idx_rfqs_company_fk                 ON procurement.rfqs (company_id);
+CREATE INDEX idx_rfqs_branch_fk                  ON procurement.rfqs (branch_id);
+
+CREATE INDEX idx_rfq_lines_rfq_fk                ON procurement.rfq_lines (rfq_id);
+CREATE INDEX idx_rfq_lines_req_line_fk           ON procurement.rfq_lines (purchase_requisition_line_id);
+CREATE INDEX idx_rfq_lines_product_fk            ON procurement.rfq_lines (product_id);
+CREATE INDEX idx_rfq_lines_uom_fk                ON procurement.rfq_lines (uom_id);
+
+CREATE INDEX idx_invit_rfq_fk                    ON procurement.supplier_invitations (rfq_id);
+CREATE INDEX idx_invit_supplier_fk               ON procurement.supplier_invitations (supplier_id);
+CREATE INDEX idx_invit_site_fk                   ON procurement.supplier_invitations (supplier_site_id);
+CREATE INDEX idx_invit_status_fk                 ON procurement.supplier_invitations (invitation_status_id);
+
+CREATE INDEX idx_quotes_rfq_fk                   ON procurement.supplier_quotations (rfq_id);
+CREATE INDEX idx_quotes_supplier_fk              ON procurement.supplier_quotations (supplier_id);
+CREATE INDEX idx_quotes_site_fk                  ON procurement.supplier_quotations (supplier_site_id);
+CREATE INDEX idx_quotes_status_fk                ON procurement.supplier_quotations (quotation_status_id);
+CREATE INDEX idx_quotes_pay_terms_fk             ON procurement.supplier_quotations (payment_terms_id);
+CREATE INDEX idx_quotes_freight_term_fk          ON procurement.supplier_quotations (freight_term_id);
+
+CREATE INDEX idx_quote_lines_quote_fk            ON procurement.quotation_lines (supplier_quotation_id);
+CREATE INDEX idx_quote_lines_rfq_line_fk         ON procurement.quotation_lines (rfq_line_id);
+CREATE INDEX idx_quote_lines_product_fk          ON procurement.quotation_lines (product_id);
+CREATE INDEX idx_quote_lines_uom_fk              ON procurement.quotation_lines (uom_id);
+
+CREATE INDEX idx_price_breaks_line_fk            ON procurement.quotation_price_breaks (quotation_line_id);
+
+CREATE INDEX idx_comp_rfq_fk                     ON procurement.quotation_comparisons (rfq_id);
+CREATE INDEX idx_comp_status_fk                  ON procurement.quotation_comparisons (status_id);
+
+CREATE INDEX idx_score_comp_fk                   ON procurement.comparison_scorings (quotation_comparison_id);
+CREATE INDEX idx_score_quote_fk                  ON procurement.comparison_scorings (supplier_quotation_id);
+CREATE INDEX idx_score_criteria_fk               ON procurement.comparison_scorings (criteria_id);
+
+CREATE INDEX idx_ranks_comp_fk                   ON procurement.comparison_ranks (quotation_comparison_id);
+CREATE INDEX idx_ranks_quote_fk                  ON procurement.comparison_ranks (supplier_quotation_id);
+
+CREATE INDEX idx_po_company_fk                   ON procurement.purchase_orders (company_id);
+CREATE INDEX idx_po_branch_fk                    ON procurement.purchase_orders (branch_id);
+CREATE INDEX idx_po_supplier_fk                  ON procurement.purchase_orders (supplier_id);
+CREATE INDEX idx_po_site_fk                      ON procurement.purchase_orders (supplier_site_id);
+CREATE INDEX idx_po_pay_terms_fk                 ON procurement.purchase_orders (payment_terms_id);
+CREATE INDEX idx_po_freight_term_fk              ON procurement.purchase_orders (freight_term_id);
+CREATE INDEX idx_po_incoterm_fk                  ON procurement.purchase_orders (incoterm_id);
+CREATE INDEX idx_po_buyer_fk                     ON procurement.purchase_orders (buyer_employee_id);
+CREATE INDEX idx_po_status_fk                    ON procurement.purchase_orders (po_status_id);
+CREATE INDEX idx_po_contract_fk                  ON procurement.purchase_orders (contract_id);
+
+CREATE INDEX idx_po_lines_po_fk                  ON procurement.purchase_order_lines (purchase_order_id);
+CREATE INDEX idx_po_lines_product_fk             ON procurement.purchase_order_lines (product_id);
+CREATE INDEX idx_po_lines_variant_fk             ON procurement.purchase_order_lines (product_variant_id);
+CREATE INDEX idx_po_lines_uom_fk                 ON procurement.purchase_order_lines (uom_id);
+CREATE INDEX idx_po_lines_tax_cat_fk             ON procurement.purchase_order_lines (tax_category_id);
+CREATE INDEX idx_po_lines_warehouse_fk           ON procurement.purchase_order_lines (destination_warehouse_id);
+CREATE INDEX idx_po_lines_location_fk            ON procurement.purchase_order_lines (destination_storage_location_id);
+CREATE INDEX idx_po_lines_req_line_fk            ON procurement.purchase_order_lines (requisition_line_id);
+CREATE INDEX INDEX_po_lines_status_fk            ON procurement.purchase_order_lines (line_status_id);
+CREATE INDEX idx_po_lines_matching_fk            ON procurement.purchase_order_lines (matching_status_id);
+
+CREATE INDEX idx_po_tax_line_fk                  ON procurement.po_line_taxes (po_line_id);
+CREATE INDEX idx_po_disc_line_fk                 ON procurement.po_line_discounts (po_line_id);
+
+CREATE INDEX idx_po_deliv_line_fk                ON procurement.po_delivery_schedules (po_line_id);
+CREATE INDEX idx_po_deliv_warehouse_fk           ON procurement.po_delivery_schedules (warehouse_id);
+CREATE INDEX idx_po_deliv_location_fk            ON procurement.po_delivery_schedules (storage_location_id);
+
+CREATE INDEX idx_po_ship_deliv_fk                ON procurement.po_shipment_schedules (po_delivery_schedule_id);
+
+CREATE INDEX idx_po_amend_po_fk                  ON procurement.purchase_order_amendments (purchase_order_id);
+CREATE INDEX idx_po_amend_editor_fk              ON procurement.purchase_order_amendments (amended_by_employee_id);
+CREATE INDEX idx_po_amend_approver_fk            ON procurement.purchase_order_amendments (approved_by_employee_id);
+
+CREATE INDEX idx_po_rev_po_fk                    ON procurement.po_revisions (purchase_order_id);
+
+CREATE INDEX idx_po_hist_po_fk                   ON procurement.po_status_history (purchase_order_id);
+CREATE INDEX idx_po_hist_status_fk               ON procurement.po_status_history (status_id);
+CREATE INDEX idx_po_hist_employee_fk             ON procurement.po_status_history (changed_by_employee_id);
+
+CREATE INDEX idx_recv_appoint_warehouse_fk       ON procurement.receiving_appointments (warehouse_id);
+CREATE INDEX idx_recv_appoint_status_fk          ON procurement.receiving_appointments (appointment_status_id);
+
+CREATE INDEX idx_grn_po_fk                       ON procurement.grns (purchase_order_id);
+CREATE INDEX idx_grn_supplier_fk                 ON procurement.grns (supplier_id);
+CREATE INDEX idx_grn_site_fk                     ON procurement.grns (supplier_site_id);
+CREATE INDEX idx_grn_warehouse_fk               ON procurement.grns (warehouse_id);
+CREATE INDEX idx_grn_receiver_fk                 ON procurement.grns (receiving_employee_id);
+CREATE INDEX idx_grn_appointment_fk              ON procurement.grns (receiving_appointment_id);
+CREATE INDEX idx_grn_stage_fk                    ON procurement.grns (grn_stage_id);
+CREATE INDEX idx_grn_status_fk                   ON procurement.grns (receipt_status_id);
+
+CREATE INDEX idx_grn_lines_grn_fk                ON procurement.grn_lines (grn_id);
+CREATE INDEX idx_grn_lines_po_line_fk            ON procurement.grn_lines (po_line_id);
+CREATE INDEX idx_grn_lines_product_fk            ON procurement.grn_lines (product_id);
+CREATE INDEX idx_grn_lines_uom_fk                ON procurement.grn_lines (uom_id);
+CREATE INDEX idx_grn_lines_location_fk            ON procurement.grn_lines (storage_location_id);
+CREATE INDEX idx_grn_lines_batch_fk              ON procurement.grn_lines (batch_id);
+CREATE INDEX idx_grn_lines_inspect_fk            ON procurement.grn_lines (inspection_status_id);
+
+CREATE INDEX idx_qa_hold_line_fk                 ON procurement.quality_holds (grn_line_id);
+CREATE INDEX idx_qa_hold_employee_fk             ON procurement.quality_holds (release_decision_employee_id);
+
+CREATE INDEX idx_excep_line_fk                   ON procurement.receiving_exceptions (grn_line_id);
+CREATE INDEX idx_excep_damage_fk                 ON procurement.receiving_exceptions (damage_type_id);
+
+CREATE INDEX idx_inspect_line_fk                 ON procurement.grn_inspections (grn_line_id);
+CREATE INDEX idx_inspect_employee_fk             ON procurement.grn_inspections (inspected_by_employee_id);
+CREATE INDEX idx_inspect_result_fk               ON procurement.grn_inspections (result_id);
+
+CREATE INDEX idx_match_po_line_fk                ON procurement.three_way_match_ledger (po_line_id);
+CREATE INDEX idx_match_grn_line_fk               ON procurement.three_way_match_ledger (grn_line_id);
+CREATE INDEX idx_match_status_fk                 ON procurement.three_way_match_ledger (matching_status_id);
+CREATE INDEX idx_match_exception_fk              ON procurement.three_way_match_ledger (exception_reason_id);
+CREATE INDEX idx_match_employee_fk               ON procurement.three_way_match_ledger (cleared_by_employee_id);
+
+CREATE INDEX idx_rtv_grn_fk                      ON procurement.purchase_returns (grn_id);
+CREATE INDEX idx_rtv_po_fk                       ON procurement.purchase_returns (purchase_order_id);
+CREATE INDEX idx_rtv_supplier_fk                 ON procurement.purchase_returns (supplier_id);
+CREATE INDEX idx_rtv_site_fk                     ON procurement.purchase_returns (supplier_site_id);
+CREATE INDEX idx_rtv_warehouse_fk               ON procurement.purchase_returns (warehouse_id);
+CREATE INDEX idx_rtv_employee_fk                 ON procurement.purchase_returns (returned_by_employee_id);
+CREATE INDEX idx_rtv_status_fk                   ON procurement.purchase_returns (return_status_id);
+
+CREATE INDEX idx_rtv_lines_rtv_fk                ON procurement.purchase_return_lines (purchase_return_id);
+CREATE INDEX idx_rtv_lines_grn_line_fk           ON procurement.purchase_return_lines (grn_line_id);
+CREATE INDEX idx_rtv_lines_product_fk            ON procurement.purchase_return_lines (product_id);
+CREATE INDEX idx_rtv_lines_uom_fk                ON procurement.purchase_return_lines (uom_id);
+CREATE INDEX idx_rtv_lines_reason_fk             ON procurement.purchase_return_lines (return_reason_id);
+
+CREATE INDEX idx_rtv_ship_rtv_fk                 ON procurement.purchase_return_shipments (purchase_return_id);
+
+CREATE INDEX idx_contracts_supplier_fk           ON procurement.contracts (supplier_id);
+CREATE INDEX idx_contracts_site_fk               ON procurement.contracts (supplier_site_id);
+CREATE INDEX idx_contracts_type_fk               ON procurement.contracts (contract_type_id);
+CREATE INDEX idx_contracts_pay_terms_fk          ON procurement.contracts (payment_terms_id);
+
+CREATE INDEX idx_contract_lines_contract_fk      ON procurement.contract_lines (contract_id);
+CREATE INDEX idx_contract_lines_product_fk       ON procurement.contract_lines (product_id);
+CREATE INDEX idx_contract_lines_uom_fk           ON procurement.contract_lines (uom_id);
+
+CREATE INDEX idx_renewals_contract_fk            ON procurement.contract_renewals (contract_id);
+CREATE INDEX idx_renewals_employee_fk            ON procurement.contract_renewals (renewed_by_employee_id);
+
+CREATE INDEX idx_capacity_supplier_fk            ON procurement.supplier_capacity_reservations (supplier_id);
+CREATE INDEX idx_capacity_site_fk                ON procurement.supplier_capacity_reservations (supplier_site_id);
+
+CREATE INDEX idx_cal_supplier_fk                 ON procurement.procurement_calendar_events (supplier_id);
+CREATE INDEX idx_cal_site_fk                     ON procurement.procurement_calendar_events (supplier_site_id);
+
+CREATE INDEX idx_landed_po_fk                    ON procurement.po_landed_costs (purchase_order_id);
+CREATE INDEX idx_landed_grn_fk                   ON procurement.po_landed_costs (grn_id);
+CREATE INDEX idx_landed_cost_type_fk             ON procurement.po_landed_costs (landed_cost_type_id);
+CREATE INDEX idx_landed_alloc_method_fk          ON procurement.po_landed_costs (allocation_method_id);
+
+CREATE INDEX idx_doc_registry_envelope           ON procurement.document_registry (document_type, document_id);
+CREATE INDEX idx_doc_versions_registry_fk        ON procurement.document_versions (document_registry_id);
+CREATE INDEX idx_doc_versions_status_fk          ON procurement.document_versions (approval_status_id);
+
+CREATE INDEX idx_kpi_po_fk                       ON procurement.procurement_kpis_snapshot (purchase_order_id);
+CREATE INDEX idx_kpi_supplier_fk                 ON procurement.procurement_kpis_snapshot (supplier_id);
+
+-- 2. COMPOSITE INDEXES (Optimized covering indexes)
+CREATE INDEX idx_reqs_status_branch_comp         ON procurement.purchase_requisitions (requisition_status_id, branch_id);
+CREATE INDEX idx_rfqs_status_deadline_comp       ON procurement.rfqs (rfq_status_id, submission_deadline DESC);
+CREATE INDEX idx_po_status_date_comp             ON procurement.purchase_orders (po_status_id, po_date DESC);
+CREATE INDEX idx_po_supplier_branch_comp         ON procurement.purchase_orders (supplier_id, branch_id);
+CREATE INDEX idx_grn_status_warehouse_comp       ON procurement.grns (receipt_status_id, warehouse_id);
+
+-- 3. PARTIAL INDEXES (Optimizing active / hot records)
+CREATE INDEX idx_contracts_active_dates          ON procurement.contracts (supplier_id, start_date, end_date) WHERE is_active = TRUE;
+CREATE INDEX idx_qa_holds_active                 ON procurement.quality_holds (batch_number) WHERE released_date IS NULL;
+CREATE INDEX idx_doc_versions_latest             ON procurement.document_versions (document_registry_id) WHERE is_latest = TRUE;
+CREATE INDEX idx_match_ledger_uncleared          ON procurement.three_way_match_ledger (po_line_id, grn_line_id) WHERE is_cleared = FALSE;
+CREATE INDEX idx_landed_costs_po_part            ON procurement.po_landed_costs (purchase_order_id) WHERE purchase_order_id IS NOT NULL;
+CREATE INDEX idx_landed_costs_grn_part           ON procurement.po_landed_costs (grn_id) WHERE grn_id IS NOT NULL;
