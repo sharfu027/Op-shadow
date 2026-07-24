@@ -1,5 +1,5 @@
 -- =============================================================================
--- INK FMCG ENTERPRISE ERP — ENTERPRISE FINANCE SCHEMAS (v1.0)
+-- INK FMCG ENTERPRISE ERP — ENTERPRISE FINANCE SCHEMAS (v2.0 REFINED)
 -- File Name      : finance_schema.sql
 -- Target Database: PostgreSQL 16+
 -- Schema Owner   : finance
@@ -120,20 +120,28 @@ CREATE TABLE finance.currencies (
 COMMENT ON TABLE finance.currencies IS 
     '[FOUNDATION] Currency codes registry conforming to ISO 4217 specifications.';
 
--- 2.2 Exchange Rates History
+-- 2.2 Exchange Rates (Refined with Provider & Approvals)
 CREATE TABLE finance.exchange_rates (
-    id                 UUID          PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
-    from_currency_id   UUID          NOT NULL REFERENCES finance.currencies(id) ON DELETE CASCADE,
-    to_currency_id     UUID          NOT NULL REFERENCES finance.currencies(id) ON DELETE CASCADE,
-    rate_date          DATE          NOT NULL,
-    rate               NUMERIC(18,6) NOT NULL,
+    id                   UUID          PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    from_currency_id     UUID          NOT NULL REFERENCES finance.currencies(id) ON DELETE CASCADE,
+    to_currency_id       UUID          NOT NULL REFERENCES finance.currencies(id) ON DELETE CASCADE,
+    rate_date            DATE          NOT NULL,
+    rate                 NUMERIC(18,6) NOT NULL,
+    
+    -- v2.0 Extensions
+    source_provider      VARCHAR(100)  NOT NULL DEFAULT 'MANUAL',
+    imported_time        TIMESTAMPTZ,
+    approved_by_user_id  UUID          REFERENCES iam.users(id) ON DELETE SET NULL,
+    approved_at_utc      TIMESTAMPTZ,
+    is_manual_override   BOOLEAN       NOT NULL DEFAULT FALSE,
+    effective_timestamp  TIMESTAMPTZ   NOT NULL DEFAULT clock_timestamp(),
 
     CONSTRAINT uq_exchange_rate UNIQUE (from_currency_id, to_currency_id, rate_date),
     CONSTRAINT chk_exch_rate CHECK (rate > 0.000000)
 );
 
 COMMENT ON TABLE finance.exchange_rates IS 
-    '[FOUNDATION] Historical conversion rates registry mapping values to day keys.';
+    '[FOUNDATION] Conversion rates registry with audit indicators mapping values to day keys.';
 
 -- 2.3 Fiscal Years
 CREATE TABLE finance.fiscal_years (
@@ -268,7 +276,7 @@ CREATE TABLE finance.journal_headers (
 );
 
 COMMENT ON TABLE finance.journal_headers IS 
-    '[OPERATIONAL] Journal entry headers tracking approval milestones, currencies, and batches.';
+    '[OPERATIONAL] Journal entry headers tracking approval milestones, currencies, and reversals.';
 
 -- 3.3 Journal Lines
 CREATE TABLE finance.journal_lines (
@@ -685,7 +693,7 @@ COMMENT ON TABLE finance.closing_approvals IS
     '[OPERATIONAL] Period close approval signatures.';
 
 -- =============================================================================
--- SECTION 9 — FINANCIAL KPI SNAPSHOTS
+-- SECTION 9 — FINANCIAL KPI SNAPSHOTS & HISTORY (REFINED)
 -- =============================================================================
 
 CREATE TABLE finance.gl_snapshots (
@@ -712,14 +720,168 @@ COMMENT ON TABLE finance.gl_snapshots IS
     '[HISTORY] Trial balance snapshots caching balances per account.';
 
 -- =============================================================================
--- SECTION 10 — INDEX STRATEGY (B-TREE FOREIGNS & COMPOSITE COVERING)
+-- SECTION 10 — TIMELINES & ASSIGNMENT AUDITING (v2.0 ADDITIONS)
 -- =============================================================================
 
--- 10.1 B-Tree Indexes on all Foreign Keys
+-- 10.1 Journal Lifecycle History
+CREATE TABLE finance.journal_lifecycle_history (
+    id                   UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    journal_header_id    UUID         NOT NULL REFERENCES finance.journal_headers(id) ON DELETE CASCADE,
+    journal_status_id    UUID         NOT NULL REFERENCES finance.journal_statuses(id) ON DELETE CASCADE,
+    effective_from       TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
+    effective_to         TIMESTAMPTZ,
+    comments             TEXT,
+    changed_by_user_id   UUID         REFERENCES iam.users(id) ON DELETE SET NULL,
+
+    CONSTRAINT chk_journal_lifecycle_dates CHECK (effective_to IS NULL OR effective_to >= effective_from)
+);
+
+COMMENT ON TABLE finance.journal_lifecycle_history IS 
+    '[HISTORY] Immutable transition log tracking journal review and post flows.';
+
+-- 10.2 Account Balance History (Daily and Period snapshots)
+CREATE TABLE finance.account_balance_history (
+    id                   UUID          PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    snapshot_date        DATE          NOT NULL DEFAULT CURRENT_DATE,
+    chart_of_accounts_id UUID          NOT NULL REFERENCES finance.chart_of_accounts(id) ON DELETE CASCADE,
+    cost_center_id       UUID          REFERENCES finance.cost_centers(id) ON DELETE CASCADE,
+    
+    opening_balance      NUMERIC(18,4) NOT NULL,
+    debit_movement       NUMERIC(18,4) NOT NULL DEFAULT 0.0000,
+    credit_movement      NUMERIC(18,4) NOT NULL DEFAULT 0.0000,
+    closing_balance      NUMERIC(18,4) GENERATED ALWAYS AS (opening_balance + debit_movement - credit_movement) STORED,
+    
+    snapshot_type        VARCHAR(20)   NOT NULL, -- DAILY, PERIOD
+    accounting_period_id UUID          REFERENCES finance.accounting_periods(id) ON DELETE CASCADE,
+    created_at_utc       TIMESTAMPTZ   NOT NULL DEFAULT clock_timestamp(),
+
+    CONSTRAINT chk_acc_bal_snap_type CHECK (snapshot_type IN ('DAILY', 'PERIOD')),
+    CONSTRAINT chk_acc_bal_debit CHECK (debit_movement >= 0.0000),
+    CONSTRAINT chk_acc_bal_credit CHECK (credit_movement >= 0.0000)
+);
+
+COMMENT ON TABLE finance.account_balance_history IS 
+    '[HISTORY] Historical ledger parameters caching totals per day/period to speed up financial reporting.';
+
+-- 10.3 Finance Audit Event Timeline
+CREATE TABLE finance.finance_audit_event_timeline (
+    id                   UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    event_type           VARCHAR(100) NOT NULL, -- JOURNAL_POSTED, INVOICE_APPROVED, INVOICE_CANCELLED, RECEIPT_APPLIED, AP_PAYMENT_COMPLETED, RECON_COMPLETED, EXCHANGE_RATE_UPDATED, PERIOD_CLOSED, YEAR_CLOSED, AUDIT_LOCK_APPLIED
+    source_document_type VARCHAR(50)  NOT NULL, -- JOURNAL, INVOICE, RECEIPT, PAYMENT, STATEMENT, EXCHANGE_RATE, PERIOD
+    source_document_id   UUID         NOT NULL,
+    event_timestamp      TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
+    performed_by_user_id UUID         REFERENCES iam.users(id) ON DELETE SET NULL,
+    payload              JSONB,
+
+    created_at_utc       TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp()
+);
+
+COMMENT ON TABLE finance.finance_audit_event_timeline IS 
+    '[HISTORY] Immutable master timeline log for all critical financial postings and closes.';
+
+-- 10.4 Approval History (Multi-level workflow details)
+CREATE TABLE finance.approval_history (
+    id                   UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    source_document_type VARCHAR(50)  NOT NULL, -- JOURNAL, INVOICE, PAYMENT, RECONCILIATION, ADJUSTMENT
+    source_document_id   UUID         NOT NULL,
+    approval_level       INT          NOT NULL,
+    workflow_stage       VARCHAR(50)  NOT NULL, -- SUBMITTED, REVIEW, LEVEL_1, LEVEL_2, FINAL
+    approver_user_id     UUID         NOT NULL REFERENCES iam.users(id) ON DELETE CASCADE,
+    decision             VARCHAR(20)  NOT NULL, -- APPROVED, REJECTED, DELEGATED
+    comments             TEXT,
+    decision_timestamp   TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
+
+    CONSTRAINT chk_approval_level CHECK (approval_level >= 1),
+    CONSTRAINT chk_approval_decision CHECK (decision IN ('APPROVED', 'REJECTED', 'DELEGATED'))
+);
+
+COMMENT ON TABLE finance.approval_history IS 
+    '[HISTORY] Approval tracking registers backing multi-level authorization workflows.';
+
+-- 10.5 Financial Adjustment Registry
+CREATE TABLE finance.financial_adjustment_registry (
+    id                     UUID          PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    adjustment_type        VARCHAR(50)   NOT NULL, -- WRITE_OFF, MANUAL_ADJUSTMENT, CORRECTION, ACCRUAL, PROVISION
+    chart_of_accounts_id   UUID          NOT NULL REFERENCES finance.chart_of_accounts(id) ON DELETE CASCADE,
+    amount                 NUMERIC(18,4) NOT NULL,
+    reason                 TEXT          NOT NULL,
+    reference_document_type VARCHAR(50)   NOT NULL, -- INVOICE, BILL, JOURNAL, BANK_TX
+    reference_document_id  UUID          NOT NULL,
+    approved_by_user_id    UUID          REFERENCES iam.users(id) ON DELETE SET NULL,
+    
+    -- Concurrency and Auditing
+    row_version            INT           NOT NULL DEFAULT 1,
+    created_at_utc         TIMESTAMPTZ   NOT NULL DEFAULT clock_timestamp(),
+    created_by_user_id     UUID          REFERENCES iam.users(id) ON DELETE SET NULL,
+
+    CONSTRAINT chk_fin_adj_type CHECK (adjustment_type IN ('WRITE_OFF', 'MANUAL_ADJUSTMENT', 'CORRECTION', 'ACCRUAL', 'PROVISION')),
+    CONSTRAINT chk_fin_adj_amount CHECK (amount <> 0.0000)
+);
+
+COMMENT ON TABLE finance.financial_adjustment_registry IS 
+    '[OPERATIONAL] Authorized write-offs, manual corrections, provisions, and adjustments.';
+
+-- 10.6 Bank Reconciliation Run History
+CREATE TABLE finance.bank_reconciliation_history (
+    id                           UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    bank_statement_id            UUID         NOT NULL REFERENCES finance.bank_statements(id) ON DELETE CASCADE,
+    operator_user_id             UUID         NOT NULL REFERENCES iam.users(id) ON DELETE CASCADE,
+    matched_transactions_count   INT          NOT NULL DEFAULT 0,
+    unmatched_transactions_count INT          NOT NULL DEFAULT 0,
+    completed_at_utc             TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
+    status                       VARCHAR(50)  NOT NULL, -- COMPLETED, PARTIAL, FAILED
+
+    CONSTRAINT chk_recon_counts CHECK (matched_transactions_count >= 0 AND unmatched_transactions_count >= 0),
+    CONSTRAINT chk_recon_status CHECK (status IN ('COMPLETED', 'PARTIAL', 'FAILED'))
+);
+
+COMMENT ON TABLE finance.bank_reconciliation_history IS 
+    '[HISTORY] Detailed audits of bank reconciliation runs.';
+
+-- 10.7 Financial Close Timeline
+CREATE TABLE finance.financial_close_timeline (
+    id                   UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    accounting_period_id UUID         NOT NULL REFERENCES finance.accounting_periods(id) ON DELETE CASCADE,
+    close_stage          VARCHAR(50)  NOT NULL, -- CLOSE_STARTED, VALIDATION_COMPLETED, APPROVAL_COMPLETED, AUDIT_LOCK_APPLIED, PERIOD_REOPENED, YEAR_CLOSED
+    stage_timestamp      TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
+    operator_user_id     UUID         REFERENCES iam.users(id) ON DELETE SET NULL,
+    comments             TEXT,
+
+    CONSTRAINT chk_close_stage CHECK (close_stage IN ('CLOSE_STARTED', 'VALIDATION_COMPLETED', 'APPROVAL_COMPLETED', 'AUDIT_LOCK_APPLIED', 'PERIOD_REOPENED', 'YEAR_CLOSED'))
+);
+
+COMMENT ON TABLE finance.financial_close_timeline IS 
+    '[HISTORY] Close process milestone records tracking accounting period lockdowns.';
+
+-- 10.8 Financial SLA Monitoring
+CREATE TABLE finance.financial_sla_monitoring (
+    id                      UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    sla_type                VARCHAR(50)  NOT NULL, -- INVOICE_POSTING, PAYMENT_PROCESSING, JOURNAL_APPROVAL, BANK_RECONCILIATION, PERIOD_CLOSING
+    source_document_id      UUID         NOT NULL,
+    target_duration_minutes INT          NOT NULL,
+    actual_duration_minutes INT,
+    is_breached             BOOLEAN      GENERATED ALWAYS AS (actual_duration_minutes > target_duration_minutes) STORED,
+    delay_reason            TEXT,
+    created_at_utc          TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
+
+    CONSTRAINT chk_fin_sla_target CHECK (target_duration_minutes > 0),
+    CONSTRAINT chk_fin_sla_actual CHECK (actual_duration_minutes IS NULL OR actual_duration_minutes >= 0),
+    CONSTRAINT chk_fin_sla_type CHECK (sla_type IN ('INVOICE_POSTING', 'PAYMENT_PROCESSING', 'JOURNAL_APPROVAL', 'BANK_RECONCILIATION', 'PERIOD_CLOSING'))
+);
+
+COMMENT ON TABLE finance.financial_sla_monitoring IS 
+    '[OPERATIONAL] Monitors transactional processing timelines against internal SLA goals.';
+
+-- =============================================================================
+-- SECTION 11 — INDEX STRATEGY (B-TREE FOREIGNS & COMPOSITE COVERING)
+-- =============================================================================
+
+-- 11.1 B-Tree Indexes on all Foreign Keys
 CREATE INDEX idx_currencies_status_fk          ON finance.currencies (currency_status_id);
 
 CREATE INDEX idx_rate_from_fk                  ON finance.exchange_rates (from_currency_id);
 CREATE INDEX idx_rate_to_fk                    ON finance.exchange_rates (to_currency_id);
+CREATE INDEX idx_rate_approver_fk              ON finance.exchange_rates (approved_by_user_id);
 
 CREATE INDEX idx_period_year_fk                ON finance.accounting_periods (fiscal_year_id);
 CREATE INDEX idx_period_status_fk              ON finance.accounting_periods (period_status_id);
@@ -808,15 +970,41 @@ CREATE INDEX idx_close_user_fk                 ON finance.closing_approvals (app
 CREATE INDEX idx_snapshot_period_fk            ON finance.gl_snapshots (accounting_period_id);
 CREATE INDEX idx_snapshot_coa_fk               ON finance.gl_snapshots (chart_of_accounts_id);
 
--- 10.2 Composite Indexes (Covering common finance queries)
+-- v2.0 Indexes
+CREATE INDEX idx_jhistory_header_fk            ON finance.journal_lifecycle_history (journal_header_id);
+CREATE INDEX idx_jhistory_status_fk            ON finance.journal_lifecycle_history (journal_status_id);
+CREATE INDEX idx_jhistory_user_fk              ON finance.journal_lifecycle_history (changed_by_user_id);
+
+CREATE INDEX idx_bal_hist_coa_fk               ON finance.account_balance_history (chart_of_accounts_id);
+CREATE INDEX idx_bal_hist_cost_fk              ON finance.account_balance_history (cost_center_id);
+CREATE INDEX idx_bal_hist_period_fk            ON finance.account_balance_history (accounting_period_id);
+
+CREATE INDEX idx_faudit_user_fk                ON finance.finance_audit_event_timeline (performed_by_user_id);
+
+CREATE INDEX idx_approve_hist_approver_fk      ON finance.approval_history (approver_user_id);
+
+CREATE INDEX idx_fin_adj_coa_fk                ON finance.financial_adjustment_registry (chart_of_accounts_id);
+CREATE INDEX idx_fin_adj_approver_fk           ON finance.financial_adjustment_registry (approved_by_user_id);
+CREATE INDEX idx_fin_adj_user_fk               ON finance.financial_adjustment_registry (created_by_user_id);
+
+CREATE INDEX idx_brecon_hist_statement_fk      ON finance.bank_reconciliation_history (bank_statement_id);
+CREATE INDEX idx_brecon_hist_operator_fk       ON finance.bank_reconciliation_history (operator_user_id);
+
+CREATE INDEX idx_fclose_period_fk              ON finance.financial_close_timeline (accounting_period_id);
+CREATE INDEX idx_fclose_user_fk                ON finance.financial_close_timeline (operator_user_id);
+
+-- 11.2 Composite Indexes (Covering common finance queries)
 CREATE INDEX idx_journal_posting_comp          ON finance.journal_headers (accounting_period_id, journal_status_id);
 CREATE INDEX idx_invoice_aging_comp            ON finance.customer_invoices (customer_id, due_date, outstanding_amount);
 CREATE INDEX idx_bill_aging_comp               ON finance.supplier_bills (supplier_id, due_date, outstanding_amount);
 CREATE INDEX idx_tax_reporting_comp            ON finance.tax_ledger (transaction_date, tax_code_id, transaction_type);
+CREATE INDEX idx_bal_hist_date_coa             ON finance.account_balance_history (snapshot_date, chart_of_accounts_id, snapshot_type);
 
--- 10.3 Partial Indexes (Optimizing active/hot records)
+-- 11.3 Partial Indexes (Optimizing active/hot records)
 CREATE INDEX idx_journal_unposted             ON finance.journal_headers (id) WHERE journal_status_id = 'c1251910-1849-43c2-bf72-4d2cf99a80e5'; -- references pending POSTING_PENDING ID
 CREATE INDEX idx_invoice_outstanding           ON finance.customer_invoices (id) WHERE outstanding_amount > 0.0000;
 CREATE INDEX idx_bill_outstanding              ON finance.supplier_bills (id) WHERE outstanding_amount > 0.0000;
 CREATE INDEX idx_bank_unreconciled             ON finance.bank_transactions (id) WHERE is_reconciled = FALSE;
 CREATE INDEX idx_period_checklist_pending      ON finance.period_close_checklist (id) WHERE is_completed = FALSE;
+CREATE INDEX idx_sla_breached_finance          ON finance.financial_sla_monitoring (source_document_id) WHERE is_breached = TRUE;
+CREATE INDEX idx_adjustments_unapproved        ON finance.financial_adjustment_registry (chart_of_accounts_id) WHERE approved_by_user_id IS NULL;
