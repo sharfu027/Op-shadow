@@ -1,5 +1,5 @@
 -- =============================================================================
--- INK FMCG ENTERPRISE ERP — CUSTOMER MANAGEMENT SCHEMAS (v1.0)
+-- INK FMCG ENTERPRISE ERP — CUSTOMER MANAGEMENT SCHEMAS (v2.0 REFINED)
 -- File Name      : customer_schema.sql
 -- Target Database: PostgreSQL 16+
 -- Schema Owner   : customer
@@ -26,7 +26,7 @@ CREATE TABLE customer.customer_statuses (
 );
 
 COMMENT ON TABLE customer.customer_statuses IS 
-    '[LOOKUP] Lifecycle status of a customer: ACTIVE, PENDING_APPROVAL, SUSPENDED, DEACTIVATED, BLACKLISTED.';
+    '[LOOKUP] Lifecycle status of a customer: PROSPECT, LEAD, QUALIFIED, ACTIVE, INACTIVE, SUSPENDED, BLOCKED, CLOSED.';
 
 -- 1.2 Customer Types
 CREATE TABLE customer.customer_types (
@@ -191,7 +191,7 @@ CREATE TABLE customer.document_types (
 COMMENT ON TABLE customer.document_types IS 
     '[LOOKUP] Types of regulatory verification papers submitted: KYC_PROOFS, GST_CERTIFICATE, PAN_CARD, BUSINESS_LICENSE, TRADE_AGREEMENT, PARTNERSHIP_DEED.';
 
--- 1.12 Customer Relationship Types (Hierarchies)
+-- 1.12 Customer Relationship Types (Graph)
 CREATE TABLE customer.customer_relationship_types (
     id             UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
     code           VARCHAR(50)  NOT NULL,
@@ -205,7 +205,7 @@ CREATE TABLE customer.customer_relationship_types (
 );
 
 COMMENT ON TABLE customer.customer_relationship_types IS 
-    '[LOOKUP] Types of parental link hierarchies: CORPORATE_PARENT, FRANCHISE_PARENT, SUBSIDIARY, FRANCHISEE, BRANCH_SITE.';
+    '[LOOKUP] Types of relational graph links: PARENT, SUBSIDIARY, FRANCHISE, BUYING_GROUP, PARTNER, SISTER_COMPANY, SHARED_OWNERSHIP, STRATEGIC_ALLIANCE, COMPETITOR.';
 
 -- 1.13 Contact Roles
 CREATE TABLE customer.contact_roles (
@@ -241,7 +241,7 @@ CREATE TABLE customer.customers (
     customer_segment_id          UUID          NOT NULL REFERENCES customer.customer_segments(id),
     industry_id                  UUID          NOT NULL REFERENCES customer.customer_industries(id),
     
-    -- Business Credentials
+    -- Business Credentials (Snapshots of latest active records)
     business_registration_number VARCHAR(100), -- CIN or local incorporation registration
     pan_number                   VARCHAR(20),  -- Income Tax PAN (India)
     tin_number                   VARCHAR(50),  -- Tax Identification Number (International)
@@ -304,7 +304,7 @@ CREATE TABLE customer.customer_sites (
     -- Beat planning & Route reference hook
     route_id                     UUID,          -- future link to route planning module
     
-    -- Site-specific regulatory data
+    -- Site-specific regulatory data (Latest snapshot)
     tax_registration_number      VARCHAR(100), -- Site GSTIN (India) or local VAT registration
     
     operating_hours_description  TEXT,
@@ -382,7 +382,7 @@ COMMENT ON TABLE customer.contact_role_assignments IS
 -- SECTION 5 — CUSTOMER CREDIT MANAGEMENT
 -- =============================================================================
 
--- 5.1 Credit Profile
+-- 5.1 Credit Profile (Latest active values)
 CREATE TABLE customer.customer_credit_profiles (
     id                           UUID          PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
     customer_id                  UUID          NOT NULL REFERENCES customer.customers(id) ON DELETE CASCADE,
@@ -570,9 +570,10 @@ COMMENT ON TABLE customer.sales_territory_mappings IS
     '[OPERATIONAL] Mappings of customer site locations to organizational sales territories, sales reps, and beats.';
 
 -- =============================================================================
--- SECTION 9 — CUSTOMER HIERARCHY
+-- SECTION 9 — HIERARCHIES & RELATIONSHIP GRAPH
 -- =============================================================================
 
+-- 9.1 Hierarchies (Hierarchical tree legacy cache)
 CREATE TABLE customer.customer_hierarchies (
     id                           UUID          PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
     parent_customer_id           UUID          NOT NULL REFERENCES customer.customers(id) ON DELETE CASCADE,
@@ -591,6 +592,27 @@ CREATE TABLE customer.customer_hierarchies (
 
 COMMENT ON TABLE customer.customer_hierarchies IS 
     '[FOUNDATION] Self referencing tree structures allowing corporate parent companies, branches, or franchises.';
+
+-- 9.2 Relationship Graph (Extended Graph Networks with historical trace)
+CREATE TABLE customer.customer_relationships (
+    id                           UUID          PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    source_customer_id           UUID          NOT NULL REFERENCES customer.customers(id) ON DELETE CASCADE,
+    target_customer_id           UUID          NOT NULL REFERENCES customer.customers(id) ON DELETE CASCADE,
+    relationship_type_id         UUID          NOT NULL REFERENCES customer.customer_relationship_types(id),
+    
+    effective_from               DATE          NOT NULL DEFAULT CURRENT_DATE,
+    effective_to                 DATE,
+    reason                       TEXT,
+
+    created_at_utc               TIMESTAMPTZ   NOT NULL DEFAULT clock_timestamp(),
+    created_by_user_id           UUID          REFERENCES iam.users(id) ON DELETE SET NULL,
+
+    CONSTRAINT chk_cust_rel_graph_self CHECK (source_customer_id <> target_customer_id),
+    CONSTRAINT chk_cust_rel_graph_dates CHECK (effective_to IS NULL OR effective_to >= effective_from)
+);
+
+COMMENT ON TABLE customer.customer_relationships IS 
+    '[FOUNDATION] Relational Graph network auditing horizontal alliances, sister companies, buying groups, competitors, and strategic partnerships.';
 
 -- =============================================================================
 -- SECTION 10 — ENTERPRISE CUSTOMER DOCUMENT MANAGEMENT
@@ -729,10 +751,9 @@ COMMENT ON TABLE customer.performance_snapshots IS
     '[HISTORY] Compiled historical KPI logs tracking revenue, return percentage, and billing scores.';
 
 -- =============================================================================
--- SECTION 13 — COMMUNICATION PREFERENCES & LOGS
+-- SECTION 13 — COMMUNICATION PREFERENCES
 -- =============================================================================
 
--- 13.1 Channel Preferences
 CREATE TABLE customer.communication_preferences (
     id                           UUID          PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
     customer_id                  UUID          NOT NULL REFERENCES customer.customers(id) ON DELETE CASCADE,
@@ -759,32 +780,179 @@ CREATE TABLE customer.communication_preferences (
 COMMENT ON TABLE customer.communication_preferences IS 
     '[FOUNDATION] Customer permissions managing channels for marketing and transactional invoices.';
 
--- 13.2 Communication History Foundation
-CREATE TABLE customer.communication_history (
-    id                         UUID          PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
-    customer_id                UUID          NOT NULL REFERENCES customer.customers(id) ON DELETE CASCADE,
-    customer_contact_id        UUID          REFERENCES customer.customer_contacts(id) ON DELETE SET NULL,
-    
-    direction                  VARCHAR(10)   NOT NULL, -- INBOUND, OUTBOUND
-    channel                    VARCHAR(20)   NOT NULL, -- EMAIL, SMS, WHATSAPP, VOICE
-    sent_at_utc                TIMESTAMPTZ   NOT NULL DEFAULT clock_timestamp(),
-    status                     VARCHAR(50)   NOT NULL, -- SENT, DELIVERED, FAILED, READ
-    
-    subject                    VARCHAR(200),
-    body_snippet               TEXT,
+-- =============================================================================
+-- SECTION 14 — AUDITING & HISTORY REFINEMENTS (v2.0 ADDITIONS)
+-- =============================================================================
 
-    CONSTRAINT chk_comm_history_dir CHECK (direction IN ('INBOUND', 'OUTBOUND')),
-    CONSTRAINT chk_comm_history_channel CHECK (channel IN ('EMAIL', 'SMS', 'WHATSAPP', 'VOICE'))
+-- 14.1 Customer Status/Lifecycle History
+CREATE TABLE customer.customer_lifecycle_history (
+    id                     UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    customer_id            UUID         NOT NULL REFERENCES customer.customers(id) ON DELETE CASCADE,
+    customer_status_id     UUID         NOT NULL REFERENCES customer.customer_statuses(id),
+    effective_from         TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
+    effective_to           TIMESTAMPTZ,
+    reason                 TEXT,
+    changed_by_user_id     UUID         REFERENCES iam.users(id) ON DELETE SET NULL,
+
+    CONSTRAINT chk_lifecycle_dates CHECK (effective_to IS NULL OR effective_to >= effective_from)
 );
 
-COMMENT ON TABLE customer.communication_history IS 
-    '[HISTORY] Basic logging ledger auditing customer contacts and invoice deliveries.';
+COMMENT ON TABLE customer.customer_lifecycle_history IS 
+    '[HISTORY] Log record of historical customer statuses (Prospect -> Active -> Suspended).';
+
+-- 14.2 Customer Sales Representative Assignment History (Ownership)
+CREATE TABLE customer.customer_ownership_history (
+    id                           UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    customer_id                  UUID         NOT NULL REFERENCES customer.customers(id) ON DELETE CASCADE,
+    primary_salesman_employee_id UUID         NOT NULL REFERENCES employee.employees(id),
+    backup_salesman_employee_id  UUID         REFERENCES employee.employees(id),
+    effective_from               TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
+    effective_to                 TIMESTAMPTZ,
+    assignment_reason            TEXT         NOT NULL,
+    assigned_by_user_id          UUID         REFERENCES iam.users(id) ON DELETE SET NULL,
+
+    CONSTRAINT chk_ownership_dates CHECK (effective_to IS NULL OR effective_to >= effective_from)
+);
+
+COMMENT ON TABLE customer.customer_ownership_history IS 
+    '[HISTORY] Tracks changes to salesmen mappings over time for territory account audits.';
+
+-- 14.3 Customer Merge & Split Consolidation Registry
+CREATE TABLE customer.customer_merges_splits (
+    id                           UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    source_customer_id           UUID         REFERENCES customer.customers(id) ON DELETE SET NULL,
+    target_customer_id           UUID         REFERENCES customer.customers(id) ON DELETE SET NULL,
+    event_type                   VARCHAR(50)  NOT NULL, -- MERGE, SPLIT, CONSOLIDATION, SEPARATION
+    event_date                   TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
+    processed_by_user_id         UUID         REFERENCES iam.users(id) ON DELETE SET NULL,
+    approval_document_reference  VARCHAR(255),
+    description                  TEXT         NOT NULL,
+
+    CONSTRAINT chk_merge_split_type CHECK (event_type IN ('MERGE', 'SPLIT', 'CONSOLIDATION', 'SEPARATION'))
+);
+
+COMMENT ON TABLE customer.customer_merges_splits IS 
+    '[HISTORY] Traces corporate mergers, divisions, and consolidation records.';
+
+-- 14.4 Tax Registration Versions History (Anti-overwrite protection)
+CREATE TABLE customer.tax_registration_history (
+    id                       UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    customer_id              UUID         NOT NULL REFERENCES customer.customers(id) ON DELETE CASCADE,
+    customer_site_id         UUID         REFERENCES customer.customer_sites(id) ON DELETE SET NULL,
+    tax_registration_type    VARCHAR(50)  NOT NULL, -- GSTIN, VAT, TIN
+    tax_registration_number  VARCHAR(100) NOT NULL,
+    effective_from           DATE         NOT NULL DEFAULT CURRENT_DATE,
+    effective_to             DATE,
+    verification_status      VARCHAR(50)  NOT NULL DEFAULT 'PENDING', -- PENDING, VALID, INVALID
+    reason_for_change        TEXT,
+    changed_by_user_id       UUID         REFERENCES iam.users(id) ON DELETE SET NULL,
+
+    CONSTRAINT chk_tax_hist_dates CHECK (effective_to IS NULL OR effective_to >= effective_from),
+    CONSTRAINT chk_tax_hist_status CHECK (verification_status IN ('PENDING', 'VALID', 'INVALID'))
+);
+
+COMMENT ON TABLE customer.tax_registration_history IS 
+    '[HISTORY] Preserves historical audits of customer GST, VAT, and local tax registrations.';
+
+-- 14.5 Customer Privacy Communication Consent History (GDPR/Compliance)
+CREATE TABLE customer.communication_consent_history (
+    id                  UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    customer_id         UUID         NOT NULL REFERENCES customer.customers(id) ON DELETE CASCADE,
+    channel             VARCHAR(50)  NOT NULL, -- EMAIL, SMS, WHATSAPP, PUSH
+    consent_given       BOOLEAN      NOT NULL,
+    consent_source      VARCHAR(100) NOT NULL, -- CUSTOMER_PORTAL, SIGNED_FORM, EMAIL_REPLY
+    consent_method      VARCHAR(50)  NOT NULL, -- DOUBLE_OPT_IN, SIGNED_DOCUMENT, OPT_OUT
+    policy_version      VARCHAR(50)  NOT NULL,
+    recorded_at_utc     TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
+    verified_by_user_id UUID         REFERENCES iam.users(id) ON DELETE SET NULL,
+
+    CONSTRAINT chk_consent_channel CHECK (channel IN ('EMAIL', 'SMS', 'WHATSAPP', 'PUSH'))
+);
+
+COMMENT ON TABLE customer.communication_consent_history IS 
+    '[HISTORY] Immutable privacy opt-in consent registers auditing compliance scores.';
+
+-- 14.6 Customer Credit Risk Snapshot History
+CREATE TABLE customer.customer_risk_history (
+    id                   UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    customer_id          UUID         NOT NULL REFERENCES customer.customers(id) ON DELETE CASCADE,
+    risk_rating_id       UUID         NOT NULL REFERENCES customer.risk_levels(id),
+    credit_score         INT          NOT NULL CHECK (credit_score BETWEEN 0 AND 1000),
+    reason               TEXT         NOT NULL,
+    effective_from       TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
+    effective_to         TIMESTAMPTZ,
+    reviewer_employee_id UUID         REFERENCES employee.employees(id) ON DELETE SET NULL,
+
+    CONSTRAINT chk_risk_hist_dates CHECK (effective_to IS NULL OR effective_to >= effective_from)
+);
+
+COMMENT ON TABLE customer.customer_risk_history IS 
+    '[HISTORY] Chronological logs of changes made to credit risks, ratings, and credit scores.';
+
+-- 14.7 External System Reference Registry
+CREATE TABLE customer.external_reference_registry (
+    id                     UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    customer_id            UUID         NOT NULL REFERENCES customer.customers(id) ON DELETE CASCADE,
+    system_name            VARCHAR(100) NOT NULL, -- SAP, ORACLE, CRM, DISTRIBUTOR_PORTAL, LEGACY_ERP
+    external_reference_code VARCHAR(100) NOT NULL,
+    is_active              BOOLEAN      NOT NULL DEFAULT TRUE,
+    mapped_at_utc          TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
+
+    CONSTRAINT uq_external_ref_code UNIQUE (system_name, external_reference_code)
+);
+
+COMMENT ON TABLE customer.external_reference_registry IS 
+    '[FOUNDATION] Map reference links linking customer records to CRM, SAP, Oracle, and legacy systems.';
+
+-- 14.8 Customer Blacklist History Audit Log
+CREATE TABLE customer.customer_blacklist_history (
+    id                   UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    customer_id          UUID         NOT NULL REFERENCES customer.customers(id) ON DELETE CASCADE,
+    reason               TEXT         NOT NULL,
+    authority            VARCHAR(100) NOT NULL, -- INTERNAL_AUDIT, CREDIT_CONTROL, LEGAL_DEPT
+    start_date           DATE         NOT NULL DEFAULT CURRENT_DATE,
+    end_date             DATE,
+    is_appealed          BOOLEAN      NOT NULL DEFAULT FALSE,
+    appeal_details       TEXT,
+    resolution           TEXT,
+    reinstatement_date   DATE,
+    processed_by_user_id UUID         REFERENCES iam.users(id) ON DELETE SET NULL,
+
+    CONSTRAINT chk_blacklist_dates CHECK (end_date IS NULL OR end_date >= start_date),
+    CONSTRAINT chk_blacklist_rein CHECK (reinstatement_date IS NULL OR reinstatement_date >= start_date)
+);
+
+COMMENT ON TABLE customer.customer_blacklist_history IS 
+    '[HISTORY] Immutable audit trail of blocks, blacklists, reasons, authorities, and reinstatements.';
+
+-- 14.9 Master Data Governance (Stewardship Registry)
+CREATE TABLE customer.master_data_governance (
+    id                       UUID          PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    customer_id              UUID          NOT NULL REFERENCES customer.customers(id) ON DELETE CASCADE,
+    data_steward_user_id     UUID          REFERENCES iam.users(id) ON DELETE SET NULL,
+    verification_status_id   UUID          NOT NULL REFERENCES customer.compliance_statuses(id),
+    data_quality_score       NUMERIC(5,2)  NOT NULL CHECK (data_quality_score BETWEEN 0.00 AND 100.00),
+    is_duplicate_reviewed    BOOLEAN       NOT NULL DEFAULT FALSE,
+    last_audit_date          TIMESTAMPTZ,
+    review_frequency_days    INT           NOT NULL DEFAULT 365,
+    is_golden_record         BOOLEAN       NOT NULL DEFAULT FALSE,
+    
+    row_version              INT           NOT NULL DEFAULT 1,
+    last_modified_at_utc     TIMESTAMPTZ   NOT NULL DEFAULT clock_timestamp(),
+    last_modified_by_user_id UUID          REFERENCES iam.users(id) ON DELETE SET NULL,
+
+    CONSTRAINT uq_gov_customer UNIQUE (customer_id),
+    CONSTRAINT chk_gov_freq CHECK (review_frequency_days > 0)
+);
+
+COMMENT ON TABLE customer.master_data_governance IS 
+    '[FOUNDATION] Customer master data quality stats, stewardship reviews, duplicates, and golden flags.';
 
 -- =============================================================================
--- SECTION 14 — INDEX STRATEGY (B-TREE FOREIGNS & COMPOSITE COVERING)
+-- SECTION 15 — INDEX STRATEGY (B-TREE FOREIGNS & COMPOSITE COVERING)
 -- =============================================================================
 
--- 1. FOREIGN KEY B-TREE INDEXES (Mandatory for optimal joins)
+-- 15.1 B-Tree Indexes on all Foreign Keys
 CREATE INDEX idx_cust_company_fk                 ON customer.customers (company_id);
 CREATE INDEX idx_cust_type_fk                    ON customer.customers (customer_type_id);
 CREATE INDEX idx_cust_status_fk                  ON customer.customers (customer_status_id);
@@ -833,6 +1001,10 @@ CREATE INDEX idx_hierarchy_parent_fk             ON customer.customer_hierarchie
 CREATE INDEX idx_hierarchy_sub_fk                ON customer.customer_hierarchies (subsidiary_customer_id);
 CREATE INDEX idx_hierarchy_relation_fk           ON customer.customer_hierarchies (relationship_type_id);
 
+CREATE INDEX idx_relationship_source_fk          ON customer.customer_relationships (source_customer_id);
+CREATE INDEX idx_relationship_target_fk          ON customer.customer_relationships (target_customer_id);
+CREATE INDEX idx_relationship_type_fk            ON customer.customer_relationships (relationship_type_id);
+
 CREATE INDEX idx_doc_registry_cust_fk            ON customer.document_registry (customer_id);
 CREATE INDEX idx_doc_registry_type_fk            ON customer.document_registry (document_type_id);
 
@@ -851,17 +1023,49 @@ CREATE INDEX idx_perf_segment_fk                 ON customer.performance_snapsho
 
 CREATE INDEX idx_comm_pref_cust_fk               ON customer.communication_preferences (customer_id);
 
-CREATE INDEX idx_comm_hist_cust_fk               ON customer.communication_history (customer_id);
-CREATE INDEX idx_comm_hist_contact_fk             ON customer.communication_history (customer_contact_id);
+CREATE INDEX idx_lifecycle_hist_cust_fk          ON customer.customer_lifecycle_history (customer_id);
+CREATE INDEX idx_lifecycle_hist_status_fk        ON customer.customer_lifecycle_history (customer_status_id);
+CREATE INDEX idx_lifecycle_hist_user_fk          ON customer.customer_lifecycle_history (changed_by_user_id);
 
--- 2. COMPOSITE INDEXES (Covering filter queries)
+CREATE INDEX idx_ownership_hist_cust_fk          ON customer.customer_ownership_history (customer_id);
+CREATE INDEX idx_ownership_hist_primary_fk       ON customer.customer_ownership_history (primary_salesman_employee_id);
+CREATE INDEX idx_ownership_hist_backup_fk        ON customer.customer_ownership_history (backup_salesman_employee_id);
+CREATE INDEX idx_ownership_hist_user_fk          ON customer.customer_ownership_history (assigned_by_user_id);
+
+CREATE INDEX idx_merges_splits_source_fk         ON customer.customer_merges_splits (source_customer_id);
+CREATE INDEX idx_merges_splits_target_fk         ON customer.customer_merges_splits (target_customer_id);
+CREATE INDEX idx_merges_splits_user_fk           ON customer.customer_merges_splits (processed_by_user_id);
+
+CREATE INDEX idx_tax_hist_cust_fk                ON customer.tax_registration_history (customer_id);
+CREATE INDEX idx_tax_hist_site_fk                ON customer.tax_registration_history (customer_site_id);
+CREATE INDEX idx_tax_hist_user_fk                ON customer.tax_registration_history (changed_by_user_id);
+
+CREATE INDEX idx_consent_hist_cust_fk            ON customer.communication_consent_history (customer_id);
+CREATE INDEX idx_consent_hist_user_fk            ON customer.communication_consent_history (verified_by_user_id);
+
+CREATE INDEX idx_risk_hist_cust_fk               ON customer.customer_risk_history (customer_id);
+CREATE INDEX idx_risk_hist_rating_fk             ON customer.customer_risk_history (risk_rating_id);
+CREATE INDEX idx_risk_hist_employee_fk           ON customer.customer_risk_history (reviewer_employee_id);
+
+CREATE INDEX idx_external_ref_cust_fk            ON customer.external_reference_registry (customer_id);
+
+CREATE INDEX idx_blacklist_hist_cust_fk          ON customer.customer_blacklist_history (customer_id);
+CREATE INDEX idx_blacklist_hist_user_fk          ON customer.customer_blacklist_history (processed_by_user_id);
+
+CREATE INDEX idx_gov_cust_fk                     ON customer.master_data_governance (customer_id);
+CREATE INDEX idx_gov_steward_fk                  ON customer.master_data_governance (data_steward_user_id);
+CREATE INDEX idx_gov_status_fk                   ON customer.master_data_governance (verification_status_id);
+
+-- 15.2 Composite Indexes (Covering filter queries)
 CREATE INDEX idx_cust_status_category_comp       ON customer.customers (customer_status_id, customer_category_id);
 CREATE INDEX idx_sites_shipping_active_comp      ON customer.customer_sites (customer_id, is_shipping, is_active);
 CREATE INDEX idx_doc_registry_type_code_comp     ON customer.document_registry (customer_id, document_type_id, document_code);
+CREATE INDEX idx_relationship_nodes_comp         ON customer.customer_relationships (source_customer_id, target_customer_id, relationship_type_id);
 
--- 3. PARTIAL INDEXES (Optimizing active/hot records)
+-- 15.3 Partial Indexes (Optimizing active/hot records)
 CREATE INDEX idx_sites_primary_active            ON customer.customer_sites (customer_id) WHERE is_primary = TRUE AND is_active = TRUE;
 CREATE INDEX idx_contacts_primary_active         ON customer.customer_contacts (customer_id) WHERE is_primary = TRUE AND is_deleted = FALSE;
 CREATE INDEX idx_credit_hold_active              ON customer.customer_credit_profiles (customer_id) WHERE is_credit_hold = TRUE;
 CREATE INDEX idx_doc_versions_latest             ON customer.document_versions (document_registry_id) WHERE is_latest = TRUE;
 CREATE INDEX idx_credit_override_active          ON customer.credit_temporary_overrides (credit_profile_id) WHERE is_active = TRUE AND end_date >= CURRENT_DATE;
+CREATE INDEX idx_gov_golden_record               ON customer.master_data_governance (customer_id) WHERE is_golden_record = TRUE;
