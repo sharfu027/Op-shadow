@@ -34,6 +34,7 @@ public static class DependencyInjection
         services.AddScoped<SecurityRiskAssessmentService>();
 
         // Register Security Application Workflows
+        services.AddScoped<IFaceValidationWorkflow, FaceValidationWorkflow>();
         services.AddScoped<IFaceEnrollmentWorkflow, FaceEnrollmentWorkflow>();
         services.AddScoped<IFaceVerificationWorkflow, FaceVerificationWorkflow>();
 

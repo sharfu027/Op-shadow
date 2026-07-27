@@ -8,4 +8,8 @@ public sealed record FaceEmbeddingResult(
     string ModelVersion,
     int EmbeddingDimension,
     TimeSpan ProcessingTime,
+    string EmbeddingProvider,
+    string ModelChecksum,
+    string InferenceDevice,
+    string ProcessingVersion,
     IReadOnlyCollection<string> Warnings);

@@ -1,8 +1,10 @@
+using MediatR;
 using Microsoft.Extensions.Logging;
 using INK.ERP.Application.Common.Interfaces;
 using INK.ERP.Domain.Common;
 using INK.ERP.Domain.Entities.Security;
 using INK.ERP.Domain.Enums.Security;
+using INK.ERP.Application.Features.Security.Events;
 using INK.ERP.Application.Features.Security.Face.DTOs;
 
 namespace INK.ERP.Application.Features.Security.Face.Workflows;
@@ -15,13 +17,16 @@ public interface IFaceVerificationWorkflow
 public class FaceVerificationWorkflow : IFaceVerificationWorkflow
 {
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IPublisher _publisher;
     private readonly ILogger<FaceVerificationWorkflow> _logger;
 
     public FaceVerificationWorkflow(
         IUnitOfWork unitOfWork,
+        IPublisher publisher,
         ILogger<FaceVerificationWorkflow> logger)
     {
         _unitOfWork = unitOfWork;
+        _publisher = publisher;
         _logger = logger;
     }
 
@@ -41,7 +46,6 @@ public class FaceVerificationWorkflow : IFaceVerificationWorkflow
             profile.RecordVerification(command.MatchScore, command.IsSuccess, command.DeviceId, command.FailureReason);
             faceProfileRepo.Update(profile);
 
-            // If verification failed repeatedly due to spoofing/mismatch, raise security incident
             if (!command.IsSuccess)
             {
                 var incidentRepo = _unitOfWork.Repository<SecurityIncident>();
@@ -54,6 +58,9 @@ public class FaceVerificationWorkflow : IFaceVerificationWorkflow
             }
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            // Publish Application Event
+            await _publisher.Publish(new FaceVerificationCompletedEvent(command.UserId, command.MatchScore, command.IsSuccess, command.DeviceId, DateTime.UtcNow), cancellationToken);
 
             var latestLog = profile.VerificationLogs.LastOrDefault();
             var dto = new FaceVerificationDto(
