@@ -24,5 +24,13 @@ public sealed class CurrentUserService : ICurrentUserService
         .Select(c => c.Value)
         .ToList() ?? new List<string>();
 
+    public IReadOnlyList<string> Permissions => _httpContextAccessor.HttpContext?.User?
+        .FindAll("permission")
+        .Select(c => c.Value)
+        .ToList() ?? new List<string>();
+
+    public string? CorrelationId => _httpContextAccessor.HttpContext?.Request.Headers["X-Correlation-ID"].FirstOrDefault()
+        ?? _httpContextAccessor.HttpContext?.User?.FindFirstValue("correlation_id");
+
     public IReadOnlyList<Claim> Claims => _httpContextAccessor.HttpContext?.User?.Claims.ToList() ?? new List<Claim>();
 }

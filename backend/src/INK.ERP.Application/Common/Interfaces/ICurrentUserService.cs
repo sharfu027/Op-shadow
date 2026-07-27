@@ -8,5 +8,7 @@ public interface ICurrentUserService
     string? Username { get; }
     bool IsAuthenticated { get; }
     IReadOnlyList<string> Roles { get; }
+    IReadOnlyList<string> Permissions { get; }
+    string? CorrelationId { get; }
     IReadOnlyList<Claim> Claims { get; }
 }

@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
+using StackExchange.Redis;
 using Hangfire;
 using Hangfire.PostgreSql;
 using INK.ERP.Application.Common.Interfaces;
@@ -16,7 +17,6 @@ using INK.ERP.Infrastructure.Services;
 using INK.ERP.Infrastructure.Security;
 using INK.ERP.Persistence;
 using OpenTelemetry.Trace;
-
 
 namespace INK.ERP.Infrastructure;
 
@@ -32,6 +32,16 @@ public static class DependencyInjection
 
         services.AddOptions<JwtOptions>()
             .Bind(configuration.GetSection(JwtOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        services.AddOptions<PasswordPolicyOptions>()
+            .Bind(configuration.GetSection(PasswordPolicyOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        services.AddOptions<SecurityOptions>()
+            .Bind(configuration.GetSection(SecurityOptions.SectionName))
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
@@ -145,19 +155,28 @@ public static class DependencyInjection
 
         services.AddHangfireServer();
 
-        // 7. Register Repositories & Unit of Work
+        // 7. Register System Services & Abstractions
+        services.AddSingleton<IDateTime, SystemDateTime>();
+        services.AddScoped<IIdentityService, IdentityService>();
+        services.AddScoped<IPermissionResolver, PermissionResolver>();
+        services.AddScoped<ITokenService, JwtTokenService>();
+
+        // 8. Register Repositories & Unit of Work
         services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
         services.AddScoped<IUnitOfWork, UnitOfWork>();
-        
+
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IRoleRepository, RoleRepository>();
+        services.AddScoped<IPermissionRepository, PermissionRepository>();
+        services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+        services.AddScoped<IUserSessionRepository, UserSessionRepository>();
+        services.AddScoped<ILoginHistoryRepository, LoginHistoryRepository>();
+        services.AddScoped<ISecurityAuditRepository, SecurityAuditRepository>();
+
         services.AddScoped<IProductRepository, ProductRepository>();
         services.AddScoped<ICustomerRepository, CustomerRepository>();
         services.AddScoped<IWarehouseRepository, WarehouseRepository>();
         services.AddScoped<ISalesOrderRepository, SalesOrderRepository>();
-
-        // 8. Register Security Token Generator Service
-        services.AddScoped<ITokenService, TokenService>();
 
         // 9. Register Current User Abstraction & Context Accessor
         services.AddHttpContextAccessor();
