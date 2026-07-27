@@ -24,11 +24,36 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructureServices(this IServiceCollection services, IConfiguration configuration)
     {
-        // 1. Register Configuration Options
-        services.Configure<DatabaseOptions>(configuration.GetSection(DatabaseOptions.SectionName));
-        services.Configure<JwtOptions>(configuration.GetSection(JwtOptions.SectionName));
-        services.Configure<RedisOptions>(configuration.GetSection(RedisOptions.SectionName));
-        services.Configure<HangfireOptions>(configuration.GetSection(HangfireOptions.SectionName));
+        // 1. Register and Validate Configuration Options
+        services.AddOptions<DatabaseOptions>()
+            .Bind(configuration.GetSection(DatabaseOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        services.AddOptions<JwtOptions>()
+            .Bind(configuration.GetSection(JwtOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        services.AddOptions<RedisOptions>()
+            .Bind(configuration.GetSection(RedisOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        services.AddOptions<HangfireOptions>()
+            .Bind(configuration.GetSection(HangfireOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        services.AddOptions<OpenTelemetryOptions>()
+            .Bind(configuration.GetSection(OpenTelemetryOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        services.AddOptions<ApplicationOptions>()
+            .Bind(configuration.GetSection(ApplicationOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
 
         var databaseOptions = configuration.GetSection(DatabaseOptions.SectionName).Get<DatabaseOptions>() ?? new DatabaseOptions();
         var jwtOptions = configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
@@ -123,6 +148,13 @@ public static class DependencyInjection
         // 7. Register Repositories & Unit of Work
         services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
         services.AddScoped<IUnitOfWork, UnitOfWork>();
+        
+        services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<IRoleRepository, RoleRepository>();
+        services.AddScoped<IProductRepository, ProductRepository>();
+        services.AddScoped<ICustomerRepository, CustomerRepository>();
+        services.AddScoped<IWarehouseRepository, WarehouseRepository>();
+        services.AddScoped<ISalesOrderRepository, SalesOrderRepository>();
 
         // 8. Register Security Token Generator Service
         services.AddScoped<ITokenService, TokenService>();
@@ -153,6 +185,19 @@ public static class DependencyInjection
                     .AddEntityFrameworkCoreInstrumentation()
                     .AddHttpClientInstrumentation());
         }
+
+        // 13. Register StackExchange.Redis ConnectionMultiplexer
+        services.AddSingleton<IConnectionMultiplexer>(sp => 
+            ConnectionMultiplexer.Connect(redisOptions.ConnectionString));
+
+        // 14. Register Caching, File Storage, and Distributed Lock Services
+        services.AddScoped<ICacheService, RedisCacheService>();
+        services.AddScoped<IDistributedLockService, RedisDistributedLockService>();
+        services.AddScoped<IPostgresAdvisoryLockService, PostgresAdvisoryLockService>();
+        services.AddSingleton<IFileStorageService, LocalFileStorageService>();
+
+        // 15. Register Idempotency Store
+        services.AddScoped<IIdempotencyStore, RedisIdempotencyStore>();
 
         return services;
     }

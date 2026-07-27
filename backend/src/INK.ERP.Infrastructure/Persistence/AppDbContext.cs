@@ -46,9 +46,18 @@ public sealed class AppDbContext : IdentityDbContext<ApplicationUser, Applicatio
             entity.Property(e => e.Content).IsRequired();
             entity.Property(e => e.OccurredOnUtc).IsRequired();
         });
+
+        builder.Entity<INK.ERP.Domain.Entities.Product>(entity => { entity.ToTable("products", "product"); });
+        builder.Entity<INK.ERP.Domain.Entities.Customer>(entity => { entity.ToTable("customers", "customer"); });
+        builder.Entity<INK.ERP.Domain.Entities.Warehouse>(entity => { entity.ToTable("warehouses", "warehouse"); });
+        builder.Entity<INK.ERP.Domain.Entities.SalesOrder>(entity => { entity.ToTable("sales_orders", "sales"); });
     }
 
     public DbSet<INK.ERP.Infrastructure.Persistence.Outbox.OutboxMessage> OutboxMessages => Set<INK.ERP.Infrastructure.Persistence.Outbox.OutboxMessage>();
+    public DbSet<INK.ERP.Domain.Entities.Product> Products => Set<INK.ERP.Domain.Entities.Product>();
+    public DbSet<INK.ERP.Domain.Entities.Customer> Customers => Set<INK.ERP.Domain.Entities.Customer>();
+    public DbSet<INK.ERP.Domain.Entities.Warehouse> Warehouses => Set<INK.ERP.Domain.Entities.Warehouse>();
+    public DbSet<INK.ERP.Domain.Entities.SalesOrder> SalesOrders => Set<INK.ERP.Domain.Entities.SalesOrder>();
 
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {

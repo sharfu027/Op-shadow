@@ -12,11 +12,15 @@ public static class DependencyInjection
     {
         var assembly = Assembly.GetExecutingAssembly();
 
-        // Register MediatR
+        // Register MediatR with ordered pipeline behaviors
         services.AddMediatR(cfg =>
         {
             cfg.RegisterServicesFromAssembly(assembly);
             cfg.AddOpenBehavior(typeof(ValidationBehavior<,>));
+            cfg.AddOpenBehavior(typeof(LoggingBehavior<,>));
+            cfg.AddOpenBehavior(typeof(PerformanceBehavior<,>));
+            cfg.AddOpenBehavior(typeof(TransactionBehavior<,>));
+            cfg.AddOpenBehavior(typeof(AuthorizationBehavior<,>));
         });
 
         // Register FluentValidation

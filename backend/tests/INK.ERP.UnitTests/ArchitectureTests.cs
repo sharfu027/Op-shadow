@@ -15,10 +15,8 @@ public sealed class ArchitectureTests
     [Fact]
     public void Domain_Should_NotHaveDependencyOnOtherProjects()
     {
-        // Arrange
         var assembly = typeof(Domain.Common.BaseEntity).Assembly;
 
-        // Act
         var result = Types.InAssembly(assembly)
             .ShouldNot()
             .HaveDependencyOnAny(
@@ -27,17 +25,14 @@ public sealed class ArchitectureTests
                 ApiNamespace)
             .GetResult();
 
-        // Assert
         result.IsSuccessful.Should().BeTrue();
     }
 
     [Fact]
     public void Application_Should_NotHaveDependencyOnInfrastructureOrApi()
     {
-        // Arrange
         var assembly = typeof(Application.DependencyInjection).Assembly;
 
-        // Act
         var result = Types.InAssembly(assembly)
             .ShouldNot()
             .HaveDependencyOnAny(
@@ -45,33 +40,40 @@ public sealed class ArchitectureTests
                 ApiNamespace)
             .GetResult();
 
-        // Assert
         result.IsSuccessful.Should().BeTrue();
     }
 
     [Fact]
     public void Infrastructure_Should_NotHaveDependencyOnApi()
     {
-        // Arrange
         var assembly = typeof(Infrastructure.DependencyInjection).Assembly;
 
-        // Act
         var result = Types.InAssembly(assembly)
             .ShouldNot()
             .HaveDependencyOnAny(ApiNamespace)
             .GetResult();
 
-        // Assert
+        result.IsSuccessful.Should().BeTrue();
+    }
+
+    [Fact]
+    public void API_Should_NotDependOnDirectInternalTestingProjects()
+    {
+        var assembly = typeof(Program).Assembly;
+
+        var result = Types.InAssembly(assembly)
+            .ShouldNot()
+            .HaveDependencyOnAny("INK.ERP.UnitTests", "INK.ERP.IntegrationTests")
+            .GetResult();
+
         result.IsSuccessful.Should().BeTrue();
     }
 
     [Fact]
     public void Handlers_Should_HaveNameEndingWithHandler()
     {
-        // Arrange
         var assembly = typeof(Application.DependencyInjection).Assembly;
 
-        // Act
         var result = Types.InAssembly(assembly)
             .That()
             .ImplementInterface(typeof(MediatR.IRequestHandler<,>))
@@ -79,7 +81,51 @@ public sealed class ArchitectureTests
             .HaveNameEndingWith("Handler")
             .GetResult();
 
-        // Assert
+        result.IsSuccessful.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Validators_Should_HaveNameEndingWithValidator()
+    {
+        var assembly = typeof(Application.DependencyInjection).Assembly;
+
+        var result = Types.InAssembly(assembly)
+            .That()
+            .Inherit(typeof(FluentValidation.AbstractValidator<>))
+            .Should()
+            .HaveNameEndingWith("Validator")
+            .GetResult();
+
+        result.IsSuccessful.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Repositories_Should_HaveNameEndingWithRepository()
+    {
+        var assembly = typeof(Infrastructure.DependencyInjection).Assembly;
+
+        var result = Types.InAssembly(assembly)
+            .That()
+            .HaveNameEndingWith("Repository")
+            .Should()
+            .ImplementInterface(typeof(Application.Common.Interfaces.IGenericRepository<>))
+            .GetResult();
+
+        result.IsSuccessful.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Services_Should_HaveNameEndingWithService()
+    {
+        var assembly = typeof(Infrastructure.DependencyInjection).Assembly;
+
+        var result = Types.InAssembly(assembly)
+            .That()
+            .HaveNameEndingWith("Service")
+            .Should()
+            .NotBeInterfaces()
+            .GetResult();
+
         result.IsSuccessful.Should().BeTrue();
     }
 }

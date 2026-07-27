@@ -32,6 +32,7 @@
     
     <!-- Cache & Jobs -->
     <PackageVersion Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="9.0.0" />
+    <PackageVersion Include="StackExchange.Redis" Version="2.8.0" />
     <PackageVersion Include="Hangfire.AspNetCore" Version="1.8.14" />
     <PackageVersion Include="Hangfire.PostgreSql" Version="1.20.10" />
     
