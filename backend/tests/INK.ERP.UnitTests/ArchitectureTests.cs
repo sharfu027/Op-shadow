@@ -1,14 +1,35 @@
+using System.Reflection;
+using FluentAssertions;
+using Xunit;
+
 namespace INK.ERP.UnitTests;
 
-using Xunit;
-using FluentAssertions;
-
-public class ArchitectureTests
+public sealed class ArchitectureTests
 {
     [Fact]
-    public void Foundation_ShouldBe_ConfiguredSuccessfully()
+    public void DomainLayer_ShouldNot_DependOnApplicationOrInfrastructure()
     {
-        bool isConfigured = true;
-        isConfigured.Should().BeTrue();
+        // Arrange
+        var domainAssembly = Assembly.Load("INK.ERP.Domain");
+
+        // Act
+        var referencedAssemblies = domainAssembly.GetReferencedAssemblies();
+
+        // Assert
+        referencedAssemblies.Should().NotContain(a => a.Name == "INK.ERP.Application");
+        referencedAssemblies.Should().NotContain(a => a.Name == "INK.ERP.Infrastructure");
+    }
+
+    [Fact]
+    public void ApplicationLayer_ShouldNot_DependOnInfrastructure()
+    {
+        // Arrange
+        var applicationAssembly = Assembly.Load("INK.ERP.Application");
+
+        // Act
+        var referencedAssemblies = applicationAssembly.GetReferencedAssemblies();
+
+        // Assert
+        referencedAssemblies.Should().NotContain(a => a.Name == "INK.ERP.Infrastructure");
     }
 }

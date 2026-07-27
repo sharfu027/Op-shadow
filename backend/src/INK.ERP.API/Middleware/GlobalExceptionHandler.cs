@@ -1,7 +1,8 @@
-namespace INK.ERP.API.Middleware;
-
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
+using INK.ERP.Application.Common.Exceptions;
+
+namespace INK.ERP.API.Middleware;
 
 public sealed class GlobalExceptionHandler : IExceptionHandler
 {
@@ -21,11 +22,22 @@ public sealed class GlobalExceptionHandler : IExceptionHandler
 
         var problemDetails = new ProblemDetails
         {
-            Status = StatusCodes.Status500InternalServerError,
-            Title = "Internal Server Error",
-            Detail = "An unexpected error occurred in the enterprise API pipeline.",
             Instance = httpContext.Request.Path
         };
+
+        if (exception is ValidationException validationException)
+        {
+            problemDetails.Status = StatusCodes.Status400BadRequest;
+            problemDetails.Title = "Validation Error";
+            problemDetails.Detail = validationException.Message;
+            problemDetails.Extensions.Add("errors", validationException.Errors);
+        }
+        else
+        {
+            problemDetails.Status = StatusCodes.Status500InternalServerError;
+            problemDetails.Title = "Internal Server Error";
+            problemDetails.Detail = "An unexpected error occurred in the enterprise API pipeline.";
+        }
 
         httpContext.Response.StatusCode = problemDetails.Status.Value;
         await httpContext.Response.WriteAsJsonAsync(problemDetails, cancellationToken);

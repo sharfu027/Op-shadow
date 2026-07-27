@@ -1,14 +1,28 @@
+using System.Net;
+using Microsoft.AspNetCore.Mvc.Testing;
+using FluentAssertions;
+using Xunit;
+
 namespace INK.ERP.IntegrationTests;
 
-using Xunit;
-using FluentAssertions;
-
-public class HealthEndpointTests
+public sealed class HealthEndpointTests : IClassFixture<WebApplicationFactory<Program>>
 {
-    [Fact]
-    public void BackendSolution_ShouldBe_CleanArchitectureReady()
+    private readonly HttpClient _client;
+
+    public HealthEndpointTests(WebApplicationFactory<Program> factory)
     {
-        string solutionName = "INK.ERP.sln";
-        solutionName.Should().Contain("INK.ERP");
+        _client = factory.CreateClient();
+    }
+
+    [Fact]
+    public async Task HealthCheck_ShouldReturnOk_AndHealthyStatus()
+    {
+        // Act
+        var response = await _client.GetAsync("/health");
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var content = await response.Content.ReadAsStringAsync();
+        content.Should().Be("Healthy");
     }
 }
