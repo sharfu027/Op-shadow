@@ -41,27 +41,70 @@ builder.Services.AddApiVersioning(options =>
     options.SubstituteApiVersionInUrl = true;
 });
 
-// 5. Configure SignalR Hubs
+// 5. Configure Policy-based Authorization
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("IAM.Users.Read", policy => 
+        policy.RequireAssertion(ctx => ctx.User.HasClaim("permission", "users:read") || ctx.User.IsInRole("Administrator") || ctx.User.IsInRole("ADMIN")));
+
+    options.AddPolicy("IAM.Users.Create", policy => 
+        policy.RequireAssertion(ctx => ctx.User.HasClaim("permission", "users:create") || ctx.User.IsInRole("Administrator") || ctx.User.IsInRole("ADMIN")));
+
+    options.AddPolicy("IAM.Users.Update", policy => 
+        policy.RequireAssertion(ctx => ctx.User.HasClaim("permission", "users:update") || ctx.User.IsInRole("Administrator") || ctx.User.IsInRole("ADMIN")));
+
+    options.AddPolicy("IAM.Users.Delete", policy => 
+        policy.RequireAssertion(ctx => ctx.User.HasClaim("permission", "users:delete") || ctx.User.IsInRole("Administrator") || ctx.User.IsInRole("ADMIN")));
+
+    options.AddPolicy("IAM.Roles.Read", policy => 
+        policy.RequireAssertion(ctx => ctx.User.HasClaim("permission", "roles:read") || ctx.User.IsInRole("Administrator") || ctx.User.IsInRole("ADMIN")));
+
+    options.AddPolicy("IAM.Roles.Manage", policy => 
+        policy.RequireAssertion(ctx => ctx.User.HasClaim("permission", "roles:manage") || ctx.User.IsInRole("Administrator") || ctx.User.IsInRole("ADMIN")));
+
+    options.AddPolicy("IAM.Permissions.Manage", policy => 
+        policy.RequireAssertion(ctx => ctx.User.HasClaim("permission", "permissions:manage") || ctx.User.IsInRole("Administrator") || ctx.User.IsInRole("ADMIN")));
+});
+
+// 6. Configure SignalR Hubs
 builder.Services.AddSignalR();
 
-// 6. Configure Health Checks (Base registered, ready indicators verified in Infrastructure)
+// 7. Configure Health Checks
 builder.Services.AddHealthChecks();
 
-// 7. Configure Rate Limiting (Fixed Window Strategy for Authentication)
+// 8. Configure Rate Limiting Policies
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 
+    // Anonymous Login Rate Limit
     options.AddFixedWindowLimiter("AuthPolicy", opt =>
     {
         opt.Window = TimeSpan.FromMinutes(1);
-        opt.PermitLimit = 5; // Max 5 requests per minute
+        opt.PermitLimit = 10;
         opt.QueueLimit = 0;
-        opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+    });
+
+    // Authenticated API Rate Limit
+    options.AddTokenBucketLimiter("ApiPolicy", opt =>
+    {
+        opt.TokenLimit = 100;
+        opt.QueueLimit = 10;
+        opt.ReplenishmentPeriod = TimeSpan.FromMinutes(1);
+        opt.TokensPerPeriod = 100;
+        opt.AutoReplenishment = true;
+    });
+
+    // Admin Endpoints Rate Limit
+    options.AddFixedWindowLimiter("AdminPolicy", opt =>
+    {
+        opt.Window = TimeSpan.FromMinutes(1);
+        opt.PermitLimit = 30;
+        opt.QueueLimit = 0;
     });
 });
 
-// 8. Configure Swagger / OpenAPI Documentation with JWT Bearer Security
+// 9. Configure Swagger / OpenAPI Documentation with JWT Bearer Security
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -69,7 +112,7 @@ builder.Services.AddSwaggerGen(options =>
     {
         Title = "INK FMCG Enterprise ERP API",
         Version = "v1",
-        Description = "Enterprise FMCG Distribution ERP Platform API - ASP.NET Core 9 Clean Architecture Foundation"
+        Description = "Enterprise FMCG Distribution ERP Platform API - ASP.NET Core 9 Clean Architecture IAM Engine"
     });
 
     options.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
@@ -98,7 +141,7 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
-// 9. Configure Enterprise CORS Policy
+// 10. Configure Production CORS Policy
 var corsOrigins = builder.Configuration.GetSection("AllowedCorsOrigins").Get<string[]>() ?? new[] { "http://localhost:3000" };
 builder.Services.AddCors(options =>
 {
@@ -113,14 +156,19 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-// Pipeline Middleware Configuration
+// ====================================================
+// MIDDLEWARE PIPELINE ORDER
+// Exception -> Correlation -> Security Headers -> CORS -> Authentication -> Authorization -> Rate Limiting -> Endpoints
+// ====================================================
+
+// 1. Exception Handling Middleware
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 
-// 1. Request Correlation ID Setup
+// 2. Correlation ID Middleware
 app.UseMiddleware<CorrelationIdMiddleware>();
 
-// 2. Security Headers Enforcement
+// 3. Security Headers Middleware
 app.UseMiddleware<SecurityHeadersMiddleware>();
 
 if (app.Environment.IsDevelopment())
@@ -133,30 +181,34 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseSerilogRequestLogging();
+
+// 4. CORS
 app.UseCors("AllowFrontendClient");
 
-app.UseRateLimiter();
-
+// 5. Authentication
 app.UseAuthentication();
+
+// 6. Authorization
 app.UseAuthorization();
 
-// Register Hangfire Dashboard Middleware
-app.UseHangfireDashboard("/hangfire", new DashboardOptions
-{
-    // Configure authorization policies for dashboard access if needed
-});
+// 7. Rate Limiting
+app.UseRateLimiter();
 
-// Mapped Health check endpoints
-app.MapHealthChecks("/health"); // Simple ping
+// Hangfire Dashboard Middleware
+app.UseHangfireDashboard("/hangfire", new DashboardOptions());
+
+// 8. Health Check Endpoints
+app.MapHealthChecks("/health");
 app.MapHealthChecks("/health/live", new HealthCheckOptions
 {
-    Predicate = _ => false // Liveness check (always returns healthy if service is running)
+    Predicate = _ => false
 });
 app.MapHealthChecks("/health/ready", new HealthCheckOptions
 {
     Predicate = reg => reg.Name == "PostgreSQL" || reg.Name == "Redis" || reg.Name == "Hangfire"
 });
 
+// 9. Map Endpoints
 app.MapControllers();
 
 app.Run();
