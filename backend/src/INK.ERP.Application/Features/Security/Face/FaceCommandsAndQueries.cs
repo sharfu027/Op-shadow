@@ -1,11 +1,10 @@
 using FluentValidation;
 using MediatR;
-using Microsoft.Extensions.Logging;
 using INK.ERP.Application.Common.Interfaces;
 using INK.ERP.Domain.Common;
 using INK.ERP.Domain.Entities.Security;
-using INK.ERP.Domain.ValueObjects.Security;
 using INK.ERP.Application.Features.Security.Face.DTOs;
+using INK.ERP.Application.Features.Security.Face.Workflows;
 
 namespace INK.ERP.Application.Features.Security.Face;
 
@@ -19,78 +18,21 @@ public sealed record EnrollFaceCommand(
 
 public sealed class EnrollFaceCommandHandler : IRequestHandler<EnrollFaceCommand, Result<Guid>>
 {
-    private readonly IUnitOfWork _unitOfWork;
-    private readonly IFaceEmbeddingService _embeddingService;
-    private readonly IImageQualityService _qualityService;
-    private readonly ILivenessDetectionService _livenessService;
-    private readonly ILogger<EnrollFaceCommandHandler> _logger;
+    private readonly IFaceEnrollmentWorkflow _workflow;
 
-    public EnrollFaceCommandHandler(
-        IUnitOfWork unitOfWork,
-        IFaceEmbeddingService embeddingService,
-        IImageQualityService qualityService,
-        ILivenessDetectionService livenessService,
-        ILogger<EnrollFaceCommandHandler> logger)
+    public EnrollFaceCommandHandler(IFaceEnrollmentWorkflow workflow)
     {
-        _unitOfWork = unitOfWork;
-        _embeddingService = embeddingService;
-        _qualityService = qualityService;
-        _livenessService = livenessService;
-        _logger = logger;
+        _workflow = workflow;
     }
 
     public async Task<Result<Guid>> Handle(EnrollFaceCommand request, CancellationToken cancellationToken)
     {
-        var livenessResult = await _livenessService.DetectLivenessAsync(request.ImageData, cancellationToken);
-        if (livenessResult.IsFailure || !livenessResult.Value)
+        var result = await _workflow.ExecuteAsync(request, cancellationToken);
+        if (result.IsFailure)
         {
-            return Result.Failure<Guid>(SecurityErrors.Face.LivenessCheckFailed);
+            return Result.Failure<Guid>(result.Error);
         }
-
-        var qualityResult = await _qualityService.ValidateQualityAsync(request.ImageData, cancellationToken);
-        if (qualityResult.IsFailure || qualityResult.Value < 0.70f)
-        {
-            return Result.Failure<Guid>(SecurityErrors.Face.QualityCheckFailed("Score below 0.70 threshold."));
-        }
-
-        var embeddingResult = await _embeddingService.GenerateEmbeddingAsync(request.ImageData, cancellationToken);
-        if (embeddingResult.IsFailure)
-        {
-            return Result.Failure<Guid>(embeddingResult.Error);
-        }
-
-        var faceProfileRepo = _unitOfWork.Repository<FaceProfile>();
-        var profiles = await faceProfileRepo.FindAsync(p => p.UserId == request.UserId && !p.IsDeleted, cancellationToken);
-        var profile = profiles.FirstOrDefault();
-
-        if (profile == null)
-        {
-            profile = new FaceProfile(request.UserId);
-            await faceProfileRepo.AddAsync(profile, cancellationToken);
-        }
-
-        try
-        {
-            profile.Enroll(embeddingResult.Value);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return Result.Failure<Guid>(new Error("SECURITY.FACE.ENROLLMENT_FAILED", ex.Message, ErrorType.Conflict));
-        }
-
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
-        _logger.LogInformation("Enrolled face profile for user {UserId}", request.UserId);
-
-        return Result.Success(profile.Id);
-    }
-}
-
-public sealed class EnrollFaceCommandValidator : AbstractValidator<EnrollFaceCommand>
-{
-    public EnrollFaceCommandValidator()
-    {
-        RuleFor(x => x.UserId).NotEmpty();
-        RuleFor(x => x.ImageData).NotEmpty().WithMessage("Image data is required.");
+        return Result.Success(result.Value.Id);
     }
 }
 
@@ -137,7 +79,7 @@ public sealed class ReplaceFaceTemplateCommandHandler : IRequestHandler<ReplaceF
 
         try
         {
-            profile.ReplaceTemplate(embeddingResult.Value);
+            profile.ReplaceTemplate(embeddingResult.Value.Embedding);
             faceProfileRepo.Update(profile);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
             return Result.Success(Unit.Value);
@@ -146,15 +88,6 @@ public sealed class ReplaceFaceTemplateCommandHandler : IRequestHandler<ReplaceF
         {
             return Result.Failure<Unit>(new Error("SECURITY.FACE.REPLACE_FAILED", ex.Message, ErrorType.Conflict));
         }
-    }
-}
-
-public sealed class ReplaceFaceTemplateCommandValidator : AbstractValidator<ReplaceFaceTemplateCommand>
-{
-    public ReplaceFaceTemplateCommandValidator()
-    {
-        RuleFor(x => x.UserId).NotEmpty();
-        RuleFor(x => x.ImageData).NotEmpty();
     }
 }
 
@@ -233,35 +166,21 @@ public sealed record RecordFaceVerificationCommand(
 
 public sealed class RecordFaceVerificationCommandHandler : IRequestHandler<RecordFaceVerificationCommand, Result<Unit>>
 {
-    private readonly IUnitOfWork _unitOfWork;
+    private readonly IFaceVerificationWorkflow _workflow;
 
-    public RecordFaceVerificationCommandHandler(IUnitOfWork unitOfWork)
+    public RecordFaceVerificationCommandHandler(IFaceVerificationWorkflow workflow)
     {
-        _unitOfWork = unitOfWork;
+        _workflow = workflow;
     }
 
     public async Task<Result<Unit>> Handle(RecordFaceVerificationCommand request, CancellationToken cancellationToken)
     {
-        var faceProfileRepo = _unitOfWork.Repository<FaceProfile>();
-        var profiles = await faceProfileRepo.FindAsync(p => p.UserId == request.UserId && !p.IsDeleted, cancellationToken);
-        var profile = profiles.FirstOrDefault();
-
-        if (profile == null)
+        var result = await _workflow.ExecuteAsync(request, cancellationToken);
+        if (result.IsFailure)
         {
-            return Result.Failure<Unit>(SecurityErrors.Face.ProfileNotFound(request.UserId));
+            return Result.Failure<Unit>(result.Error);
         }
-
-        try
-        {
-            profile.RecordVerification(request.MatchScore, request.IsSuccess, request.DeviceId, request.FailureReason);
-            faceProfileRepo.Update(profile);
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
-            return Result.Success(Unit.Value);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return Result.Failure<Unit>(new Error("SECURITY.FACE.VERIFICATION_FAILED", ex.Message, ErrorType.Conflict));
-        }
+        return Result.Success(Unit.Value);
     }
 }
 

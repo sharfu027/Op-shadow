@@ -1,11 +1,14 @@
 using INK.ERP.Domain.Common;
 using INK.ERP.Domain.ValueObjects.Security;
+using INK.ERP.Application.Features.Security.Common;
+using INK.ERP.Application.Features.Security.Face.DTOs;
+using INK.ERP.Application.Features.Security.Risk.DTOs;
 
 namespace INK.ERP.Application.Common.Interfaces;
 
 public interface IFaceEmbeddingService
 {
-    Task<Result<FaceEmbedding>> GenerateEmbeddingAsync(byte[] imageData, CancellationToken cancellationToken = default);
+    Task<Result<FaceEmbeddingResult>> GenerateEmbeddingAsync(byte[] imageData, CancellationToken cancellationToken = default);
 }
 
 public interface IImageQualityService
@@ -25,7 +28,7 @@ public interface IGpsVerificationService
 
 public interface IGeofenceService
 {
-    Task<Result<bool>> IsWithinGeofenceAsync(GpsCoordinate coordinate, double targetLat, double targetLon, double radiusMeters, CancellationToken cancellationToken = default);
+    Task<Result<bool>> IsWithinGeofenceAsync(GpsCoordinate coordinate, GeofenceDto geofence, CancellationToken cancellationToken = default);
 }
 
 public interface IDeviceFingerprintService
@@ -35,5 +38,5 @@ public interface IDeviceFingerprintService
 
 public interface IRiskEngine
 {
-    Task<Result<INK.ERP.Application.Features.Security.Risk.DTOs.RiskAssessmentDto>> AssessRiskAsync(Guid userId, GpsCoordinate? currentCoordinate, string? ipAddress, CancellationToken cancellationToken = default);
+    Task<Result<RiskAssessmentDto>> AssessRiskAsync(AuthenticationContext context, CancellationToken cancellationToken = default);
 }
