@@ -1,5 +1,5 @@
 -- =============================================================================
--- INK FMCG ENTERPRISE ERP — ENTERPRISE HRMS SCHEMA DDL (v1.0)
+-- INK FMCG ENTERPRISE ERP — ENTERPRISE HRMS SCHEMA DDL (v2.0 REFINED)
 -- File Name      : hrms_schema.sql
 -- Target Database: PostgreSQL 17+
 -- Schema Owner   : hrms
@@ -350,6 +350,20 @@ CREATE TABLE hrms.exit_records (
 
 COMMENT ON TABLE hrms.exit_records IS '[OPERATIONAL] Offboarding records tracking separations, settlement details, and exits.';
 
+-- 2.4 Employment Lifecycle History (v2.0 addition)
+CREATE TABLE hrms.employment_lifecycle_history (
+    id                   UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    employment_record_id UUID         NOT NULL REFERENCES hrms.employment_records(id) ON DELETE CASCADE,
+    previous_state       VARCHAR(100),
+    new_state            VARCHAR(100) NOT NULL,
+    effective_date       DATE         NOT NULL,
+    approved_by_user_id  UUID         REFERENCES iam.users(id) ON DELETE SET NULL,
+    change_reason        TEXT,
+    event_timestamp      TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp()
+);
+
+COMMENT ON TABLE hrms.employment_lifecycle_history IS '[HISTORY] Immutable audit logging for all employee status shifts and department swaps.';
+
 -- =============================================================================
 -- SECTION 3 — ATTENDANCE MANAGEMENT
 -- =============================================================================
@@ -440,6 +454,23 @@ CREATE TABLE hrms.attendance_corrections (
 
 COMMENT ON TABLE hrms.attendance_corrections IS '[OPERATIONAL] Regularization workflows correcting missed punches.';
 
+-- 3.6 Attendance Correction History (v2.0 addition)
+CREATE TABLE hrms.attendance_correction_history (
+    id                        UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    attendance_correction_id  UUID         NOT NULL REFERENCES hrms.attendance_corrections(id) ON DELETE CASCADE,
+    original_punch_in         TIMESTAMPTZ,
+    original_punch_out        TIMESTAMPTZ,
+    corrected_punch_in         TIMESTAMPTZ,
+    corrected_punch_out        TIMESTAMPTZ,
+    requested_by_user_id      UUID         REFERENCES iam.users(id) ON DELETE SET NULL,
+    approved_by_user_id        UUID         REFERENCES iam.users(id) ON DELETE SET NULL,
+    correction_reason         TEXT,
+    approval_timestamp        TIMESTAMPTZ,
+    correction_source         VARCHAR(100) NOT NULL DEFAULT 'MANUAL'
+);
+
+COMMENT ON TABLE hrms.attendance_correction_history IS '[HISTORY] Audit trail of all attendance regularizations and punch updates.';
+
 -- =============================================================================
 -- SECTION 4 — LEAVE MANAGEMENT
 -- =============================================================================
@@ -501,6 +532,21 @@ CREATE TABLE hrms.leave_requests (
 );
 
 COMMENT ON TABLE hrms.leave_requests IS '[OPERATIONAL] Leave requests with dates and approval states.';
+
+-- 4.4 Leave Balance History (v2.0 addition)
+CREATE TABLE hrms.leave_balance_history (
+    id                   UUID          PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    leave_balance_id     UUID          NOT NULL REFERENCES hrms.leave_balances(id) ON DELETE CASCADE,
+    transaction_type     VARCHAR(50)   NOT NULL, -- ACCRUAL, USAGE, CARRY_FORWARD, EXPIRY, ENCASHMENT, MANUAL_ADJUSTMENT
+    delta_days           NUMERIC(4,1)  NOT NULL,
+    running_balance_days NUMERIC(4,1)  NOT NULL,
+    event_timestamp      TIMESTAMPTZ   NOT NULL DEFAULT clock_timestamp(),
+    remarks              TEXT,
+
+    CONSTRAINT chk_leave_bal_hist_type CHECK (transaction_type IN ('ACCRUAL', 'USAGE', 'CARRY_FORWARD', 'EXPIRY', 'ENCASHMENT', 'MANUAL_ADJUSTMENT'))
+);
+
+COMMENT ON TABLE hrms.leave_balance_history IS '[HISTORY] Transaction registry auditing leave encashments and accruals.';
 
 -- =============================================================================
 -- SECTION 5 — PAYROLL FOUNDATION
@@ -572,7 +618,7 @@ CREATE TABLE hrms.salary_structure_lines (
 
 COMMENT ON TABLE hrms.salary_structure_lines IS '[OPERATIONAL] Base monetary assignments mapped per component.';
 
--- 5.5 Payroll Runs & Paylips
+-- 5.5 Payroll Runs & Payslips
 CREATE TABLE hrms.payroll_runs (
     id                     UUID          PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
     payroll_group_id       UUID          NOT NULL REFERENCES hrms.payroll_groups(id),
@@ -612,6 +658,38 @@ CREATE TABLE hrms.employee_payslips (
 );
 
 COMMENT ON TABLE hrms.employee_payslips IS '[OPERATIONAL] Employee payslip items tracking earnings, deductions, and nets.';
+
+-- 5.6 Salary Revision History (v2.0 addition)
+CREATE TABLE hrms.salary_revision_history (
+    id                           UUID          PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    employee_id                  UUID          NOT NULL REFERENCES employee.employees(id) ON DELETE CASCADE,
+    previous_salary_structure_id UUID          REFERENCES hrms.salary_structures(id) ON DELETE SET NULL,
+    new_salary_structure_id      UUID          NOT NULL REFERENCES hrms.salary_structures(id) ON DELETE CASCADE,
+    component_changes            JSONB,
+    effective_date               DATE          NOT NULL,
+    revision_reason              TEXT,
+    approved_by_user_id          UUID          REFERENCES iam.users(id) ON DELETE SET NULL,
+    payroll_version              INT           NOT NULL DEFAULT 1
+);
+
+COMMENT ON TABLE hrms.salary_revision_history IS '[HISTORY] Auditing salary component increases and revisions.';
+
+-- 5.7 Payroll Run History (v2.0 addition)
+CREATE TABLE hrms.payroll_run_history (
+    id                       UUID          PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    payroll_run_id           UUID          NOT NULL REFERENCES hrms.payroll_runs(id) ON DELETE CASCADE,
+    payroll_version          INT           NOT NULL DEFAULT 1,
+    period_start_date        DATE          NOT NULL,
+    period_end_date          DATE          NOT NULL,
+    execution_timestamp      TIMESTAMPTZ   NOT NULL DEFAULT clock_timestamp(),
+    approved_by_user_id      UUID          REFERENCES iam.users(id) ON DELETE SET NULL,
+    lock_status              VARCHAR(50)   NOT NULL, -- LOCKED, UNLOCKED
+    is_recalculation         BOOLEAN       NOT NULL DEFAULT FALSE,
+    generated_payslips_count INT           NOT NULL DEFAULT 0,
+    failure_details          TEXT
+);
+
+COMMENT ON TABLE hrms.payroll_run_history IS '[HISTORY] Record tracking recalculation triggers, versions, and verification runs.';
 
 -- =============================================================================
 -- SECTION 6 — PERFORMANCE MANAGEMENT
@@ -671,6 +749,21 @@ CREATE TABLE hrms.appraisals (
 );
 
 COMMENT ON TABLE hrms.appraisals IS '[OPERATIONAL] Reviews tracking manager inputs, calibrations, and PIP indicators.';
+
+-- 6.4 Performance Review History (v2.0 addition)
+CREATE TABLE hrms.performance_review_history (
+    id                        UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    appraisal_id              UUID         NOT NULL REFERENCES hrms.appraisals(id) ON DELETE CASCADE,
+    reviewer_employee_id      UUID         NOT NULL REFERENCES employee.employees(id) ON DELETE CASCADE,
+    previous_rating_id        UUID         REFERENCES hrms.performance_ratings(id) ON DELETE SET NULL,
+    final_rating_id           UUID         NOT NULL REFERENCES hrms.performance_ratings(id) ON DELETE CASCADE,
+    calibration_result        TEXT,
+    improvement_plan_details  TEXT,
+    promotion_recommendation  BOOLEAN      NOT NULL DEFAULT FALSE,
+    completion_timestamp      TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp()
+);
+
+COMMENT ON TABLE hrms.performance_review_history IS '[HISTORY] Logs tracing reviewer switches, score updates, and PIP milestones.';
 
 -- =============================================================================
 -- SECTION 7 — RECRUITMENT
@@ -743,6 +836,20 @@ CREATE TABLE hrms.interview_schedules (
 
 COMMENT ON TABLE hrms.interview_schedules IS '[OPERATIONAL] Interview timeline logs recording candidate scores.';
 
+-- 7.5 Recruitment Pipeline History (v2.0 addition)
+CREATE TABLE hrms.recruitment_pipeline_history (
+    id                   UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    application_id       UUID         NOT NULL REFERENCES hrms.candidate_applications(id) ON DELETE CASCADE,
+    stage                VARCHAR(50)  NOT NULL, -- RECEIVED, SCREENING, INTERVIEW, OFFER, ACCEPTED, REJECTED, WITHDRAWN, JOINED
+    event_timestamp      TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
+    changed_by_user_id   UUID         REFERENCES iam.users(id) ON DELETE SET NULL,
+    comments             TEXT,
+
+    CONSTRAINT chk_rec_pipe_stage CHECK (stage IN ('RECEIVED', 'SCREENING', 'INTERVIEW', 'OFFER', 'ACCEPTED', 'REJECTED', 'WITHDRAWN', 'JOINED'))
+);
+
+COMMENT ON TABLE hrms.recruitment_pipeline_history IS '[HISTORY] Stage log tracking candidate evaluations from screen to hire.';
+
 -- =============================================================================
 -- SECTION 8 — LEARNING & TRAINING
 -- =============================================================================
@@ -795,6 +902,20 @@ CREATE TABLE hrms.training_enrollments (
 
 COMMENT ON TABLE hrms.training_enrollments IS '[OPERATIONAL] Student registrations mapping employee training tracks.';
 
+-- 8.3 Training Completion History (v2.0 addition)
+CREATE TABLE hrms.training_completion_history (
+    id                     UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    enrollment_id          UUID         NOT NULL REFERENCES hrms.training_enrollments(id) ON DELETE CASCADE,
+    stage                  VARCHAR(50)  NOT NULL, -- ENROLLED, ATTENDED, ASSESSED, COMPLETED, CERTIFIED, RENEWED, EXPIRED
+    score_achieved         INT,
+    certificate_reference  VARCHAR(255),
+    event_timestamp        TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
+
+    CONSTRAINT chk_train_comp_stage CHECK (stage IN ('ENROLLED', 'ATTENDED', 'ASSESSED', 'COMPLETED', 'CERTIFIED', 'RENEWED', 'EXPIRED'))
+);
+
+COMMENT ON TABLE hrms.training_completion_history IS '[HISTORY] Timeline tracking training milestones, renewals, and credentials.';
+
 -- =============================================================================
 -- SECTION 9 — EMPLOYEE ASSETS
 -- =============================================================================
@@ -845,6 +966,20 @@ CREATE TABLE hrms.asset_allocations (
 
 COMMENT ON TABLE hrms.asset_allocations IS '[OPERATIONAL] Device handovers tracking release dates and return flags.';
 
+-- 9.4 Asset Assignment History (v2.0 addition)
+CREATE TABLE hrms.asset_assignment_history (
+    id                       UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    asset_inventory_id       UUID         NOT NULL REFERENCES hrms.asset_inventories(id) ON DELETE CASCADE,
+    responsible_employee_id  UUID         NOT NULL REFERENCES employee.employees(id) ON DELETE CASCADE,
+    assignment_event         VARCHAR(50)  NOT NULL, -- ASSIGNMENT, TRANSFER, REPAIR, RETURN, REPLACEMENT, LOSS, DISPOSAL
+    event_timestamp          TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
+    remarks                  TEXT,
+
+    CONSTRAINT chk_asset_assign_event CHECK (assignment_event IN ('ASSIGNMENT', 'TRANSFER', 'REPAIR', 'RETURN', 'REPLACEMENT', 'LOSS', 'DISPOSAL'))
+);
+
+COMMENT ON TABLE hrms.asset_assignment_history IS '[HISTORY] Hardware custody trail tracking asset swaps and losses.';
+
 -- =============================================================================
 -- SECTION 10 — EMPLOYEE DOCUMENTS
 -- =============================================================================
@@ -868,6 +1003,21 @@ CREATE TABLE hrms.employee_documents (
 );
 
 COMMENT ON TABLE hrms.employee_documents IS '[OPERATIONAL] Versioned files tracking visa, credentials, and passport expiry dates.';
+
+-- 10.2 Employee Document History (v2.0 addition)
+CREATE TABLE hrms.employee_document_history (
+    id                   UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    employee_document_id UUID         NOT NULL REFERENCES hrms.employee_documents(id) ON DELETE CASCADE,
+    action_type          VARCHAR(50)  NOT NULL, -- UPLOAD, REPLACEMENT, VERSION_UPGRADE, EXPIRY, RENEWAL, ARCHIVE, VERIFICATION
+    document_version     INT          NOT NULL,
+    file_reference_hook  VARCHAR(255) NOT NULL,
+    event_timestamp      TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
+    performed_by_user_id UUID         REFERENCES iam.users(id) ON DELETE SET NULL,
+
+    CONSTRAINT chk_emp_doc_hist_action CHECK (action_type IN ('UPLOAD', 'REPLACEMENT', 'VERSION_UPGRADE', 'EXPIRY', 'RENEWAL', 'ARCHIVE', 'VERIFICATION'))
+);
+
+COMMENT ON TABLE hrms.employee_document_history IS '[HISTORY] Verification trail tracking document modifications and updates.';
 
 -- =============================================================================
 -- SECTION 11 — EMPLOYEE SELF SERVICE (ESS)
@@ -912,7 +1062,7 @@ CREATE TABLE hrms.travel_requests (
 COMMENT ON TABLE hrms.travel_requests IS '[OPERATIONAL] Corporate travel applications.';
 
 -- =============================================================================
--- SECTION 12 — HR ANALYTICS & TIMELINES
+-- SECTION 12 — HR ANALYTICS & TIMELINES (v2.0 REFINED)
 -- =============================================================================
 
 -- 12.1 HR Metric Snapshots
@@ -938,12 +1088,12 @@ CREATE TABLE hrms.hrms_snapshots (
     CONSTRAINT chk_hrms_snap_period CHECK (aggregation_period IN ('DAILY', 'WEEKLY', 'MONTHLY'))
 );
 
-COMMENT ON TABLE hrms.hrms_snapshots IS '[HISTORY] Daily aggregated HR metrics and budget overhead indicators.';
+COMMENT ON TABLE hrms.hrms_snapshots IS '[HISTORY] daily logs tracking headcounts, attrition percentages, and payroll costs.';
 
--- 12.2 HRMS SLA Monitoring
+-- 12.2 HRMS SLA Monitoring (v2.0 addition)
 CREATE TABLE hrms.hrms_sla_monitoring (
     id                      UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
-    sla_type                VARCHAR(50)  NOT NULL, -- LEAVE_APPROVAL, EXPENSE_APPROVAL, RECRUITMENT_REQUISITION, PROBATION_REVIEW
+    sla_type                VARCHAR(50)  NOT NULL, -- LEAVE_APPROVAL, ATTENDANCE_CORRECTION, RECRUITMENT, PAYROLL, ASSET_RETURN, DOCUMENT_VERIFICATION, TRAINING_COMPLETION
     source_document_id      UUID         NOT NULL,
     target_duration_minutes INT          NOT NULL,
     actual_duration_minutes INT,
@@ -953,16 +1103,16 @@ CREATE TABLE hrms.hrms_sla_monitoring (
 
     CONSTRAINT chk_hrms_sla_target CHECK (target_duration_minutes > 0),
     CONSTRAINT chk_hrms_sla_actual CHECK (actual_duration_minutes IS NULL OR actual_duration_minutes >= 0),
-    CONSTRAINT chk_hrms_sla_type CHECK (sla_type IN ('LEAVE_APPROVAL', 'EXPENSE_APPROVAL', 'RECRUITMENT_REQUISITION', 'PROBATION_REVIEW'))
+    CONSTRAINT chk_hrms_sla_type CHECK (sla_type IN ('LEAVE_APPROVAL', 'ATTENDANCE_CORRECTION', 'RECRUITMENT', 'PAYROLL', 'ASSET_RETURN', 'DOCUMENT_VERIFICATION', 'TRAINING_COMPLETION'))
 );
 
 COMMENT ON TABLE hrms.hrms_sla_monitoring IS '[OPERATIONAL] Workflow SLA trackers flagging approval delays.';
 
--- 12.3 HRMS Audit Event Timeline
+-- 12.3 HRMS Audit Event Timeline (v2.0 addition)
 CREATE TABLE hrms.hrms_audit_event_timeline (
     id                   UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
-    event_type           VARCHAR(100) NOT NULL, -- EMPLOYMENT_CONFIRMED, SEPARATION_LOGGED, LEAVE_APPROVED, PAYROLL_LOCKED, APPRAISAL_CALIBRATED, REQUISITION_APPROVED
-    source_document_type VARCHAR(50)  NOT NULL, -- EMPLOYMENT, LEAVE, PAYROLL, PERFORMANCE, RECRUITMENT
+    event_type           VARCHAR(100) NOT NULL, -- EMPLOYMENT_CHANGES, ATTENDANCE_CORRECTIONS, LEAVE_APPROVAL, PAYROLL_APPROVAL, SALARY_REVISION, PERFORMANCE_REVIEW, RECRUITMENT_EVENTS, TRAINING_COMPLETION, ASSET_ASSIGNMENT, DOCUMENT_UPDATES, ESS_REQUESTS
+    source_document_type VARCHAR(50)  NOT NULL,
     source_document_id   UUID         NOT NULL,
     event_timestamp      TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
     performed_by_user_id UUID         REFERENCES iam.users(id) ON DELETE SET NULL,
@@ -1082,6 +1232,40 @@ CREATE INDEX idx_sla_monitor_source_fk         ON hrms.hrms_sla_monitoring (sour
 
 CREATE INDEX idx_haudit_user_fk                ON hrms.hrms_audit_event_timeline (performed_by_user_id);
 
+-- v2.0 indexes
+CREATE INDEX idx_emp_lh_rec_fk                 ON hrms.employment_lifecycle_history (employment_record_id);
+CREATE INDEX idx_emp_lh_user_fk                ON hrms.employment_lifecycle_history (approved_by_user_id);
+
+CREATE INDEX idx_sal_rev_emp_fk                ON hrms.salary_revision_history (employee_id);
+CREATE INDEX idx_sal_rev_prev_fk               ON hrms.salary_revision_history (previous_salary_structure_id);
+CREATE INDEX idx_sal_rev_new_fk                ON hrms.salary_revision_history (new_salary_structure_id);
+CREATE INDEX idx_sal_rev_user_fk               ON hrms.salary_revision_history (approved_by_user_id);
+
+CREATE INDEX idx_leave_bh_bal_fk               ON hrms.leave_balance_history (leave_balance_id);
+
+CREATE INDEX idx_att_ch_corr_fk                ON hrms.attendance_correction_history (attendance_correction_id);
+CREATE INDEX idx_att_ch_req_fk                 ON hrms.attendance_correction_history (requested_by_user_id);
+CREATE INDEX idx_att_ch_app_fk                 ON hrms.attendance_correction_history (approved_by_user_id);
+
+CREATE INDEX idx_pay_rh_run_fk                 ON hrms.payroll_run_history (payroll_run_id);
+CREATE INDEX idx_pay_rh_user_fk                ON hrms.payroll_run_history (approved_by_user_id);
+
+CREATE INDEX idx_perf_rh_app_fk                ON hrms.performance_review_history (appraisal_id);
+CREATE INDEX idx_perf_rh_rev_fk                ON hrms.performance_review_history (reviewer_employee_id);
+CREATE INDEX idx_perf_rh_prev_fk               ON hrms.performance_review_history (previous_rating_id);
+CREATE INDEX idx_perf_rh_final_fk              ON hrms.performance_review_history (final_rating_id);
+
+CREATE INDEX idx_rec_ph_app_fk                 ON hrms.recruitment_pipeline_history (application_id);
+CREATE INDEX idx_rec_ph_user_fk                ON hrms.recruitment_pipeline_history (changed_by_user_id);
+
+CREATE INDEX idx_train_ch_enroll_fk            ON hrms.training_completion_history (enrollment_id);
+
+CREATE INDEX idx_asset_ah_inv_fk               ON hrms.asset_assignment_history (asset_inventory_id);
+CREATE INDEX idx_asset_ah_emp_fk               ON hrms.asset_assignment_history (responsible_employee_id);
+
+CREATE INDEX idx_emp_dh_doc_fk                 ON hrms.employee_document_history (employee_document_id);
+CREATE INDEX idx_emp_dh_user_fk                ON hrms.employee_document_history (performed_by_user_id);
+
 -- 13.2 Composite Indexes (Optimizing daily punch schedules & performance evaluation loops)
 CREATE INDEX idx_attendance_date_emp           ON hrms.attendance_records (work_date, employee_id);
 CREATE INDEX idx_salary_structure_comp         ON hrms.salary_structures (employee_id, effective_from_date);
@@ -1093,3 +1277,7 @@ CREATE INDEX idx_leave_requests_pending        ON hrms.leave_requests (id) WHERE
 CREATE INDEX idx_claims_unsettled              ON hrms.expense_claims (id) WHERE settled_in_payslip_id IS NULL;
 CREATE INDEX idx_sla_breached_hrms             ON hrms.hrms_sla_monitoring (source_document_id) WHERE is_breached = TRUE;
 CREATE INDEX idx_documents_expired             ON hrms.employee_documents (id) WHERE expiry_date < CURRENT_DATE;
+CREATE INDEX idx_assets_allocated_run          ON hrms.asset_inventories (id) WHERE status_id = 'c1251910-1849-43c2-bf72-4d2cf99a80ea'; -- references ALLOCATED asset status ID
+CREATE INDEX idx_training_incomplete_run       ON hrms.training_enrollments (id) WHERE is_completed = FALSE;
+CREATE INDEX idx_recruitment_open_run          ON hrms.job_requisitions (id) WHERE status_id = 'c1251910-1849-43c2-bf72-4d2cf99a80eb'; -- references OPEN status ID
+CREATE INDEX idx_ess_travel_pending_run        ON hrms.travel_requests (id) WHERE status_id = 'c1251910-1849-43c2-bf72-4d2cf99a80fa'; -- references PLANNED status ID
