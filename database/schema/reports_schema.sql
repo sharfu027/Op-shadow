@@ -1,5 +1,5 @@
 -- =============================================================================
--- INK FMCG ENTERPRISE ERP — ENTERPRISE REPORTING & ANALYTICS SCHEMAS (v1.0)
+-- INK FMCG ENTERPRISE ERP — ENTERPRISE REPORTING & ANALYTICS SCHEMAS (v2.0 REFINED)
 -- File Name      : reports_schema.sql
 -- Target Database: PostgreSQL 17+
 -- Schema Owner   : reports / bi
@@ -292,6 +292,13 @@ CREATE TABLE bi.fact_sales_orders (
     tax_amount             NUMERIC(18,4) NOT NULL DEFAULT 0.0000,
     net_amount             NUMERIC(18,4) NOT NULL,
 
+    -- v2.0 Snapshot Extensions
+    snapshot_version       INT           NOT NULL DEFAULT 1,
+    aggregation_period     VARCHAR(50)   NOT NULL DEFAULT 'DAILY',
+    calculation_version    INT           NOT NULL DEFAULT 1,
+    source_system_version  VARCHAR(50)   NOT NULL DEFAULT 'v1.0',
+    execution_timestamp    TIMESTAMPTZ   NOT NULL DEFAULT clock_timestamp(),
+
     CONSTRAINT chk_sales_qty CHECK (quantity_ordered > 0.0000),
     CONSTRAINT chk_sales_gross CHECK (gross_amount >= 0.0000),
     CONSTRAINT chk_sales_net CHECK (net_amount = (gross_amount - discount_amount + tax_amount))
@@ -310,6 +317,13 @@ CREATE TABLE bi.fact_procurement_purchases (
     quantity_ordered       NUMERIC(18,4) NOT NULL,
     net_amount             NUMERIC(18,4) NOT NULL,
 
+    -- v2.0 Snapshot Extensions
+    snapshot_version       INT           NOT NULL DEFAULT 1,
+    aggregation_period     VARCHAR(50)   NOT NULL DEFAULT 'DAILY',
+    calculation_version    INT           NOT NULL DEFAULT 1,
+    source_system_version  VARCHAR(50)   NOT NULL DEFAULT 'v1.0',
+    execution_timestamp    TIMESTAMPTZ   NOT NULL DEFAULT clock_timestamp(),
+
     CONSTRAINT chk_proc_qty CHECK (quantity_ordered > 0.0000),
     CONSTRAINT chk_proc_net CHECK (net_amount >= 0.0000)
 ) PARTITION BY RANGE (date_key);
@@ -323,6 +337,13 @@ CREATE TABLE bi.fact_daily_inventory_snapshots (
     product_key            UUID          NOT NULL REFERENCES bi.dim_product(product_key),
     stock_on_hand          NUMERIC(18,4) NOT NULL,
     valuation_amount       NUMERIC(18,4) NOT NULL,
+
+    -- v2.0 Snapshot Extensions
+    snapshot_version       INT           NOT NULL DEFAULT 1,
+    aggregation_period     VARCHAR(50)   NOT NULL DEFAULT 'DAILY',
+    calculation_version    INT           NOT NULL DEFAULT 1,
+    source_system_version  VARCHAR(50)   NOT NULL DEFAULT 'v1.0',
+    execution_timestamp    TIMESTAMPTZ   NOT NULL DEFAULT clock_timestamp(),
 
     CONSTRAINT chk_snap_stock CHECK (stock_on_hand >= 0.0000),
     CONSTRAINT chk_snap_val CHECK (valuation_amount >= 0.0000)
@@ -409,6 +430,14 @@ CREATE TABLE bi.ai_model_registry (
     performance_score      NUMERIC(5,4),
     registry_metadata      JSONB         NOT NULL,
 
+    -- v2.0 AI Metadata
+    feature_version           VARCHAR(50)  NOT NULL DEFAULT 'v1.0',
+    training_dataset_version  VARCHAR(50)  NOT NULL DEFAULT 'v1.0',
+    inference_dataset_version VARCHAR(50)  NOT NULL DEFAULT 'v1.0',
+    feature_refresh_timestamp TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
+    model_compatibility       VARCHAR(100),
+    deprecation_status        VARCHAR(50)  NOT NULL DEFAULT 'ACTIVE',
+
     CONSTRAINT uq_ai_model UNIQUE (model_code, model_version),
     CONSTRAINT chk_ai_score CHECK (performance_score BETWEEN 0.0000 AND 1.0000)
 );
@@ -427,33 +456,186 @@ CREATE TABLE bi.ai_prediction_history (
 COMMENT ON TABLE bi.ai_prediction_history IS '[HISTORY] Execution logs and inputs mapped to predictions.';
 
 -- =============================================================================
--- SECTION 10 — DATA QUALITY
+-- SECTION 10 — DATA QUALITY (v2.0 REFINED)
 -- =============================================================================
 
 CREATE TABLE bi.data_quality_runs (
-    id                     UUID          PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
-    execution_date         DATE          NOT NULL DEFAULT CURRENT_DATE,
-    refresh_status         VARCHAR(50)   NOT NULL, -- COMPLETED, FAILED, RUNNING
-    records_processed      INT           NOT NULL DEFAULT 0,
-    records_failed         INT           NOT NULL DEFAULT 0,
-    quality_score_pct      NUMERIC(5,2)  NOT NULL DEFAULT 100.00,
-    failure_details        TEXT,
+    id                      UUID          PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    execution_date          DATE          NOT NULL DEFAULT CURRENT_DATE,
+    refresh_status          VARCHAR(50)   NOT NULL, -- COMPLETED, FAILED, RUNNING
+    records_processed       INT           NOT NULL DEFAULT 0,
+    records_failed          INT           NOT NULL DEFAULT 0,
+    quality_score_pct       NUMERIC(5,2)  NOT NULL DEFAULT 100.00,
+    failure_details         TEXT,
+
+    -- v2.0 Quality Metrics
+    completeness_score      NUMERIC(5,2)  NOT NULL DEFAULT 100.00,
+    accuracy_score          NUMERIC(5,2)  NOT NULL DEFAULT 100.00,
+    consistency_score       NUMERIC(5,2)  NOT NULL DEFAULT 100.00,
+    timeliness_score        NUMERIC(5,2)  NOT NULL DEFAULT 100.00,
+    validity_score          NUMERIC(5,2)  NOT NULL DEFAULT 100.00,
+    duplicate_rate_pct      NUMERIC(5,2)  NOT NULL DEFAULT 0.00,
+    missing_values_count    INT           NOT NULL DEFAULT 0,
+    overall_quality_score   NUMERIC(5,2)  NOT NULL DEFAULT 100.00,
 
     CONSTRAINT chk_dq_processed CHECK (records_processed >= 0),
     CONSTRAINT chk_dq_failed CHECK (records_failed >= 0),
     CONSTRAINT chk_dq_score CHECK (quality_score_pct BETWEEN 0.00 AND 100.00)
 );
 
-COMMENT ON TABLE bi.data_quality_runs (
-    id IS 'Primary key.',
-    execution_date IS 'Data refresh and ETL audit run date.'
+COMMENT ON TABLE bi.data_quality_runs IS '[HISTORY] Historical quality checks auditing data completeness and validity scores.';
+
+-- =============================================================================
+-- SECTION 11 — REFINEMENT TRACKING TABLES (v2.0 ADDITIONS)
+-- =============================================================================
+
+-- 11.1 Data Refresh History
+CREATE TABLE bi.refresh_history (
+    id                   UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    refresh_batch_number VARCHAR(100) NOT NULL,
+    dataset_name         VARCHAR(150) NOT NULL,
+    refresh_type         VARCHAR(50)  NOT NULL, -- INCREMENTAL, FULL
+    started_at_utc       TIMESTAMPTZ  NOT NULL,
+    completed_at_utc     TIMESTAMPTZ,
+    duration_ms          INT,
+    status               VARCHAR(50)  NOT NULL, -- RUNNING, COMPLETED, FAILED
+    rows_read            INT          NOT NULL DEFAULT 0,
+    rows_inserted        INT          NOT NULL DEFAULT 0,
+    rows_updated        INT          NOT NULL DEFAULT 0,
+    rows_failed          INT          NOT NULL DEFAULT 0,
+    failure_reason       TEXT,
+    trigger_source       VARCHAR(100) NOT NULL DEFAULT 'SCHEDULED'
 );
 
+COMMENT ON TABLE bi.refresh_history IS '[HISTORY] ETL execution log tracing source row read counts and insert deltas.';
+
+-- 11.2 Fact Load History
+CREATE TABLE bi.fact_load_history (
+    id                UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    fact_table_name   VARCHAR(100) NOT NULL,
+    source_module     VARCHAR(100) NOT NULL,
+    batch_number      VARCHAR(100) NOT NULL,
+    load_type         VARCHAR(50)  NOT NULL, -- FULL, INCREMENTAL
+    rows_inserted     INT          NOT NULL DEFAULT 0,
+    rows_updated      INT          NOT NULL DEFAULT 0,
+    rows_rejected     INT          NOT NULL DEFAULT 0,
+    execution_time    TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
+    validation_result TEXT
+);
+
+COMMENT ON TABLE bi.fact_load_history IS '[HISTORY] Load status summaries for dimension mappings.';
+
+-- 11.3 KPI Calculation History
+CREATE TABLE reports.kpi_calculation_history (
+    id                    UUID          PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    kpi_id                UUID          NOT NULL REFERENCES reports.kpi_definitions(id) ON DELETE CASCADE,
+    formula_version       INT           NOT NULL DEFAULT 1,
+    threshold_version     INT           NOT NULL DEFAULT 1,
+    calculated_value      NUMERIC(18,4) NOT NULL,
+    target_value          NUMERIC(18,4) NOT NULL,
+    status                VARCHAR(50)   NOT NULL, -- GREEN, YELLOW, RED
+    calculation_timestamp TIMESTAMPTZ   NOT NULL DEFAULT clock_timestamp()
+);
+
+COMMENT ON TABLE reports.kpi_calculation_history IS '[HISTORY] Snapshot record log auditing computed metrics.';
+
+-- 11.4 Report Execution Metrics
+CREATE TABLE reports.report_execution_metrics (
+    id                  UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    report_id           UUID         NOT NULL REFERENCES reports.report_definitions(id) ON DELETE CASCADE,
+    user_id             UUID         REFERENCES iam.users(id) ON DELETE SET NULL,
+    runtime_ms          INT          NOT NULL,
+    dataset_size_bytes  BIGINT       NOT NULL,
+    export_format       VARCHAR(50)  NOT NULL,
+    execution_status    VARCHAR(50)  NOT NULL, -- SUCCESS, FAILED
+    error_details       TEXT,
+    execution_timestamp TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp()
+);
+
+COMMENT ON TABLE reports.report_execution_metrics IS '[HISTORY] Operational metadata logging user report downloads.';
+
+-- 11.5 Dashboard Usage History
+CREATE TABLE reports.dashboard_usage_history (
+    id                   UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    dashboard_id         UUID         NOT NULL REFERENCES reports.dashboards(id) ON DELETE CASCADE,
+    widget_id            UUID         REFERENCES reports.dashboard_widgets(id) ON DELETE SET NULL,
+    user_id              UUID         REFERENCES iam.users(id) ON DELETE SET NULL,
+    open_timestamp       TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
+    refresh_timestamp    TIMESTAMPTZ,
+    execution_duration_ms INT,
+    device_type          VARCHAR(100) NOT NULL DEFAULT 'DESKTOP'
+);
+
+COMMENT ON TABLE reports.dashboard_usage_history IS '[HISTORY] UI interaction audits tracking open durations.';
+
+-- 11.6 Data Lineage Registry
+CREATE TABLE bi.data_lineage_registry (
+    id                     UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    source_module          VARCHAR(100) NOT NULL,
+    source_table_name      VARCHAR(100) NOT NULL,
+    target_fact_name       VARCHAR(100),
+    target_dimension_name  VARCHAR(100),
+    transformation_version VARCHAR(50)  NOT NULL DEFAULT 'v1.0',
+    refresh_batch_number   VARCHAR(100),
+    owner_employee_id      UUID         REFERENCES employee.employees(id) ON DELETE SET NULL,
+    last_refresh_timestamp TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp()
+);
+
+COMMENT ON TABLE bi.data_lineage_registry IS '[FOUNDATION] Governance registry mapping table lineages.';
+
+-- 11.7 Forecast Execution History
+CREATE TABLE bi.forecast_execution_history (
+    id                    UUID          PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    forecast_model_id     UUID          NOT NULL REFERENCES bi.forecast_models(id) ON DELETE CASCADE,
+    model_version         VARCHAR(50)   NOT NULL DEFAULT 'v1.0',
+    parameters            JSONB         NOT NULL,
+    forecast_horizon_days INT           NOT NULL,
+    execution_timestamp   TIMESTAMPTZ   NOT NULL DEFAULT clock_timestamp(),
+    accuracy_metric       VARCHAR(100),
+    variance_pct          NUMERIC(5,2),
+    confidence_score      NUMERIC(5,4)
+);
+
+COMMENT ON TABLE bi.forecast_execution_history IS '[HISTORY] Logs of analytical predictions and scoring validations.';
+
+-- 11.8 Analytics SLA Monitoring
+CREATE TABLE bi.analytics_sla_monitoring (
+    id                      UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    sla_type                VARCHAR(50)  NOT NULL, -- REFRESH_SLA, REPORT_EXECUTION_SLA, DASHBOARD_REFRESH_SLA, FORECAST_SLA, AI_INFERENCE_SLA, DQ_SLA
+    source_document_id      UUID         NOT NULL,
+    target_duration_minutes INT          NOT NULL,
+    actual_duration_minutes INT,
+    is_breached             BOOLEAN      GENERATED ALWAYS AS (actual_duration_minutes > target_duration_minutes) STORED,
+    breach_reason           TEXT,
+    created_at_utc          TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
+
+    CONSTRAINT chk_bi_sla_target CHECK (target_duration_minutes > 0),
+    CONSTRAINT chk_bi_sla_actual CHECK (actual_duration_minutes IS NULL OR actual_duration_minutes >= 0),
+    CONSTRAINT chk_bi_sla_type CHECK (sla_type IN ('REFRESH_SLA', 'REPORT_EXECUTION_SLA', 'DASHBOARD_REFRESH_SLA', 'FORECAST_SLA', 'AI_INFERENCE_SLA', 'DQ_SLA'))
+);
+
+COMMENT ON TABLE bi.analytics_sla_monitoring IS '[OPERATIONAL] SLA timers auditing latency parameters.';
+
+-- 11.9 Analytics Audit Event Timeline
+CREATE TABLE bi.analytics_audit_event_timeline (
+    id                   UUID         PRIMARY KEY DEFAULT iam.uuid_generate_v7(),
+    event_type           VARCHAR(100) NOT NULL, -- REFRESH_EVENTS, REPORT_EXECUTIONS, KPI_CALCULATIONS, FORECAST_RUNS, DASHBOARD_CHANGES, DATA_QUALITY_FAILURES, AI_MODEL_EXECUTIONS
+    source_document_type VARCHAR(50)  NOT NULL,
+    source_document_id   UUID         NOT NULL,
+    event_timestamp      TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
+    performed_by_user_id UUID         REFERENCES iam.users(id) ON DELETE SET NULL,
+    payload              JSONB,
+
+    created_at_utc       TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp()
+);
+
+COMMENT ON TABLE bi.analytics_audit_event_timeline IS '[HISTORY] Immutable log of metric refreshes and dashboard structural changes.';
+
 -- =============================================================================
--- SECTION 11 — INDEX STRATEGY (B-TREE FOREIGNS & COMPOSITE COVERING)
+-- SECTION 12 — INDEX STRATEGY (B-TREE FOREIGNS & COMPOSITE COVERING)
 -- =============================================================================
 
--- 11.1 B-Tree Indexes on all Foreign Keys
+-- 12.1 B-Tree Indexes on all Foreign Keys
 CREATE INDEX idx_kpi_def_cat_fk                ON reports.kpi_definitions (category_id);
 CREATE INDEX idx_kpi_def_emp_fk                ON reports.kpi_definitions (owner_employee_id);
 
@@ -493,12 +675,33 @@ CREATE INDEX idx_benchmark_kpi_fk              ON bi.benchmarks (kpi_id);
 
 CREATE INDEX idx_prediction_registry_fk        ON bi.ai_prediction_history (model_registry_id);
 
--- 11.2 Composite Indexes (Covering common dimensional warehouse queries)
+-- v2.0 Index extensions
+CREATE INDEX idx_kpi_ch_kpi_fk                 ON reports.kpi_calculation_history (kpi_id);
+
+CREATE INDEX idx_rep_em_report_fk              ON reports.report_execution_metrics (report_id);
+CREATE INDEX idx_rep_em_user_fk                ON reports.report_execution_metrics (user_id);
+
+CREATE INDEX idx_dash_uh_dash_fk               ON reports.dashboard_usage_history (dashboard_id);
+CREATE INDEX idx_dash_uh_user_fk               ON reports.dashboard_usage_history (user_id);
+
+CREATE INDEX idx_lineage_owner_fk              ON bi.data_lineage_registry (owner_employee_id);
+
+CREATE INDEX idx_fore_eh_model_fk              ON bi.forecast_execution_history (forecast_model_id);
+
+CREATE INDEX idx_sla_monitor_fk                ON bi.analytics_sla_monitoring (source_document_id);
+
+CREATE INDEX idx_aaudit_user_fk                ON bi.analytics_audit_event_timeline (performed_by_user_id);
+
+-- 12.2 Composite Indexes (Covering common dimensional warehouse queries)
 CREATE INDEX idx_fact_sales_covering           ON bi.fact_sales_orders (date_key, organization_key, customer_key);
 CREATE INDEX idx_fact_proc_covering            ON bi.fact_procurement_purchases (date_key, organization_key, supplier_key);
 CREATE INDEX idx_fact_inv_covering             ON bi.fact_daily_inventory_snapshots (date_key, product_key);
 
--- 11.3 Partial Indexes (Optimizing active/hot records)
+-- 12.3 Partial Indexes (Optimizing active/hot records)
 CREATE INDEX idx_report_schedules_active       ON reports.report_schedules (id) WHERE is_active = TRUE;
 CREATE INDEX idx_dq_runs_failed                ON bi.data_quality_runs (id) WHERE refresh_status = 'FAILED';
 CREATE INDEX idx_forecast_runs_variance        ON bi.forecast_runs (id) WHERE variance_pct > 15.00;
+CREATE INDEX idx_refresh_failed                ON bi.refresh_history (id) WHERE status = 'FAILED';
+CREATE INDEX idx_report_jobs_pending           ON reports.report_execution_history (id) WHERE status = 'RUNNING';
+CREATE INDEX idx_ai_predictions_deviated       ON bi.ai_prediction_history (id) WHERE actual_output IS NULL;
+CREATE INDEX idx_dq_scores_low                 ON bi.data_quality_runs (id) WHERE quality_score_pct < 95.00;
