@@ -1,4 +1,4 @@
-using System.Reflection;
+using NetArchTest.Rules;
 using FluentAssertions;
 using Xunit;
 
@@ -6,30 +6,80 @@ namespace INK.ERP.UnitTests;
 
 public sealed class ArchitectureTests
 {
+    private const string DomainNamespace = "INK.ERP.Domain";
+    private const string ApplicationNamespace = "INK.ERP.Application";
+    private const string InfrastructureNamespace = "INK.ERP.Infrastructure";
+    private const string ApiNamespace = "INK.ERP.API";
+    private const string SharedNamespace = "INK.ERP.Shared";
+
     [Fact]
-    public void DomainLayer_ShouldNot_DependOnApplicationOrInfrastructure()
+    public void Domain_Should_NotHaveDependencyOnOtherProjects()
     {
         // Arrange
-        var domainAssembly = Assembly.Load("INK.ERP.Domain");
+        var assembly = typeof(Domain.Common.BaseEntity).Assembly;
 
         // Act
-        var referencedAssemblies = domainAssembly.GetReferencedAssemblies();
+        var result = Types.InAssembly(assembly)
+            .ShouldNot()
+            .HaveDependencyOnAny(
+                ApplicationNamespace,
+                InfrastructureNamespace,
+                ApiNamespace)
+            .GetResult();
 
         // Assert
-        referencedAssemblies.Should().NotContain(a => a.Name == "INK.ERP.Application");
-        referencedAssemblies.Should().NotContain(a => a.Name == "INK.ERP.Infrastructure");
+        result.IsSuccessful.Should().BeTrue();
     }
 
     [Fact]
-    public void ApplicationLayer_ShouldNot_DependOnInfrastructure()
+    public void Application_Should_NotHaveDependencyOnInfrastructureOrApi()
     {
         // Arrange
-        var applicationAssembly = Assembly.Load("INK.ERP.Application");
+        var assembly = typeof(Application.DependencyInjection).Assembly;
 
         // Act
-        var referencedAssemblies = applicationAssembly.GetReferencedAssemblies();
+        var result = Types.InAssembly(assembly)
+            .ShouldNot()
+            .HaveDependencyOnAny(
+                InfrastructureNamespace,
+                ApiNamespace)
+            .GetResult();
 
         // Assert
-        referencedAssemblies.Should().NotContain(a => a.Name == "INK.ERP.Infrastructure");
+        result.IsSuccessful.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Infrastructure_Should_NotHaveDependencyOnApi()
+    {
+        // Arrange
+        var assembly = typeof(Infrastructure.DependencyInjection).Assembly;
+
+        // Act
+        var result = Types.InAssembly(assembly)
+            .ShouldNot()
+            .HaveDependencyOnAny(ApiNamespace)
+            .GetResult();
+
+        // Assert
+        result.IsSuccessful.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Handlers_Should_HaveNameEndingWithHandler()
+    {
+        // Arrange
+        var assembly = typeof(Application.DependencyInjection).Assembly;
+
+        // Act
+        var result = Types.InAssembly(assembly)
+            .That()
+            .ImplementInterface(typeof(MediatR.IRequestHandler<,>))
+            .Should()
+            .HaveNameEndingWith("Handler")
+            .GetResult();
+
+        // Assert
+        result.IsSuccessful.Should().BeTrue();
     }
 }

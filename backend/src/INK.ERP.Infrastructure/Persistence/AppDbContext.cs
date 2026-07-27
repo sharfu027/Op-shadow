@@ -37,18 +37,59 @@ public sealed class AppDbContext : IdentityDbContext<ApplicationUser, Applicatio
         builder.Entity<IdentityUserLogin<Guid>>().ToTable("user_logins", "iam");
         builder.Entity<IdentityRoleClaim<Guid>>().ToTable("role_claims", "iam");
         builder.Entity<IdentityUserToken<Guid>>().ToTable("user_tokens", "iam");
+
+        builder.Entity<INK.ERP.Infrastructure.Persistence.Outbox.OutboxMessage>(entity =>
+        {
+            entity.ToTable("outbox_messages", "iam");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Type).HasMaxLength(255).IsRequired();
+            entity.Property(e => e.Content).IsRequired();
+            entity.Property(e => e.OccurredOnUtc).IsRequired();
+        });
     }
+
+    public DbSet<INK.ERP.Infrastructure.Persistence.Outbox.OutboxMessage> OutboxMessages => Set<INK.ERP.Infrastructure.Persistence.Outbox.OutboxMessage>();
 
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         UpdateAuditFields();
+        ConvertDomainEventsToOutboxMessages();
         return base.SaveChangesAsync(cancellationToken);
     }
 
     public override int SaveChanges()
     {
         UpdateAuditFields();
+        ConvertDomainEventsToOutboxMessages();
         return base.SaveChanges();
+    }
+
+    private void ConvertDomainEventsToOutboxMessages()
+    {
+        var domainEntities = ChangeTracker.Entries<BaseEntity>()
+            .Where(x => x.Entity.DomainEvents.Any())
+            .ToList();
+
+        var domainEvents = domainEntities
+            .SelectMany(x => x.Entity.DomainEvents)
+            .ToList();
+
+        foreach (var domainEvent in domainEvents)
+        {
+            var outboxMessage = new INK.ERP.Infrastructure.Persistence.Outbox.OutboxMessage
+            {
+                Type = domainEvent.GetType().AssemblyQualifiedName ?? domainEvent.GetType().FullName ?? string.Empty,
+                Content = System.Text.Json.JsonSerializer.Serialize(domainEvent, domainEvent.GetType()),
+                OccurredOnUtc = DateTime.UtcNow
+            };
+
+            Set<INK.ERP.Infrastructure.Persistence.Outbox.OutboxMessage>().Add(outboxMessage);
+        }
+
+        foreach (var entity in domainEntities)
+        {
+            entity.Entity.ClearDomainEvents();
+        }
     }
 
     private void UpdateAuditFields()

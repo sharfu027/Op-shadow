@@ -11,8 +11,12 @@ using INK.ERP.Application.Common.Interfaces;
 using INK.ERP.Domain.Common;
 using INK.ERP.Infrastructure.Options;
 using INK.ERP.Infrastructure.Persistence.Repositories;
+using INK.ERP.Infrastructure.Persistence.Outbox;
+using INK.ERP.Infrastructure.Services;
 using INK.ERP.Infrastructure.Security;
 using INK.ERP.Persistence;
+using OpenTelemetry.Trace;
+
 
 namespace INK.ERP.Infrastructure;
 
@@ -122,6 +126,33 @@ public static class DependencyInjection
 
         // 8. Register Security Token Generator Service
         services.AddScoped<ITokenService, TokenService>();
+
+        // 9. Register Current User Abstraction & Context Accessor
+        services.AddHttpContextAccessor();
+        services.AddScoped<ICurrentUserService, CurrentUserService>();
+
+        // 10. Register Outbox Processor Background Service
+        services.AddHostedService<OutboxProcessor>();
+
+        // 11. Configure Enterprise Health Checks
+        services.AddHealthChecks()
+            .AddNpgSql(databaseOptions.ConnectionString, name: "PostgreSQL")
+            .AddRedis(redisOptions.ConnectionString, name: "Redis")
+            .AddHangfire(options =>
+            {
+                options.MinimumAvailableServers = 1;
+            }, name: "Hangfire");
+
+        // 12. Configure OpenTelemetry Tracing
+        var enableTracing = configuration.GetValue<bool>("OpenTelemetry:EnableTracing", false);
+        if (enableTracing)
+        {
+            services.AddOpenTelemetry()
+                .WithTracing(tracing => tracing
+                    .AddAspNetCoreInstrumentation()
+                    .AddEntityFrameworkCoreInstrumentation()
+                    .AddHttpClientInstrumentation());
+        }
 
         return services;
     }

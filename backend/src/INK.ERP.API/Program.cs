@@ -5,6 +5,9 @@ using INK.ERP.Shared;
 using Serilog;
 using Asp.Versioning;
 using Hangfire;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.RateLimiting;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -41,10 +44,24 @@ builder.Services.AddApiVersioning(options =>
 // 5. Configure SignalR Hubs
 builder.Services.AddSignalR();
 
-// 6. Configure Health Checks
+// 6. Configure Health Checks (Base registered, ready indicators verified in Infrastructure)
 builder.Services.AddHealthChecks();
 
-// 7. Configure Swagger / OpenAPI Documentation with JWT Bearer Security
+// 7. Configure Rate Limiting (Fixed Window Strategy for Authentication)
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    options.AddFixedWindowLimiter("AuthPolicy", opt =>
+    {
+        opt.Window = TimeSpan.FromMinutes(1);
+        opt.PermitLimit = 5; // Max 5 requests per minute
+        opt.QueueLimit = 0;
+        opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+    });
+});
+
+// 8. Configure Swagger / OpenAPI Documentation with JWT Bearer Security
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -81,7 +98,7 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
-// 8. Configure Enterprise CORS Policy
+// 9. Configure Enterprise CORS Policy
 var corsOrigins = builder.Configuration.GetSection("AllowedCorsOrigins").Get<string[]>() ?? new[] { "http://localhost:3000" };
 builder.Services.AddCors(options =>
 {
@@ -100,6 +117,12 @@ var app = builder.Build();
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 
+// 1. Request Correlation ID Setup
+app.UseMiddleware<CorrelationIdMiddleware>();
+
+// 2. Security Headers Enforcement
+app.UseMiddleware<SecurityHeadersMiddleware>();
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -112,6 +135,8 @@ if (app.Environment.IsDevelopment())
 app.UseSerilogRequestLogging();
 app.UseCors("AllowFrontendClient");
 
+app.UseRateLimiter();
+
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -121,10 +146,19 @@ app.UseHangfireDashboard("/hangfire", new DashboardOptions
     // Configure authorization policies for dashboard access if needed
 });
 
+// Mapped Health check endpoints
+app.MapHealthChecks("/health"); // Simple ping
+app.MapHealthChecks("/health/live", new HealthCheckOptions
+{
+    Predicate = _ => false // Liveness check (always returns healthy if service is running)
+});
+app.MapHealthChecks("/health/ready", new HealthCheckOptions
+{
+    Predicate = reg => reg.Name == "PostgreSQL" || reg.Name == "Redis" || reg.Name == "Hangfire"
+});
+
 app.MapControllers();
-app.MapHealthChecks("/health");
 
 app.Run();
 
 public partial class Program { }
-
