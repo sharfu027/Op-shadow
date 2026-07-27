@@ -19,19 +19,6 @@ public sealed class AppDbContext : IdentityDbContext<ApplicationUser, Applicatio
         builder.HasDefaultSchema("iam");
 
         // Identity Table Renaming for enterprise schema alignment
-        builder.Entity<ApplicationUser>(entity =>
-        {
-            entity.ToTable("users", "iam");
-            entity.Property(u => u.FirstName).HasMaxLength(100);
-            entity.Property(u => u.LastName).HasMaxLength(100);
-        });
-
-        builder.Entity<ApplicationRole>(entity =>
-        {
-            entity.ToTable("roles", "iam");
-            entity.Property(r => r.Description).HasMaxLength(250);
-        });
-
         builder.Entity<IdentityUserClaim<Guid>>().ToTable("user_claims", "iam");
         builder.Entity<IdentityUserRole<Guid>>().ToTable("user_roles", "iam");
         builder.Entity<IdentityUserLogin<Guid>>().ToTable("user_logins", "iam");
@@ -51,6 +38,9 @@ public sealed class AppDbContext : IdentityDbContext<ApplicationUser, Applicatio
         builder.Entity<INK.ERP.Domain.Entities.Customer>(entity => { entity.ToTable("customers", "customer"); });
         builder.Entity<INK.ERP.Domain.Entities.Warehouse>(entity => { entity.ToTable("warehouses", "warehouse"); });
         builder.Entity<INK.ERP.Domain.Entities.SalesOrder>(entity => { entity.ToTable("sales_orders", "sales"); });
+
+        // Apply all configurations from the assembly (runs all IEntityTypeConfiguration classes)
+        builder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
     }
 
     public DbSet<INK.ERP.Infrastructure.Persistence.Outbox.OutboxMessage> OutboxMessages => Set<INK.ERP.Infrastructure.Persistence.Outbox.OutboxMessage>();
@@ -58,6 +48,19 @@ public sealed class AppDbContext : IdentityDbContext<ApplicationUser, Applicatio
     public DbSet<INK.ERP.Domain.Entities.Customer> Customers => Set<INK.ERP.Domain.Entities.Customer>();
     public DbSet<INK.ERP.Domain.Entities.Warehouse> Warehouses => Set<INK.ERP.Domain.Entities.Warehouse>();
     public DbSet<INK.ERP.Domain.Entities.SalesOrder> SalesOrders => Set<INK.ERP.Domain.Entities.SalesOrder>();
+
+    // IAM DB Sets
+    public DbSet<INK.ERP.Domain.Entities.IAM.PermissionGroup> PermissionGroups => Set<INK.ERP.Domain.Entities.IAM.PermissionGroup>();
+    public DbSet<INK.ERP.Domain.Entities.IAM.Permission> Permissions => Set<INK.ERP.Domain.Entities.IAM.Permission>();
+    public DbSet<INK.ERP.Domain.Entities.IAM.UserRole> IAMUserRoles => Set<INK.ERP.Domain.Entities.IAM.UserRole>();
+    public DbSet<INK.ERP.Domain.Entities.IAM.RolePermission> RolePermissions => Set<INK.ERP.Domain.Entities.IAM.RolePermission>();
+    public DbSet<INK.ERP.Domain.Entities.IAM.RefreshToken> RefreshTokens => Set<INK.ERP.Domain.Entities.IAM.RefreshToken>();
+    public DbSet<INK.ERP.Domain.Entities.IAM.UserSession> UserSessions => Set<INK.ERP.Domain.Entities.IAM.UserSession>();
+    public DbSet<INK.ERP.Domain.Entities.IAM.LoginHistory> LoginHistories => Set<INK.ERP.Domain.Entities.IAM.LoginHistory>();
+    public DbSet<INK.ERP.Domain.Entities.IAM.PasswordResetToken> PasswordResetTokens => Set<INK.ERP.Domain.Entities.IAM.PasswordResetToken>();
+    public DbSet<INK.ERP.Domain.Entities.IAM.EmailVerificationToken> EmailVerificationTokens => Set<INK.ERP.Domain.Entities.IAM.EmailVerificationToken>();
+    public DbSet<INK.ERP.Domain.Entities.IAM.UserPreference> UserPreferences => Set<INK.ERP.Domain.Entities.IAM.UserPreference>();
+    public DbSet<INK.ERP.Domain.Entities.IAM.SecurityAuditLog> SecurityAuditLogs => Set<INK.ERP.Domain.Entities.IAM.SecurityAuditLog>();
 
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
