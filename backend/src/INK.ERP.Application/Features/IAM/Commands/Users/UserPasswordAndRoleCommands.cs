@@ -5,7 +5,7 @@ using INK.ERP.Application.Common.Interfaces;
 using INK.ERP.Domain.Common;
 using INK.ERP.Domain.Entities.IAM;
 using INK.ERP.Domain.Events.IAM;
-using INK.ERP.Application.Features.IAM;
+using INK.ERP.Application.Features.IAM.Services;
 
 namespace INK.ERP.Application.Features.IAM.Commands.Users;
 
@@ -20,16 +20,30 @@ public sealed record ChangePasswordCommand(
 public sealed class ChangePasswordCommandHandler : IRequestHandler<ChangePasswordCommand, Result<Unit>>
 {
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IPasswordPolicyService _passwordPolicyService;
+    private readonly IDateTime _dateTime;
     private readonly ILogger<ChangePasswordCommandHandler> _logger;
 
-    public ChangePasswordCommandHandler(IUnitOfWork unitOfWork, ILogger<ChangePasswordCommandHandler> logger)
+    public ChangePasswordCommandHandler(
+        IUnitOfWork unitOfWork,
+        IPasswordPolicyService passwordPolicyService,
+        IDateTime dateTime,
+        ILogger<ChangePasswordCommandHandler> logger)
     {
         _unitOfWork = unitOfWork;
+        _passwordPolicyService = passwordPolicyService;
+        _dateTime = dateTime;
         _logger = logger;
     }
 
     public async Task<Result<Unit>> Handle(ChangePasswordCommand request, CancellationToken cancellationToken)
     {
+        var passwordPolicyValidation = _passwordPolicyService.ValidatePassword(request.NewPassword);
+        if (passwordPolicyValidation.IsFailure)
+        {
+            return Result.Failure<Unit>(passwordPolicyValidation.Error);
+        }
+
         var userRepo = _unitOfWork.Repository<ApplicationUser>();
         var user = await userRepo.GetByIdAsync(request.UserId, cancellationToken);
         if (user is null || user.IsDeleted)
@@ -43,9 +57,9 @@ public sealed class ChangePasswordCommandHandler : IRequestHandler<ChangePasswor
         }
 
         user.PasswordHash = "HASHED:" + request.NewPassword;
-        user.LastPasswordChangedUtc = DateTime.UtcNow;
+        user.LastPasswordChangedUtc = _dateTime.UtcNow;
         user.RequirePasswordChange = false;
-        user.LastModifiedAtUtc = DateTime.UtcNow;
+        user.LastModifiedAtUtc = _dateTime.UtcNow;
 
         user.AddDomainEvent(new PasswordChangedEvent(user.Id));
 
@@ -80,10 +94,12 @@ public sealed record ForcePasswordResetCommand(Guid UserId) : ICommand<Result<Un
 public sealed class ForcePasswordResetCommandHandler : IRequestHandler<ForcePasswordResetCommand, Result<Unit>>
 {
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IDateTime _dateTime;
 
-    public ForcePasswordResetCommandHandler(IUnitOfWork unitOfWork)
+    public ForcePasswordResetCommandHandler(IUnitOfWork unitOfWork, IDateTime dateTime)
     {
         _unitOfWork = unitOfWork;
+        _dateTime = dateTime;
     }
 
     public async Task<Result<Unit>> Handle(ForcePasswordResetCommand request, CancellationToken cancellationToken)
@@ -96,7 +112,7 @@ public sealed class ForcePasswordResetCommandHandler : IRequestHandler<ForcePass
         }
 
         user.RequirePasswordChange = true;
-        user.LastModifiedAtUtc = DateTime.UtcNow;
+        user.LastModifiedAtUtc = _dateTime.UtcNow;
 
         userRepo.Update(user);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -113,52 +129,46 @@ public sealed record AssignRoleCommand(Guid UserId, Guid RoleId) : ICommand<Resu
 public sealed class AssignRoleCommandHandler : IRequestHandler<AssignRoleCommand, Result<Unit>>
 {
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IUserDomainService _userDomainService;
+    private readonly IDateTime _dateTime;
     private readonly ILogger<AssignRoleCommandHandler> _logger;
 
-    public AssignRoleCommandHandler(IUnitOfWork unitOfWork, ILogger<AssignRoleCommandHandler> logger)
+    public AssignRoleCommandHandler(
+        IUnitOfWork unitOfWork,
+        IUserDomainService userDomainService,
+        IDateTime dateTime,
+        ILogger<AssignRoleCommandHandler> logger)
     {
         _unitOfWork = unitOfWork;
+        _userDomainService = userDomainService;
+        _dateTime = dateTime;
         _logger = logger;
     }
 
     public async Task<Result<Unit>> Handle(AssignRoleCommand request, CancellationToken cancellationToken)
     {
+        var domainValidation = await _userDomainService.CanAssignRoleToUserAsync(request.UserId, request.RoleId, cancellationToken);
+        if (domainValidation.IsFailure)
+        {
+            return Result.Failure<Unit>(domainValidation.Error);
+        }
+
         var userRepo = _unitOfWork.Repository<ApplicationUser>();
         var roleRepo = _unitOfWork.Repository<ApplicationRole>();
         var userRoleRepo = _unitOfWork.Repository<UserRole>();
 
         var user = await userRepo.GetByIdAsync(request.UserId, cancellationToken);
-        if (user is null || user.IsDeleted)
-        {
-            return Result.Failure<Unit>(IamErrors.User.NotFound(request.UserId));
-        }
-
-        if (!user.IsActive)
-        {
-            return Result.Failure<Unit>(IamErrors.User.InactiveCannotReceiveRoles);
-        }
-
         var role = await roleRepo.GetByIdAsync(request.RoleId, cancellationToken);
-        if (role is null || role.IsDeleted)
-        {
-            return Result.Failure<Unit>(IamErrors.Role.NotFound(request.RoleId));
-        }
-
-        var existingUserRole = await userRoleRepo.FindAsync(ur => ur.UserId == request.UserId && ur.RoleId == request.RoleId && !ur.IsDeleted, cancellationToken);
-        if (existingUserRole.Any())
-        {
-            return Result.Failure<Unit>(IamErrors.Role.DuplicateAssignment(role.Name ?? role.Code));
-        }
 
         var userRole = new UserRole
         {
             Id = Guid.NewGuid(),
             UserId = request.UserId,
             RoleId = request.RoleId,
-            CreatedAtUtc = DateTime.UtcNow
+            CreatedAtUtc = _dateTime.UtcNow
         };
 
-        user.AddDomainEvent(new RoleAssignedEvent(user.Id, role.Id, role.Name ?? role.Code));
+        user!.AddDomainEvent(new RoleAssignedEvent(user.Id, role!.Id, role.Name ?? role.Code));
 
         await userRoleRepo.AddAsync(userRole, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -176,10 +186,12 @@ public sealed record RemoveRoleCommand(Guid UserId, Guid RoleId) : ICommand<Resu
 public sealed class RemoveRoleCommandHandler : IRequestHandler<RemoveRoleCommand, Result<Unit>>
 {
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IRoleDomainService _roleDomainService;
 
-    public RemoveRoleCommandHandler(IUnitOfWork unitOfWork)
+    public RemoveRoleCommandHandler(IUnitOfWork unitOfWork, IRoleDomainService roleDomainService)
     {
         _unitOfWork = unitOfWork;
+        _roleDomainService = roleDomainService;
     }
 
     public async Task<Result<Unit>> Handle(RemoveRoleCommand request, CancellationToken cancellationToken)
@@ -191,21 +203,16 @@ public sealed class RemoveRoleCommandHandler : IRequestHandler<RemoveRoleCommand
         var userRoleList = await userRoleRepo.FindAsync(ur => ur.UserId == request.UserId && ur.RoleId == request.RoleId && !ur.IsDeleted, cancellationToken);
         if (!userRoleList.Any())
         {
-            return Result.Success(Unit.Value); // Idempotent or success if not assigned
+            return Result.Success(Unit.Value);
+        }
+
+        var domainValidation = await _roleDomainService.CanRemoveRoleFromUserAsync(request.UserId, request.RoleId, cancellationToken);
+        if (domainValidation.IsFailure)
+        {
+            return Result.Failure<Unit>(domainValidation.Error);
         }
 
         var role = await roleRepo.GetByIdAsync(request.RoleId, cancellationToken);
-
-        // Business rule: Cannot remove final administrator role if this is the last admin
-        if (role != null && (role.Code == "ADMIN" || role.Name == "Administrator"))
-        {
-            var allAdminUserRoles = await userRoleRepo.FindAsync(ur => ur.RoleId == request.RoleId && !ur.IsDeleted, cancellationToken);
-            if (allAdminUserRoles.Count <= 1)
-            {
-                return Result.Failure<Unit>(IamErrors.Role.CannotRemoveLastAdminRole);
-            }
-        }
-
         var userRole = userRoleList.First();
         userRole.IsDeleted = true;
 
@@ -237,10 +244,12 @@ public sealed record UpdateUserPreferenceCommand(
 public sealed class UpdateUserPreferenceCommandHandler : IRequestHandler<UpdateUserPreferenceCommand, Result<Unit>>
 {
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IDateTime _dateTime;
 
-    public UpdateUserPreferenceCommandHandler(IUnitOfWork unitOfWork)
+    public UpdateUserPreferenceCommandHandler(IUnitOfWork unitOfWork, IDateTime dateTime)
     {
         _unitOfWork = unitOfWork;
+        _dateTime = dateTime;
     }
 
     public async Task<Result<Unit>> Handle(UpdateUserPreferenceCommand request, CancellationToken cancellationToken)
@@ -264,7 +273,7 @@ public sealed class UpdateUserPreferenceCommandHandler : IRequestHandler<UpdateU
             pref.DateFormat = request.DateFormat;
             pref.NumberFormat = request.NumberFormat;
             pref.NotificationPreferences = request.NotificationPreferences;
-            pref.LastModifiedAtUtc = DateTime.UtcNow;
+            pref.LastModifiedAtUtc = _dateTime.UtcNow;
             prefRepo.Update(pref);
         }
         else
@@ -279,7 +288,7 @@ public sealed class UpdateUserPreferenceCommandHandler : IRequestHandler<UpdateU
                 DateFormat = request.DateFormat,
                 NumberFormat = request.NumberFormat,
                 NotificationPreferences = request.NotificationPreferences,
-                CreatedAtUtc = DateTime.UtcNow
+                CreatedAtUtc = _dateTime.UtcNow
             };
             await prefRepo.AddAsync(pref, cancellationToken);
         }

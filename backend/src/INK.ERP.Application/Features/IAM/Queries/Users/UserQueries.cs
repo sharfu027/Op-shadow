@@ -1,9 +1,12 @@
 using Mapster;
 using MediatR;
 using INK.ERP.Application.Common.Interfaces;
+using INK.ERP.Application.Common.Models;
 using INK.ERP.Domain.Common;
 using INK.ERP.Domain.Entities.IAM;
 using INK.ERP.Application.Features.IAM.DTOs;
+using INK.ERP.Application.Features.IAM.Filters;
+using INK.ERP.Application.Features.IAM.Specifications;
 using INK.ERP.Application.Features.IAM;
 
 namespace INK.ERP.Application.Features.IAM.Queries.Users;
@@ -64,10 +67,10 @@ public sealed class GetUserByIdQueryHandler : IRequestHandler<GetUserByIdQuery, 
     }
 }
 
-// 2. GetUsersQuery
-public sealed record GetUsersQuery(string? SearchTerm = null, bool? IsActive = null) : IQuery<Result<IReadOnlyList<UserDto>>>;
+// 2. GetUsersQuery (Paged with Specification and Projection)
+public sealed record GetUsersQuery(UserFilter Filter) : IQuery<Result<PagedResult<UserDto>>>;
 
-public sealed class GetUsersQueryHandler : IRequestHandler<GetUsersQuery, Result<IReadOnlyList<UserDto>>>
+public sealed class GetUsersQueryHandler : IRequestHandler<GetUsersQuery, Result<PagedResult<UserDto>>>
 {
     private readonly IUnitOfWork _unitOfWork;
 
@@ -76,18 +79,15 @@ public sealed class GetUsersQueryHandler : IRequestHandler<GetUsersQuery, Result
         _unitOfWork = unitOfWork;
     }
 
-    public async Task<Result<IReadOnlyList<UserDto>>> Handle(GetUsersQuery request, CancellationToken cancellationToken)
+    public async Task<Result<PagedResult<UserDto>>> Handle(GetUsersQuery request, CancellationToken cancellationToken)
     {
         var userRepo = _unitOfWork.Repository<ApplicationUser>();
         var userRoleRepo = _unitOfWork.Repository<UserRole>();
         var roleRepo = _unitOfWork.Repository<ApplicationRole>();
 
-        var users = await userRepo.FindAsync(u => !u.IsDeleted &&
-            (!request.IsActive.HasValue || u.IsActive == request.IsActive.Value) &&
-            (string.IsNullOrWhiteSpace(request.SearchTerm) ||
-             u.UserName.Contains(request.SearchTerm) ||
-             u.Email.Contains(request.SearchTerm) ||
-             u.DisplayName.Contains(request.SearchTerm)), cancellationToken);
+        var spec = new UserFilterSpecification(request.Filter);
+        var users = await userRepo.ListAsync(spec, cancellationToken);
+        var totalCount = await userRepo.CountAsync(spec, cancellationToken);
 
         var userRoles = await userRoleRepo.GetAllAsync(cancellationToken);
         var roles = await roleRepo.GetAllAsync(cancellationToken);
@@ -121,6 +121,7 @@ public sealed class GetUsersQueryHandler : IRequestHandler<GetUsersQuery, Result
             userRolesMap.GetValueOrDefault(user.Id, new List<string>())
         )).ToList();
 
-        return Result.Success<IReadOnlyList<UserDto>>(resultDtos);
+        var pagedResult = PagedResult<UserDto>.Create(resultDtos, totalCount, request.Filter.PageNumber, request.Filter.PageSize);
+        return Result.Success(pagedResult);
     }
 }

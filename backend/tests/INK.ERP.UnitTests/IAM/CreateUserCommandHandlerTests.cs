@@ -5,6 +5,7 @@ using Moq;
 using Xunit;
 using INK.ERP.Application.Common.Interfaces;
 using INK.ERP.Application.Features.IAM.Commands.Users;
+using INK.ERP.Application.Features.IAM.Services;
 using INK.ERP.Domain.Common;
 
 namespace INK.ERP.UnitTests.IAM;
@@ -13,6 +14,9 @@ public sealed class CreateUserCommandHandlerTests
 {
     private readonly Mock<IUnitOfWork> _unitOfWorkMock;
     private readonly Mock<IGenericRepository<ApplicationUser>> _userRepoMock;
+    private readonly Mock<IUserDomainService> _userDomainServiceMock;
+    private readonly Mock<IPasswordPolicyService> _passwordPolicyServiceMock;
+    private readonly Mock<IDateTime> _dateTimeMock;
     private readonly Mock<ILogger<CreateUserCommandHandler>> _loggerMock;
     private readonly CreateUserCommandHandler _handler;
 
@@ -20,19 +24,31 @@ public sealed class CreateUserCommandHandlerTests
     {
         _unitOfWorkMock = new Mock<IUnitOfWork>();
         _userRepoMock = new Mock<IGenericRepository<ApplicationUser>>();
+        _userDomainServiceMock = new Mock<IUserDomainService>();
+        _passwordPolicyServiceMock = new Mock<IPasswordPolicyService>();
+        _dateTimeMock = new Mock<IDateTime>();
         _loggerMock = new Mock<ILogger<CreateUserCommandHandler>>();
+
+        _dateTimeMock.Setup(d => d.UtcNow).Returns(new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+        _passwordPolicyServiceMock.Setup(p => p.ValidatePassword(It.IsAny<string>())).Returns(Result.Success());
 
         _unitOfWorkMock.Setup(u => u.Repository<ApplicationUser>()).Returns(_userRepoMock.Object);
 
-        _handler = new CreateUserCommandHandler(_unitOfWorkMock.Object, _loggerMock.Object);
+        _handler = new CreateUserCommandHandler(
+            _unitOfWorkMock.Object,
+            _userDomainServiceMock.Object,
+            _passwordPolicyServiceMock.Object,
+            _dateTimeMock.Object,
+            _loggerMock.Object);
     }
 
     [Fact]
     public async Task Handle_ValidCommand_ReturnsSuccessWithUserId()
     {
         // Arrange
-        _userRepoMock.Setup(r => r.FindAsync(It.IsAny<Expression<Func<ApplicationUser, bool>>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<ApplicationUser>());
+        _userDomainServiceMock
+            .Setup(s => s.CanCreateUserAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
 
         var command = new CreateUserCommand(
             "john.doe",
@@ -61,10 +77,9 @@ public sealed class CreateUserCommandHandlerTests
     public async Task Handle_DuplicateUsername_ReturnsConflictError()
     {
         // Arrange
-        var existingUser = new ApplicationUser { UserName = "john.doe", Email = "other@example.com" };
-
-        _userRepoMock.Setup(r => r.FindAsync(It.IsAny<Expression<Func<ApplicationUser, bool>>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<ApplicationUser> { existingUser });
+        _userDomainServiceMock
+            .Setup(s => s.CanCreateUserAsync("john.doe", "john.doe@example.com", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Failure(INK.ERP.Application.Features.IAM.IamErrors.User.UsernameAlreadyExists("john.doe")));
 
         var command = new CreateUserCommand(
             "john.doe",
@@ -83,18 +98,16 @@ public sealed class CreateUserCommandHandlerTests
 
         // Assert
         result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("User.UsernameExists");
+        result.Error.Code.Should().Be("IAM.USER.DUPLICATE_USERNAME");
     }
 
     [Fact]
-    public async Task Handle_DuplicateEmail_ReturnsConflictError()
+    public async Task Handle_PasswordPolicyViolation_ReturnsValidationError()
     {
         // Arrange
-        var existingUser = new ApplicationUser { UserName = "other.user", Email = "john.doe@example.com" };
-
-        _userRepoMock.SetupSequence(r => r.FindAsync(It.IsAny<Expression<Func<ApplicationUser, bool>>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<ApplicationUser>()) // First call for username check
-            .ReturnsAsync(new List<ApplicationUser> { existingUser }); // Second call for email check
+        _passwordPolicyServiceMock
+            .Setup(p => p.ValidatePassword(It.IsAny<string>()))
+            .Returns(Result.Failure(INK.ERP.Application.Features.IAM.IamErrors.User.PasswordPolicyViolation));
 
         var command = new CreateUserCommand(
             "john.doe",
@@ -103,7 +116,7 @@ public sealed class CreateUserCommandHandlerTests
             "John",
             "Doe",
             "John Doe",
-            "SecureP@ss123",
+            "weak",
             null,
             "en",
             "UTC");
@@ -113,6 +126,6 @@ public sealed class CreateUserCommandHandlerTests
 
         // Assert
         result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("User.EmailExists");
+        result.Error.Code.Should().Be("IAM.USER.PASSWORD_POLICY_VIOLATION");
     }
 }

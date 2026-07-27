@@ -3,9 +3,8 @@ using MediatR;
 using Microsoft.Extensions.Logging;
 using INK.ERP.Application.Common.Interfaces;
 using INK.ERP.Domain.Common;
-using INK.ERP.Domain.Entities.IAM;
 using INK.ERP.Domain.Events.IAM;
-using INK.ERP.Application.Features.IAM;
+using INK.ERP.Application.Features.IAM.Services;
 
 namespace INK.ERP.Application.Features.IAM.Commands.Users;
 
@@ -25,11 +24,13 @@ public sealed record UpdateUserCommand(
 public sealed class UpdateUserCommandHandler : IRequestHandler<UpdateUserCommand, Result<Unit>>
 {
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IDateTime _dateTime;
     private readonly ILogger<UpdateUserCommandHandler> _logger;
 
-    public UpdateUserCommandHandler(IUnitOfWork unitOfWork, ILogger<UpdateUserCommandHandler> logger)
+    public UpdateUserCommandHandler(IUnitOfWork unitOfWork, IDateTime dateTime, ILogger<UpdateUserCommandHandler> logger)
     {
         _unitOfWork = unitOfWork;
+        _dateTime = dateTime;
         _logger = logger;
     }
 
@@ -49,7 +50,7 @@ public sealed class UpdateUserCommandHandler : IRequestHandler<UpdateUserCommand
         user.PreferredLanguage = request.PreferredLanguage;
         user.TimeZone = request.TimeZone;
         user.ProfileImageUrl = request.ProfileImageUrl;
-        user.LastModifiedAtUtc = DateTime.UtcNow;
+        user.LastModifiedAtUtc = _dateTime.UtcNow;
 
         user.AddDomainEvent(new UserUpdatedEvent(user.Id));
 
@@ -82,11 +83,13 @@ public sealed record DeleteUserCommand(Guid UserId) : ICommand<Result<Unit>>;
 public sealed class DeleteUserCommandHandler : IRequestHandler<DeleteUserCommand, Result<Unit>>
 {
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IDateTime _dateTime;
     private readonly ILogger<DeleteUserCommandHandler> _logger;
 
-    public DeleteUserCommandHandler(IUnitOfWork unitOfWork, ILogger<DeleteUserCommandHandler> logger)
+    public DeleteUserCommandHandler(IUnitOfWork unitOfWork, IDateTime dateTime, ILogger<DeleteUserCommandHandler> logger)
     {
         _unitOfWork = unitOfWork;
+        _dateTime = dateTime;
         _logger = logger;
     }
 
@@ -101,7 +104,7 @@ public sealed class DeleteUserCommandHandler : IRequestHandler<DeleteUserCommand
 
         user.IsDeleted = true;
         user.IsActive = false;
-        user.LastModifiedAtUtc = DateTime.UtcNow;
+        user.LastModifiedAtUtc = _dateTime.UtcNow;
 
         userRepo.Update(user);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -119,10 +122,12 @@ public sealed record ActivateUserCommand(Guid UserId) : ICommand<Result<Unit>>;
 public sealed class ActivateUserCommandHandler : IRequestHandler<ActivateUserCommand, Result<Unit>>
 {
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IDateTime _dateTime;
 
-    public ActivateUserCommandHandler(IUnitOfWork unitOfWork)
+    public ActivateUserCommandHandler(IUnitOfWork unitOfWork, IDateTime dateTime)
     {
         _unitOfWork = unitOfWork;
+        _dateTime = dateTime;
     }
 
     public async Task<Result<Unit>> Handle(ActivateUserCommand request, CancellationToken cancellationToken)
@@ -135,7 +140,7 @@ public sealed class ActivateUserCommandHandler : IRequestHandler<ActivateUserCom
         }
 
         user.IsActive = true;
-        user.LastModifiedAtUtc = DateTime.UtcNow;
+        user.LastModifiedAtUtc = _dateTime.UtcNow;
         user.AddDomainEvent(new UserActivatedEvent(user.Id));
 
         userRepo.Update(user);
@@ -153,41 +158,33 @@ public sealed record DeactivateUserCommand(Guid UserId) : ICommand<Result<Unit>>
 public sealed class DeactivateUserCommandHandler : IRequestHandler<DeactivateUserCommand, Result<Unit>>
 {
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IUserDomainService _userDomainService;
+    private readonly IDateTime _dateTime;
 
-    public DeactivateUserCommandHandler(IUnitOfWork unitOfWork)
+    public DeactivateUserCommandHandler(IUnitOfWork unitOfWork, IUserDomainService userDomainService, IDateTime dateTime)
     {
         _unitOfWork = unitOfWork;
+        _userDomainService = userDomainService;
+        _dateTime = dateTime;
     }
 
     public async Task<Result<Unit>> Handle(DeactivateUserCommand request, CancellationToken cancellationToken)
     {
         var userRepo = _unitOfWork.Repository<ApplicationUser>();
-        var roleRepo = _unitOfWork.Repository<ApplicationRole>();
-        var userRoleRepo = _unitOfWork.Repository<UserRole>();
-
         var user = await userRepo.GetByIdAsync(request.UserId, cancellationToken);
         if (user is null || user.IsDeleted)
         {
             return Result.Failure<Unit>(IamErrors.User.NotFound(request.UserId));
         }
 
-        // Business rule: Cannot deactivate the last administrator
-        var adminRoles = await roleRepo.FindAsync(r => r.Code == "ADMIN" || r.Name == "Administrator", cancellationToken);
-        if (adminRoles.Any())
+        var domainValidation = await _userDomainService.CanDeactivateUserAsync(request.UserId, cancellationToken);
+        if (domainValidation.IsFailure)
         {
-            var adminRoleId = adminRoles.First().Id;
-            var userRoles = await userRoleRepo.FindAsync(ur => ur.RoleId == adminRoleId && !ur.IsDeleted, cancellationToken);
-            var activeAdminUserIds = userRoles.Select(ur => ur.UserId).Distinct().ToList();
-
-            var activeAdmins = await userRepo.FindAsync(u => activeAdminUserIds.Contains(u.Id) && u.IsActive && !u.IsDeleted, cancellationToken);
-            if (activeAdmins.Count == 1 && activeAdmins.First().Id == request.UserId)
-            {
-                return Result.Failure<Unit>(IamErrors.User.CannotDeactivateLastAdmin);
-            }
+            return Result.Failure<Unit>(domainValidation.Error);
         }
 
         user.IsActive = false;
-        user.LastModifiedAtUtc = DateTime.UtcNow;
+        user.LastModifiedAtUtc = _dateTime.UtcNow;
         user.AddDomainEvent(new UserDeactivatedEvent(user.Id));
 
         userRepo.Update(user);
@@ -206,11 +203,13 @@ public sealed class LockUserCommandHandler : IRequestHandler<LockUserCommand, Re
 {
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICurrentUserService _currentUserService;
+    private readonly IDateTime _dateTime;
 
-    public LockUserCommandHandler(IUnitOfWork unitOfWork, ICurrentUserService currentUserService)
+    public LockUserCommandHandler(IUnitOfWork unitOfWork, ICurrentUserService currentUserService, IDateTime dateTime)
     {
         _unitOfWork = unitOfWork;
         _currentUserService = currentUserService;
+        _dateTime = dateTime;
     }
 
     public async Task<Result<Unit>> Handle(LockUserCommand request, CancellationToken cancellationToken)
@@ -229,7 +228,7 @@ public sealed class LockUserCommandHandler : IRequestHandler<LockUserCommand, Re
 
         user.IsLocked = true;
         user.LockoutEnd = request.LockoutEndUtc.HasValue ? new DateTimeOffset(request.LockoutEndUtc.Value) : DateTimeOffset.MaxValue;
-        user.LastModifiedAtUtc = DateTime.UtcNow;
+        user.LastModifiedAtUtc = _dateTime.UtcNow;
 
         user.AddDomainEvent(new UserLockedEvent(user.Id, _currentUserService.Username ?? "System"));
 
@@ -249,11 +248,13 @@ public sealed class UnlockUserCommandHandler : IRequestHandler<UnlockUserCommand
 {
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICurrentUserService _currentUserService;
+    private readonly IDateTime _dateTime;
 
-    public UnlockUserCommandHandler(IUnitOfWork unitOfWork, ICurrentUserService currentUserService)
+    public UnlockUserCommandHandler(IUnitOfWork unitOfWork, ICurrentUserService currentUserService, IDateTime dateTime)
     {
         _unitOfWork = unitOfWork;
         _currentUserService = currentUserService;
+        _dateTime = dateTime;
     }
 
     public async Task<Result<Unit>> Handle(UnlockUserCommand request, CancellationToken cancellationToken)
@@ -268,7 +269,7 @@ public sealed class UnlockUserCommandHandler : IRequestHandler<UnlockUserCommand
         user.IsLocked = false;
         user.LockoutEnd = null;
         user.AccessFailedCount = 0;
-        user.LastModifiedAtUtc = DateTime.UtcNow;
+        user.LastModifiedAtUtc = _dateTime.UtcNow;
 
         user.AddDomainEvent(new UserUnlockedEvent(user.Id, _currentUserService.Username ?? "System"));
 

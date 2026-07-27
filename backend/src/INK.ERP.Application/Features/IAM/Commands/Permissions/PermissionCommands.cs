@@ -5,7 +5,7 @@ using INK.ERP.Application.Common.Interfaces;
 using INK.ERP.Domain.Common;
 using INK.ERP.Domain.Entities.IAM;
 using INK.ERP.Domain.Events.IAM;
-using INK.ERP.Application.Features.IAM;
+using INK.ERP.Application.Features.IAM.Services;
 
 namespace INK.ERP.Application.Features.IAM.Commands.Permissions;
 
@@ -22,30 +22,31 @@ public sealed record CreatePermissionCommand(
 public sealed class CreatePermissionCommandHandler : IRequestHandler<CreatePermissionCommand, Result<Guid>>
 {
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IPermissionDomainService _permissionDomainService;
+    private readonly IDateTime _dateTime;
     private readonly ILogger<CreatePermissionCommandHandler> _logger;
 
-    public CreatePermissionCommandHandler(IUnitOfWork unitOfWork, ILogger<CreatePermissionCommandHandler> logger)
+    public CreatePermissionCommandHandler(
+        IUnitOfWork unitOfWork,
+        IPermissionDomainService permissionDomainService,
+        IDateTime dateTime,
+        ILogger<CreatePermissionCommandHandler> logger)
     {
         _unitOfWork = unitOfWork;
+        _permissionDomainService = permissionDomainService;
+        _dateTime = dateTime;
         _logger = logger;
     }
 
     public async Task<Result<Guid>> Handle(CreatePermissionCommand request, CancellationToken cancellationToken)
     {
+        var domainValidation = await _permissionDomainService.CanCreatePermissionAsync(request.Code, request.PermissionGroupId, cancellationToken);
+        if (domainValidation.IsFailure)
+        {
+            return Result.Failure<Guid>(domainValidation.Error);
+        }
+
         var permRepo = _unitOfWork.Repository<Permission>();
-        var groupRepo = _unitOfWork.Repository<PermissionGroup>();
-
-        var existingGroup = await groupRepo.GetByIdAsync(request.PermissionGroupId, cancellationToken);
-        if (existingGroup is null || existingGroup.IsDeleted)
-        {
-            return Result.Failure<Guid>(IamErrors.Permission.GroupNotFound(request.PermissionGroupId));
-        }
-
-        var existingCode = await permRepo.FindAsync(p => p.Code == request.Code && !p.IsDeleted, cancellationToken);
-        if (existingCode.Any())
-        {
-            return Result.Failure<Guid>(IamErrors.Permission.CodeAlreadyExists(request.Code));
-        }
 
         var permission = new Permission
         {
@@ -56,7 +57,7 @@ public sealed class CreatePermissionCommandHandler : IRequestHandler<CreatePermi
             PermissionGroupId = request.PermissionGroupId,
             DisplayOrder = request.DisplayOrder,
             IsActive = true,
-            CreatedAtUtc = DateTime.UtcNow
+            CreatedAtUtc = _dateTime.UtcNow
         };
 
         permission.AddDomainEvent(new PermissionCreatedEvent(permission.Id, permission.Code));
@@ -93,11 +94,16 @@ public sealed record UpdatePermissionCommand(
 public sealed class UpdatePermissionCommandHandler : IRequestHandler<UpdatePermissionCommand, Result<Unit>>
 {
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IDateTime _dateTime;
     private readonly ILogger<UpdatePermissionCommandHandler> _logger;
 
-    public UpdatePermissionCommandHandler(IUnitOfWork unitOfWork, ILogger<UpdatePermissionCommandHandler> logger)
+    public UpdatePermissionCommandHandler(
+        IUnitOfWork unitOfWork,
+        IDateTime dateTime,
+        ILogger<UpdatePermissionCommandHandler> logger)
     {
         _unitOfWork = unitOfWork;
+        _dateTime = dateTime;
         _logger = logger;
     }
 
@@ -114,7 +120,7 @@ public sealed class UpdatePermissionCommandHandler : IRequestHandler<UpdatePermi
         permission.Description = request.Description;
         permission.DisplayOrder = request.DisplayOrder;
         permission.IsActive = request.IsActive;
-        permission.LastModifiedAtUtc = DateTime.UtcNow;
+        permission.LastModifiedAtUtc = _dateTime.UtcNow;
 
         permission.AddDomainEvent(new PermissionUpdatedEvent(permission.Id));
 
@@ -144,10 +150,12 @@ public sealed record DeletePermissionCommand(Guid PermissionId) : ICommand<Resul
 public sealed class DeletePermissionCommandHandler : IRequestHandler<DeletePermissionCommand, Result<Unit>>
 {
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IDateTime _dateTime;
 
-    public DeletePermissionCommandHandler(IUnitOfWork unitOfWork)
+    public DeletePermissionCommandHandler(IUnitOfWork unitOfWork, IDateTime dateTime)
     {
         _unitOfWork = unitOfWork;
+        _dateTime = dateTime;
     }
 
     public async Task<Result<Unit>> Handle(DeletePermissionCommand request, CancellationToken cancellationToken)
@@ -161,7 +169,7 @@ public sealed class DeletePermissionCommandHandler : IRequestHandler<DeletePermi
 
         permission.IsDeleted = true;
         permission.IsActive = false;
-        permission.LastModifiedAtUtc = DateTime.UtcNow;
+        permission.LastModifiedAtUtc = _dateTime.UtcNow;
 
         permission.AddDomainEvent(new PermissionDeletedEvent(permission.Id, permission.Code));
 

@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging;
 using INK.ERP.Application.Common.Interfaces;
 using INK.ERP.Domain.Common;
 using INK.ERP.Domain.Events.IAM;
-using INK.ERP.Application.Features.IAM;
+using INK.ERP.Application.Features.IAM.Services;
 
 namespace INK.ERP.Application.Features.IAM.Commands.Roles;
 
@@ -21,22 +21,31 @@ public sealed record CreateRoleCommand(
 public sealed class CreateRoleCommandHandler : IRequestHandler<CreateRoleCommand, Result<Guid>>
 {
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IRoleDomainService _roleDomainService;
+    private readonly IDateTime _dateTime;
     private readonly ILogger<CreateRoleCommandHandler> _logger;
 
-    public CreateRoleCommandHandler(IUnitOfWork unitOfWork, ILogger<CreateRoleCommandHandler> logger)
+    public CreateRoleCommandHandler(
+        IUnitOfWork unitOfWork,
+        IRoleDomainService roleDomainService,
+        IDateTime dateTime,
+        ILogger<CreateRoleCommandHandler> logger)
     {
         _unitOfWork = unitOfWork;
+        _roleDomainService = roleDomainService;
+        _dateTime = dateTime;
         _logger = logger;
     }
 
     public async Task<Result<Guid>> Handle(CreateRoleCommand request, CancellationToken cancellationToken)
     {
-        var roleRepo = _unitOfWork.Repository<ApplicationRole>();
-        var existing = await roleRepo.FindAsync(r => r.Code == request.Code && !r.IsDeleted, cancellationToken);
-        if (existing.Any())
+        var domainValidation = await _roleDomainService.CanCreateRoleAsync(request.Code, cancellationToken);
+        if (domainValidation.IsFailure)
         {
-            return Result.Failure<Guid>(IamErrors.Role.CodeAlreadyExists(request.Code));
+            return Result.Failure<Guid>(domainValidation.Error);
         }
+
+        var roleRepo = _unitOfWork.Repository<ApplicationRole>();
 
         var role = new ApplicationRole
         {
@@ -48,7 +57,7 @@ public sealed class CreateRoleCommandHandler : IRequestHandler<CreateRoleCommand
             IsSystem = request.IsSystem,
             Priority = request.Priority,
             IsActive = true,
-            CreatedAtUtc = DateTime.UtcNow
+            CreatedAtUtc = _dateTime.UtcNow
         };
 
         role.AddDomainEvent(new RoleCreatedEvent(role.Id, role.Code));
@@ -84,10 +93,12 @@ public sealed record UpdateRoleCommand(
 public sealed class UpdateRoleCommandHandler : IRequestHandler<UpdateRoleCommand, Result<Unit>>
 {
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IDateTime _dateTime;
 
-    public UpdateRoleCommandHandler(IUnitOfWork unitOfWork)
+    public UpdateRoleCommandHandler(IUnitOfWork unitOfWork, IDateTime dateTime)
     {
         _unitOfWork = unitOfWork;
+        _dateTime = dateTime;
     }
 
     public async Task<Result<Unit>> Handle(UpdateRoleCommand request, CancellationToken cancellationToken)
@@ -104,7 +115,7 @@ public sealed class UpdateRoleCommandHandler : IRequestHandler<UpdateRoleCommand
         role.Description = request.Description;
         role.Priority = request.Priority;
         role.IsActive = request.IsActive;
-        role.LastModifiedAtUtc = DateTime.UtcNow;
+        role.LastModifiedAtUtc = _dateTime.UtcNow;
 
         role.AddDomainEvent(new RoleUpdatedEvent(role.Id));
 
@@ -133,32 +144,36 @@ public sealed record DeleteRoleCommand(Guid RoleId) : ICommand<Result<Unit>>;
 public sealed class DeleteRoleCommandHandler : IRequestHandler<DeleteRoleCommand, Result<Unit>>
 {
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IRoleDomainService _roleDomainService;
+    private readonly IDateTime _dateTime;
     private readonly ILogger<DeleteRoleCommandHandler> _logger;
 
-    public DeleteRoleCommandHandler(IUnitOfWork unitOfWork, ILogger<DeleteRoleCommandHandler> logger)
+    public DeleteRoleCommandHandler(
+        IUnitOfWork unitOfWork,
+        IRoleDomainService roleDomainService,
+        IDateTime dateTime,
+        ILogger<DeleteRoleCommandHandler> logger)
     {
         _unitOfWork = unitOfWork;
+        _roleDomainService = roleDomainService;
+        _dateTime = dateTime;
         _logger = logger;
     }
 
     public async Task<Result<Unit>> Handle(DeleteRoleCommand request, CancellationToken cancellationToken)
     {
+        var domainValidation = await _roleDomainService.CanDeleteRoleAsync(request.RoleId, cancellationToken);
+        if (domainValidation.IsFailure)
+        {
+            return Result.Failure<Unit>(domainValidation.Error);
+        }
+
         var roleRepo = _unitOfWork.Repository<ApplicationRole>();
         var role = await roleRepo.GetByIdAsync(request.RoleId, cancellationToken);
-        if (role is null || role.IsDeleted)
-        {
-            return Result.Failure<Unit>(IamErrors.Role.NotFound(request.RoleId));
-        }
 
-        // Business rule: Cannot delete System Role
-        if (role.IsSystem)
-        {
-            return Result.Failure<Unit>(IamErrors.Role.CannotDeleteSystemRole);
-        }
-
-        role.IsDeleted = true;
+        role!.IsDeleted = true;
         role.IsActive = false;
-        role.LastModifiedAtUtc = DateTime.UtcNow;
+        role.LastModifiedAtUtc = _dateTime.UtcNow;
 
         role.AddDomainEvent(new RoleDeletedEvent(role.Id, role.Code));
 

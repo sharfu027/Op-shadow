@@ -12,6 +12,7 @@ public sealed class LockUserCommandHandlerTests
     private readonly Mock<IUnitOfWork> _unitOfWorkMock;
     private readonly Mock<IGenericRepository<ApplicationUser>> _userRepoMock;
     private readonly Mock<ICurrentUserService> _currentUserServiceMock;
+    private readonly Mock<IDateTime> _dateTimeMock;
     private readonly LockUserCommandHandler _handler;
 
     public LockUserCommandHandlerTests()
@@ -19,10 +20,12 @@ public sealed class LockUserCommandHandlerTests
         _unitOfWorkMock = new Mock<IUnitOfWork>();
         _userRepoMock = new Mock<IGenericRepository<ApplicationUser>>();
         _currentUserServiceMock = new Mock<ICurrentUserService>();
+        _dateTimeMock = new Mock<IDateTime>();
 
+        _dateTimeMock.Setup(d => d.UtcNow).Returns(new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
         _unitOfWorkMock.Setup(u => u.Repository<ApplicationUser>()).Returns(_userRepoMock.Object);
 
-        _handler = new LockUserCommandHandler(_unitOfWorkMock.Object, _currentUserServiceMock.Object);
+        _handler = new LockUserCommandHandler(_unitOfWorkMock.Object, _currentUserServiceMock.Object, _dateTimeMock.Object);
     }
 
     [Fact]
@@ -63,7 +66,7 @@ public sealed class LockUserCommandHandlerTests
 
         // Assert
         result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("User.NotFound");
+        result.Error.Code.Should().Be("IAM.USER.NOT_FOUND");
     }
 
     [Fact]
@@ -80,6 +83,6 @@ public sealed class LockUserCommandHandlerTests
 
         // Assert
         result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("User.CannotLockSelf");
+        result.Error.Code.Should().Be("IAM.USER.CANNOT_LOCK_SELF");
     }
 }

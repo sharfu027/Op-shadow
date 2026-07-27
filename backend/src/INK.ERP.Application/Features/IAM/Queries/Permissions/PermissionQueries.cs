@@ -1,9 +1,12 @@
 using Mapster;
 using MediatR;
 using INK.ERP.Application.Common.Interfaces;
+using INK.ERP.Application.Common.Models;
 using INK.ERP.Domain.Common;
 using INK.ERP.Domain.Entities.IAM;
 using INK.ERP.Application.Features.IAM.DTOs;
+using INK.ERP.Application.Features.IAM.Filters;
+using INK.ERP.Application.Features.IAM.Specifications;
 using INK.ERP.Application.Features.IAM;
 
 namespace INK.ERP.Application.Features.IAM.Queries.Permissions;
@@ -55,10 +58,10 @@ public sealed class GetPermissionByIdQueryHandler : IRequestHandler<GetPermissio
     }
 }
 
-// 6. GetPermissionsQuery
-public sealed record GetPermissionsQuery(Guid? PermissionGroupId = null) : IQuery<Result<IReadOnlyList<PermissionDto>>>;
+// 6. GetPermissionsQuery (Paged with Specification)
+public sealed record GetPermissionsQuery(PermissionFilter Filter) : IQuery<Result<PagedResult<PermissionDto>>>;
 
-public sealed class GetPermissionsQueryHandler : IRequestHandler<GetPermissionsQuery, Result<IReadOnlyList<PermissionDto>>>
+public sealed class GetPermissionsQueryHandler : IRequestHandler<GetPermissionsQuery, Result<PagedResult<PermissionDto>>>
 {
     private readonly IUnitOfWork _unitOfWork;
 
@@ -67,13 +70,14 @@ public sealed class GetPermissionsQueryHandler : IRequestHandler<GetPermissionsQ
         _unitOfWork = unitOfWork;
     }
 
-    public async Task<Result<IReadOnlyList<PermissionDto>>> Handle(GetPermissionsQuery request, CancellationToken cancellationToken)
+    public async Task<Result<PagedResult<PermissionDto>>> Handle(GetPermissionsQuery request, CancellationToken cancellationToken)
     {
         var permRepo = _unitOfWork.Repository<Permission>();
         var groupRepo = _unitOfWork.Repository<PermissionGroup>();
 
-        var permissions = await permRepo.FindAsync(p => !p.IsDeleted &&
-            (!request.PermissionGroupId.HasValue || p.PermissionGroupId == request.PermissionGroupId.Value), cancellationToken);
+        var spec = new PermissionFilterSpecification(request.Filter);
+        var permissions = await permRepo.ListAsync(spec, cancellationToken);
+        var totalCount = await permRepo.CountAsync(spec, cancellationToken);
 
         var groups = await groupRepo.GetAllAsync(cancellationToken);
         var groupMap = groups.ToDictionary(g => g.Id, g => g.Name);
@@ -89,6 +93,7 @@ public sealed class GetPermissionsQueryHandler : IRequestHandler<GetPermissionsQ
             p.IsActive
         )).ToList();
 
-        return Result.Success<IReadOnlyList<PermissionDto>>(dtos);
+        var pagedResult = PagedResult<PermissionDto>.Create(dtos, totalCount, request.Filter.PageNumber, request.Filter.PageSize);
+        return Result.Success(pagedResult);
     }
 }

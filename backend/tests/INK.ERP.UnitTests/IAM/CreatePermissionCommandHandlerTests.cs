@@ -5,6 +5,7 @@ using Moq;
 using Xunit;
 using INK.ERP.Application.Common.Interfaces;
 using INK.ERP.Application.Features.IAM.Commands.Permissions;
+using INK.ERP.Application.Features.IAM.Services;
 using INK.ERP.Domain.Common;
 using INK.ERP.Domain.Entities.IAM;
 
@@ -14,7 +15,8 @@ public sealed class CreatePermissionCommandHandlerTests
 {
     private readonly Mock<IUnitOfWork> _unitOfWorkMock;
     private readonly Mock<IGenericRepository<Permission>> _permRepoMock;
-    private readonly Mock<IGenericRepository<PermissionGroup>> _groupRepoMock;
+    private readonly Mock<IPermissionDomainService> _permDomainServiceMock;
+    private readonly Mock<IDateTime> _dateTimeMock;
     private readonly Mock<ILogger<CreatePermissionCommandHandler>> _loggerMock;
     private readonly CreatePermissionCommandHandler _handler;
 
@@ -22,13 +24,18 @@ public sealed class CreatePermissionCommandHandlerTests
     {
         _unitOfWorkMock = new Mock<IUnitOfWork>();
         _permRepoMock = new Mock<IGenericRepository<Permission>>();
-        _groupRepoMock = new Mock<IGenericRepository<PermissionGroup>>();
+        _permDomainServiceMock = new Mock<IPermissionDomainService>();
+        _dateTimeMock = new Mock<IDateTime>();
         _loggerMock = new Mock<ILogger<CreatePermissionCommandHandler>>();
 
+        _dateTimeMock.Setup(d => d.UtcNow).Returns(new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
         _unitOfWorkMock.Setup(u => u.Repository<Permission>()).Returns(_permRepoMock.Object);
-        _unitOfWorkMock.Setup(u => u.Repository<PermissionGroup>()).Returns(_groupRepoMock.Object);
 
-        _handler = new CreatePermissionCommandHandler(_unitOfWorkMock.Object, _loggerMock.Object);
+        _handler = new CreatePermissionCommandHandler(
+            _unitOfWorkMock.Object,
+            _permDomainServiceMock.Object,
+            _dateTimeMock.Object,
+            _loggerMock.Object);
     }
 
     [Fact]
@@ -36,11 +43,9 @@ public sealed class CreatePermissionCommandHandlerTests
     {
         // Arrange
         var groupId = Guid.NewGuid();
-        var group = new PermissionGroup { Id = groupId, Name = "User Management" };
 
-        _groupRepoMock.Setup(r => r.GetByIdAsync(groupId, It.IsAny<CancellationToken>())).ReturnsAsync(group);
-        _permRepoMock.Setup(r => r.FindAsync(It.IsAny<Expression<Func<Permission, bool>>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<Permission>());
+        _permDomainServiceMock.Setup(s => s.CanCreatePermissionAsync("users:create", groupId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
 
         var command = new CreatePermissionCommand("Create User", "users:create", "Allows creating users", groupId, 1);
 
@@ -59,7 +64,8 @@ public sealed class CreatePermissionCommandHandlerTests
     {
         // Arrange
         var groupId = Guid.NewGuid();
-        _groupRepoMock.Setup(r => r.GetByIdAsync(groupId, It.IsAny<CancellationToken>())).ReturnsAsync((PermissionGroup?)null);
+        _permDomainServiceMock.Setup(s => s.CanCreatePermissionAsync("users:create", groupId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Failure(INK.ERP.Application.Features.IAM.IamErrors.Permission.GroupNotFound(groupId)));
 
         var command = new CreatePermissionCommand("Create User", "users:create", "Description", groupId, 1);
 
@@ -68,7 +74,7 @@ public sealed class CreatePermissionCommandHandlerTests
 
         // Assert
         result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("Permission.GroupNotFound");
+        result.Error.Code.Should().Be("IAM.PERMISSION.GROUP_NOT_FOUND");
     }
 
     [Fact]
@@ -76,12 +82,8 @@ public sealed class CreatePermissionCommandHandlerTests
     {
         // Arrange
         var groupId = Guid.NewGuid();
-        var group = new PermissionGroup { Id = groupId, Name = "User Management" };
-        var existingPerm = new Permission { Code = "users:create" };
-
-        _groupRepoMock.Setup(r => r.GetByIdAsync(groupId, It.IsAny<CancellationToken>())).ReturnsAsync(group);
-        _permRepoMock.Setup(r => r.FindAsync(It.IsAny<Expression<Func<Permission, bool>>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<Permission> { existingPerm });
+        _permDomainServiceMock.Setup(s => s.CanCreatePermissionAsync("users:create", groupId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Failure(INK.ERP.Application.Features.IAM.IamErrors.Permission.CodeAlreadyExists("users:create")));
 
         var command = new CreatePermissionCommand("Create User", "users:create", "Description", groupId, 1);
 
@@ -90,6 +92,6 @@ public sealed class CreatePermissionCommandHandlerTests
 
         // Assert
         result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("Permission.CodeExists");
+        result.Error.Code.Should().Be("IAM.PERMISSION.DUPLICATE_CODE");
     }
 }

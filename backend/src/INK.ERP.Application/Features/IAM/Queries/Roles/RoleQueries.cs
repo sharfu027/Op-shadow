@@ -1,8 +1,11 @@
 using Mapster;
 using MediatR;
 using INK.ERP.Application.Common.Interfaces;
+using INK.ERP.Application.Common.Models;
 using INK.ERP.Domain.Common;
 using INK.ERP.Application.Features.IAM.DTOs;
+using INK.ERP.Application.Features.IAM.Filters;
+using INK.ERP.Application.Features.IAM.Specifications;
 using INK.ERP.Application.Features.IAM;
 
 namespace INK.ERP.Application.Features.IAM.Queries.Roles;
@@ -34,10 +37,10 @@ public sealed class GetRoleByIdQueryHandler : IRequestHandler<GetRoleByIdQuery, 
     }
 }
 
-// 4. GetRolesQuery
-public sealed record GetRolesQuery(bool? IsActive = null) : IQuery<Result<IReadOnlyList<RoleDto>>>;
+// 4. GetRolesQuery (Paged with Specification)
+public sealed record GetRolesQuery(RoleFilter Filter) : IQuery<Result<PagedResult<RoleDto>>>;
 
-public sealed class GetRolesQueryHandler : IRequestHandler<GetRolesQuery, Result<IReadOnlyList<RoleDto>>>
+public sealed class GetRolesQueryHandler : IRequestHandler<GetRolesQuery, Result<PagedResult<RoleDto>>>
 {
     private readonly IUnitOfWork _unitOfWork;
 
@@ -46,13 +49,17 @@ public sealed class GetRolesQueryHandler : IRequestHandler<GetRolesQuery, Result
         _unitOfWork = unitOfWork;
     }
 
-    public async Task<Result<IReadOnlyList<RoleDto>>> Handle(GetRolesQuery request, CancellationToken cancellationToken)
+    public async Task<Result<PagedResult<RoleDto>>> Handle(GetRolesQuery request, CancellationToken cancellationToken)
     {
         var roleRepo = _unitOfWork.Repository<ApplicationRole>();
-        var roles = await roleRepo.FindAsync(r => !r.IsDeleted &&
-            (!request.IsActive.HasValue || r.IsActive == request.IsActive.Value), cancellationToken);
+        var spec = new RoleFilterSpecification(request.Filter);
+
+        var roles = await roleRepo.ListAsync(spec, cancellationToken);
+        var totalCount = await roleRepo.CountAsync(spec, cancellationToken);
 
         var dtos = roles.Adapt<IReadOnlyList<RoleDto>>();
-        return Result.Success(dtos);
+        var pagedResult = PagedResult<RoleDto>.Create(dtos, totalCount, request.Filter.PageNumber, request.Filter.PageSize);
+
+        return Result.Success(pagedResult);
     }
 }

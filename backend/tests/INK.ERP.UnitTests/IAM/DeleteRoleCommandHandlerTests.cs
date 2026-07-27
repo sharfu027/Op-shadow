@@ -4,6 +4,7 @@ using Moq;
 using Xunit;
 using INK.ERP.Application.Common.Interfaces;
 using INK.ERP.Application.Features.IAM.Commands.Roles;
+using INK.ERP.Application.Features.IAM.Services;
 using INK.ERP.Domain.Common;
 
 namespace INK.ERP.UnitTests.IAM;
@@ -12,6 +13,8 @@ public sealed class DeleteRoleCommandHandlerTests
 {
     private readonly Mock<IUnitOfWork> _unitOfWorkMock;
     private readonly Mock<IGenericRepository<ApplicationRole>> _roleRepoMock;
+    private readonly Mock<IRoleDomainService> _roleDomainServiceMock;
+    private readonly Mock<IDateTime> _dateTimeMock;
     private readonly Mock<ILogger<DeleteRoleCommandHandler>> _loggerMock;
     private readonly DeleteRoleCommandHandler _handler;
 
@@ -19,11 +22,18 @@ public sealed class DeleteRoleCommandHandlerTests
     {
         _unitOfWorkMock = new Mock<IUnitOfWork>();
         _roleRepoMock = new Mock<IGenericRepository<ApplicationRole>>();
+        _roleDomainServiceMock = new Mock<IRoleDomainService>();
+        _dateTimeMock = new Mock<IDateTime>();
         _loggerMock = new Mock<ILogger<DeleteRoleCommandHandler>>();
 
+        _dateTimeMock.Setup(d => d.UtcNow).Returns(new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
         _unitOfWorkMock.Setup(u => u.Repository<ApplicationRole>()).Returns(_roleRepoMock.Object);
 
-        _handler = new DeleteRoleCommandHandler(_unitOfWorkMock.Object, _loggerMock.Object);
+        _handler = new DeleteRoleCommandHandler(
+            _unitOfWorkMock.Object,
+            _roleDomainServiceMock.Object,
+            _dateTimeMock.Object,
+            _loggerMock.Object);
     }
 
     [Fact]
@@ -32,6 +42,9 @@ public sealed class DeleteRoleCommandHandlerTests
         // Arrange
         var roleId = Guid.NewGuid();
         var role = new ApplicationRole { Id = roleId, Code = "CUSTOM_ROLE", IsSystem = false, IsActive = true };
+
+        _roleDomainServiceMock.Setup(s => s.CanDeleteRoleAsync(roleId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
 
         _roleRepoMock.Setup(r => r.GetByIdAsync(roleId, It.IsAny<CancellationToken>())).ReturnsAsync(role);
 
@@ -52,7 +65,8 @@ public sealed class DeleteRoleCommandHandlerTests
     {
         // Arrange
         var roleId = Guid.NewGuid();
-        _roleRepoMock.Setup(r => r.GetByIdAsync(roleId, It.IsAny<CancellationToken>())).ReturnsAsync((ApplicationRole?)null);
+        _roleDomainServiceMock.Setup(s => s.CanDeleteRoleAsync(roleId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Failure(INK.ERP.Application.Features.IAM.IamErrors.Role.NotFound(roleId)));
 
         var command = new DeleteRoleCommand(roleId);
 
@@ -61,7 +75,7 @@ public sealed class DeleteRoleCommandHandlerTests
 
         // Assert
         result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("Role.NotFound");
+        result.Error.Code.Should().Be("IAM.ROLE.NOT_FOUND");
     }
 
     [Fact]
@@ -69,9 +83,8 @@ public sealed class DeleteRoleCommandHandlerTests
     {
         // Arrange
         var roleId = Guid.NewGuid();
-        var role = new ApplicationRole { Id = roleId, Code = "ADMIN", IsSystem = true };
-
-        _roleRepoMock.Setup(r => r.GetByIdAsync(roleId, It.IsAny<CancellationToken>())).ReturnsAsync(role);
+        _roleDomainServiceMock.Setup(s => s.CanDeleteRoleAsync(roleId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Failure(INK.ERP.Application.Features.IAM.IamErrors.Role.CannotDeleteSystemRole));
 
         var command = new DeleteRoleCommand(roleId);
 
@@ -80,6 +93,6 @@ public sealed class DeleteRoleCommandHandlerTests
 
         // Assert
         result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("Role.SystemRole");
+        result.Error.Code.Should().Be("IAM.ROLE.SYSTEM_ROLE_CANNOT_BE_DELETED");
     }
 }

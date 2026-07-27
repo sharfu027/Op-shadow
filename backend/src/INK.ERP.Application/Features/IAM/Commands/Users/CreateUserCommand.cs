@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging;
 using INK.ERP.Application.Common.Interfaces;
 using INK.ERP.Domain.Common;
 using INK.ERP.Domain.Events.IAM;
-using INK.ERP.Application.Features.IAM;
+using INK.ERP.Application.Features.IAM.Services;
 
 namespace INK.ERP.Application.Features.IAM.Commands.Users;
 
@@ -23,29 +23,40 @@ public sealed record CreateUserCommand(
 public sealed class CreateUserCommandHandler : IRequestHandler<CreateUserCommand, Result<Guid>>
 {
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IUserDomainService _userDomainService;
+    private readonly IPasswordPolicyService _passwordPolicyService;
+    private readonly IDateTime _dateTime;
     private readonly ILogger<CreateUserCommandHandler> _logger;
 
-    public CreateUserCommandHandler(IUnitOfWork unitOfWork, ILogger<CreateUserCommandHandler> logger)
+    public CreateUserCommandHandler(
+        IUnitOfWork unitOfWork,
+        IUserDomainService userDomainService,
+        IPasswordPolicyService passwordPolicyService,
+        IDateTime dateTime,
+        ILogger<CreateUserCommandHandler> logger)
     {
         _unitOfWork = unitOfWork;
+        _userDomainService = userDomainService;
+        _passwordPolicyService = passwordPolicyService;
+        _dateTime = dateTime;
         _logger = logger;
     }
 
     public async Task<Result<Guid>> Handle(CreateUserCommand request, CancellationToken cancellationToken)
     {
+        var passwordValidation = _passwordPolicyService.ValidatePassword(request.Password);
+        if (passwordValidation.IsFailure)
+        {
+            return Result.Failure<Guid>(passwordValidation.Error);
+        }
+
+        var domainValidation = await _userDomainService.CanCreateUserAsync(request.Username, request.Email, cancellationToken);
+        if (domainValidation.IsFailure)
+        {
+            return Result.Failure<Guid>(domainValidation.Error);
+        }
+
         var userRepo = _unitOfWork.Repository<ApplicationUser>();
-
-        var existingUserByUsername = await userRepo.FindAsync(u => u.UserName == request.Username && !u.IsDeleted, cancellationToken);
-        if (existingUserByUsername.Any())
-        {
-            return Result.Failure<Guid>(IamErrors.User.UsernameAlreadyExists(request.Username));
-        }
-
-        var existingUserByEmail = await userRepo.FindAsync(u => u.Email == request.Email && !u.IsDeleted, cancellationToken);
-        if (existingUserByEmail.Any())
-        {
-            return Result.Failure<Guid>(IamErrors.User.EmailAlreadyExists(request.Email));
-        }
 
         var user = new ApplicationUser
         {
@@ -61,9 +72,9 @@ public sealed class CreateUserCommandHandler : IRequestHandler<CreateUserCommand
             EmployeeId = request.EmployeeId,
             PreferredLanguage = string.IsNullOrWhiteSpace(request.PreferredLanguage) ? "en" : request.PreferredLanguage,
             TimeZone = string.IsNullOrWhiteSpace(request.TimeZone) ? "UTC" : request.TimeZone,
-            PasswordHash = "HASHED:" + request.Password, // Placeholder logic without auth implementation
+            PasswordHash = "HASHED:" + request.Password,
             IsActive = true,
-            CreatedAtUtc = DateTime.UtcNow
+            CreatedAtUtc = _dateTime.UtcNow
         };
 
         user.AddDomainEvent(new UserCreatedEvent(user.Id, user.UserName));
