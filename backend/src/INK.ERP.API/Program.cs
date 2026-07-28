@@ -64,6 +64,22 @@ builder.Services.AddAuthorization(options =>
 
     options.AddPolicy("IAM.Permissions.Manage", policy => 
         policy.RequireAssertion(ctx => ctx.User.HasClaim("permission", "permissions:manage") || ctx.User.IsInRole("Administrator") || ctx.User.IsInRole("ADMIN")));
+
+    // Enterprise Security Policies
+    options.AddPolicy("Security.Face.Enroll", policy =>
+        policy.RequireAssertion(ctx => ctx.User.HasClaim("permission", "security.face:enroll") || ctx.User.IsInRole("Administrator") || ctx.User.IsInRole("ADMIN") || ctx.User.IsInRole("SecurityAdmin")));
+
+    options.AddPolicy("Security.Face.Verify", policy =>
+        policy.RequireAssertion(ctx => ctx.User.HasClaim("permission", "security.face:verify") || ctx.User.IsInRole("Administrator") || ctx.User.IsInRole("ADMIN") || ctx.User.IsInRole("User")));
+
+    options.AddPolicy("Security.Device.Manage", policy =>
+        policy.RequireAssertion(ctx => ctx.User.HasClaim("permission", "security.device:manage") || ctx.User.IsInRole("Administrator") || ctx.User.IsInRole("ADMIN") || ctx.User.IsInRole("SecurityAdmin")));
+
+    options.AddPolicy("Security.Policy.Manage", policy =>
+        policy.RequireAssertion(ctx => ctx.User.HasClaim("permission", "security.policy:manage") || ctx.User.IsInRole("Administrator") || ctx.User.IsInRole("ADMIN")));
+
+    options.AddPolicy("Security.Risk.View", policy =>
+        policy.RequireAssertion(ctx => ctx.User.HasClaim("permission", "security.risk:view") || ctx.User.IsInRole("Administrator") || ctx.User.IsInRole("ADMIN") || ctx.User.IsInRole("SecurityAdmin")));
 });
 
 // 6. Configure SignalR Hubs
@@ -102,6 +118,22 @@ builder.Services.AddRateLimiter(options =>
         opt.PermitLimit = 30;
         opt.QueueLimit = 0;
     });
+
+    // Enterprise Security Face Operations Rate Limit
+    options.AddFixedWindowLimiter("FacePolicy", opt =>
+    {
+        opt.Window = TimeSpan.FromMinutes(1);
+        opt.PermitLimit = 20;
+        opt.QueueLimit = 0;
+    });
+
+    // Enterprise Security Risk Engine Rate Limit
+    options.AddFixedWindowLimiter("RiskPolicy", opt =>
+    {
+        opt.Window = TimeSpan.FromMinutes(1);
+        opt.PermitLimit = 30;
+        opt.QueueLimit = 0;
+    });
 });
 
 // 9. Configure Swagger / OpenAPI Documentation with JWT Bearer Security
@@ -112,7 +144,7 @@ builder.Services.AddSwaggerGen(options =>
     {
         Title = "INK FMCG Enterprise ERP API",
         Version = "v1",
-        Description = "Enterprise FMCG Distribution ERP Platform API - ASP.NET Core 9 Clean Architecture IAM Engine"
+        Description = "Enterprise FMCG Distribution ERP Platform API - ASP.NET Core 9 Clean Architecture IAM & Enterprise Security Engine"
     });
 
     options.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
@@ -205,7 +237,7 @@ app.MapHealthChecks("/health/live", new HealthCheckOptions
 });
 app.MapHealthChecks("/health/ready", new HealthCheckOptions
 {
-    Predicate = reg => reg.Name == "PostgreSQL" || reg.Name == "Redis" || reg.Name == "Hangfire"
+    Predicate = reg => reg.Name == "PostgreSQL" || reg.Name == "Redis" || reg.Name == "Hangfire" || reg.Name == "FaceModel"
 });
 
 // 9. Map Endpoints
