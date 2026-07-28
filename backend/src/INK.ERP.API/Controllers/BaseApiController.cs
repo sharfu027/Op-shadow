@@ -1,6 +1,7 @@
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using INK.ERP.Domain.Common;
+using System.Diagnostics;
 
 namespace INK.ERP.API.Controllers;
 
@@ -47,7 +48,7 @@ public abstract class BaseApiController : ControllerBase
         return MapErrorToProblemDetails(result.Error);
     }
 
-    private IActionResult MapErrorToProblemDetails(Error error)
+    protected IActionResult MapErrorToProblemDetails(Error error)
     {
         var statusCode = error.Type switch
         {
@@ -57,6 +58,11 @@ public abstract class BaseApiController : ControllerBase
             ErrorType.Unauthorized => StatusCodes.Status401Unauthorized,
             _ => StatusCodes.Status400BadRequest
         };
+
+        var traceId = Activity.Current?.Id ?? HttpContext.TraceIdentifier;
+        var correlationId = HttpContext.Items["X-Correlation-ID"]?.ToString()
+            ?? HttpContext.Response.Headers["X-Correlation-ID"].ToString()
+            ?? Guid.NewGuid().ToString();
 
         var problemDetails = new ProblemDetails
         {
@@ -68,6 +74,9 @@ public abstract class BaseApiController : ControllerBase
         };
 
         problemDetails.Extensions["errorCode"] = error.Code;
+        problemDetails.Extensions["traceId"] = traceId;
+        problemDetails.Extensions["correlationId"] = correlationId;
+        problemDetails.Extensions["timestamp"] = DateTime.UtcNow.ToString("o");
 
         return StatusCode(statusCode, problemDetails);
     }

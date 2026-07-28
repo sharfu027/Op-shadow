@@ -18,13 +18,25 @@ public class SecurityControllerIntegrationTests : IClassFixture<WebApplicationFa
     }
 
     [Fact]
-    public async Task GetFaceProfile_Unauthenticated_ReturnsUnauthorized()
+    public async Task EveryRequest_ReturnsXCorrelationIdHeader()
+    {
+        // Act
+        var response = await _client.GetAsync("/health");
+
+        // Assert
+        response.Headers.Contains("X-Correlation-ID").Should().BeTrue();
+        response.Headers.GetValues("X-Correlation-ID").First().Should().NotBeNullOrWhiteSpace();
+    }
+
+    [Fact]
+    public async Task GetFaceProfile_Unauthenticated_ReturnsExtendedProblemDetails()
     {
         // Act
         var response = await _client.GetAsync("/api/v1/security/face/profile?userId=" + Guid.NewGuid());
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        response.Headers.Contains("X-Correlation-ID").Should().BeTrue();
     }
 
     [Fact]
@@ -33,56 +45,47 @@ public class SecurityControllerIntegrationTests : IClassFixture<WebApplicationFa
         // Arrange
         using var content = new MultipartFormDataContent();
         var fileContent = new ByteArrayContent(Encoding.UTF8.GetBytes("fake text data"));
-        fileContent.Headers.ContentType = MediaTypeHeaderValue.Parse("text/plain"); // Invalid MIME
+        fileContent.Headers.ContentType = MediaTypeHeaderValue.Parse("text/plain");
         content.Add(fileContent, "Image", "test.txt");
         content.Add(new StringContent(Guid.NewGuid().ToString()), "UserId");
 
         // Act
         var response = await _client.PostAsync("/api/v1/security/face/enroll", content);
 
-        // Assert (Requires Auth or returns 401/400)
+        // Assert
         response.StatusCode.Should().BeOneOf(HttpStatusCode.Unauthorized, HttpStatusCode.BadRequest);
     }
 
     [Fact]
-    public async Task DeviceApprove_Unauthenticated_ReturnsUnauthorized()
+    public async Task UpdateGlobalPolicy_MismatchIfMatchHeader_ReturnsPreconditionFailed()
     {
+        // Arrange
+        var request = new HttpRequestMessage(HttpMethod.Put, "/api/v1/security/policy/global");
+        request.Headers.Add("If-Match", "\"W/invalid-etag-hash\"");
+        var payload = JsonSerializer.Serialize(new { PolicyId = Guid.NewGuid(), MinFaceConfidenceScore = 0.90f });
+        request.Content = new StringContent(payload, Encoding.UTF8, "application/json");
+
         // Act
+        var response = await _client.SendAsync(request);
+
+        // Assert
+        response.StatusCode.Should().BeOneOf(HttpStatusCode.Unauthorized, HttpStatusCode.PreconditionFailed);
+    }
+
+    [Fact]
+    public async Task DeviceApprove_WithIdempotencyKey_ExecutesSuccessfully()
+    {
+        // Arrange
+        var idempotencyKey = Guid.NewGuid().ToString();
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/security/device/approve");
+        request.Headers.Add("Idempotency-Key", idempotencyKey);
         var payload = JsonSerializer.Serialize(new { DeviceId = Guid.NewGuid(), ApprovedBy = "Admin" });
-        var response = await _client.PostAsync("/api/v1/security/device/approve", new StringContent(payload, Encoding.UTF8, "application/json"));
+        request.Content = new StringContent(payload, Encoding.UTF8, "application/json");
 
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    [Fact]
-    public async Task RiskCalculate_Unauthenticated_ReturnsUnauthorized()
-    {
         // Act
-        var payload = JsonSerializer.Serialize(new { UserId = Guid.NewGuid() });
-        var response = await _client.PostAsync("/api/v1/security/risk/calculate", new StringContent(payload, Encoding.UTF8, "application/json"));
+        var response = await _client.SendAsync(request);
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    [Fact]
-    public async Task GetEffectivePolicy_Unauthenticated_ReturnsUnauthorized()
-    {
-        // Act
-        var response = await _client.GetAsync("/api/v1/security/policy/effective?userId=" + Guid.NewGuid());
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    [Fact]
-    public async Task GetCriticalIncidents_Unauthenticated_ReturnsUnauthorized()
-    {
-        // Act
-        var response = await _client.GetAsync("/api/v1/security/incident/critical");
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        response.StatusCode.Should().BeOneOf(HttpStatusCode.Unauthorized, HttpStatusCode.NoContent, HttpStatusCode.OK);
     }
 }

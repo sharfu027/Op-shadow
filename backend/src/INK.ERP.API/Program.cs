@@ -1,4 +1,5 @@
 using INK.ERP.API.Middleware;
+using INK.ERP.API.OpenApi;
 using INK.ERP.Application;
 using INK.ERP.Infrastructure;
 using INK.ERP.Shared;
@@ -23,12 +24,13 @@ builder.Services.AddSharedServices();
 builder.Services.AddApplicationServices();
 builder.Services.AddInfrastructureServices(builder.Configuration);
 
-// 3. Configure API Controllers, ProblemDetails & Exception Handler
+// 3. Configure API Controllers, Response Caching, ProblemDetails & Exception Handler
 builder.Services.AddControllers();
+builder.Services.AddResponseCaching();
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 
-// 4. Configure API Versioning
+// 4. Configure API Versioning & Lifecycle
 builder.Services.AddApiVersioning(options =>
 {
     options.DefaultApiVersion = new ApiVersion(1, 0);
@@ -93,7 +95,6 @@ builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 
-    // Anonymous Login Rate Limit
     options.AddFixedWindowLimiter("AuthPolicy", opt =>
     {
         opt.Window = TimeSpan.FromMinutes(1);
@@ -101,7 +102,6 @@ builder.Services.AddRateLimiter(options =>
         opt.QueueLimit = 0;
     });
 
-    // Authenticated API Rate Limit
     options.AddTokenBucketLimiter("ApiPolicy", opt =>
     {
         opt.TokenLimit = 100;
@@ -111,7 +111,6 @@ builder.Services.AddRateLimiter(options =>
         opt.AutoReplenishment = true;
     });
 
-    // Admin Endpoints Rate Limit
     options.AddFixedWindowLimiter("AdminPolicy", opt =>
     {
         opt.Window = TimeSpan.FromMinutes(1);
@@ -119,7 +118,6 @@ builder.Services.AddRateLimiter(options =>
         opt.QueueLimit = 0;
     });
 
-    // Enterprise Security Face Operations Rate Limit
     options.AddFixedWindowLimiter("FacePolicy", opt =>
     {
         opt.Window = TimeSpan.FromMinutes(1);
@@ -127,7 +125,6 @@ builder.Services.AddRateLimiter(options =>
         opt.QueueLimit = 0;
     });
 
-    // Enterprise Security Risk Engine Rate Limit
     options.AddFixedWindowLimiter("RiskPolicy", opt =>
     {
         opt.Window = TimeSpan.FromMinutes(1);
@@ -136,7 +133,7 @@ builder.Services.AddRateLimiter(options =>
     });
 });
 
-// 9. Configure Swagger / OpenAPI Documentation with JWT Bearer Security
+// 9. Configure Swagger / OpenAPI Documentation with JWT Bearer Security & Examples
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -146,6 +143,8 @@ builder.Services.AddSwaggerGen(options =>
         Version = "v1",
         Description = "Enterprise FMCG Distribution ERP Platform API - ASP.NET Core 9 Clean Architecture IAM & Enterprise Security Engine"
     });
+
+    options.OperationFilter<SecuritySwaggerExamplesFilter>();
 
     options.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
     {
@@ -190,7 +189,7 @@ var app = builder.Build();
 
 // ====================================================
 // MIDDLEWARE PIPELINE ORDER
-// Exception -> Correlation -> Security Headers -> CORS -> Authentication -> Authorization -> Rate Limiting -> Endpoints
+// Exception -> Correlation -> Security Headers -> Idempotency -> CORS -> Authentication -> Authorization -> Rate Limiting -> Response Caching -> Endpoints
 // ====================================================
 
 // 1. Exception Handling Middleware
@@ -203,6 +202,9 @@ app.UseMiddleware<CorrelationIdMiddleware>();
 // 3. Security Headers Middleware
 app.UseMiddleware<SecurityHeadersMiddleware>();
 
+// 4. Idempotency Key Middleware
+app.UseMiddleware<IdempotencyMiddleware>();
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -214,22 +216,25 @@ if (app.Environment.IsDevelopment())
 
 app.UseSerilogRequestLogging();
 
-// 4. CORS
+// 5. CORS
 app.UseCors("AllowFrontendClient");
 
-// 5. Authentication
+// 6. Authentication
 app.UseAuthentication();
 
-// 6. Authorization
+// 7. Authorization
 app.UseAuthorization();
 
-// 7. Rate Limiting
+// 8. Rate Limiting
 app.UseRateLimiter();
+
+// 9. Response Caching
+app.UseResponseCaching();
 
 // Hangfire Dashboard Middleware
 app.UseHangfireDashboard("/hangfire", new DashboardOptions());
 
-// 8. Health Check Endpoints
+// 10. Health Check Endpoints
 app.MapHealthChecks("/health");
 app.MapHealthChecks("/health/live", new HealthCheckOptions
 {
@@ -240,7 +245,7 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions
     Predicate = reg => reg.Name == "PostgreSQL" || reg.Name == "Redis" || reg.Name == "Hangfire" || reg.Name == "FaceModel"
 });
 
-// 9. Map Endpoints
+// 11. Map Endpoints
 app.MapControllers();
 
 app.Run();

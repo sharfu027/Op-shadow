@@ -1,7 +1,11 @@
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using INK.ERP.API.Models;
 using INK.ERP.Application.Features.Security.Face;
 using INK.ERP.Application.Features.Security.Face.DTOs;
 
@@ -17,11 +21,13 @@ public class FaceController : BaseApiController
 
     /// <summary>
     /// Enrolls a user's facial biometric template using multipart image upload.
+    /// Supports Idempotency-Key header for duplicate request protection.
     /// </summary>
     [HttpPost("enroll")]
     [Authorize(Policy = "Security.Face.Enroll")]
     [ProducesResponseType(typeof(Guid), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Enroll([FromForm] EnrollFaceRequest request, CancellationToken cancellationToken)
     {
         var validationError = ValidateImageFile(request.Image);
@@ -38,6 +44,7 @@ public class FaceController : BaseApiController
 
     /// <summary>
     /// Records a face verification attempt against the user's enrolled biometric template.
+    /// Supports Idempotency-Key header for duplicate attempt protection.
     /// </summary>
     [HttpPost("verify")]
     [Authorize(Policy = "Security.Face.Verify")]
@@ -92,29 +99,47 @@ public class FaceController : BaseApiController
     }
 
     /// <summary>
-    /// Retrieves a user's face profile metadata and active template version.
+    /// Retrieves a user's face profile metadata and active template version. Supports Response Caching and ETag.
     /// </summary>
     [HttpGet("profile")]
     [Authorize(Policy = "Security.Face.Verify")]
+    [ResponseCache(Duration = 30, Location = ResponseCacheLocation.Any, VaryByQueryKeys = new[] { "userId" })]
     [ProducesResponseType(typeof(FaceProfileDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetProfile([FromQuery] Guid userId, CancellationToken cancellationToken)
     {
         var query = new GetFaceProfileQuery(userId);
         var result = await Mediator.Send(query, cancellationToken);
+        if (result.IsSuccess && result.Value != null)
+        {
+            Response.Headers.ETag = CalculateETag(result.Value);
+        }
         return HandleResult(result);
     }
 
     /// <summary>
-    /// Retrieves face verification attempt logs for a user.
+    /// Retrieves face verification attempt logs for a user with standardized pagination and X-Pagination header.
     /// </summary>
     [HttpGet("history")]
     [Authorize(Policy = "Security.Face.Verify")]
     [ProducesResponseType(typeof(IReadOnlyList<FaceVerificationDto>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetHistory([FromQuery] Guid userId, CancellationToken cancellationToken)
+    public async Task<IActionResult> GetHistory([FromQuery] Guid userId, [FromQuery] SecurityFilterParameters filter, CancellationToken cancellationToken)
     {
         var query = new GetFaceVerificationHistoryQuery(userId);
         var result = await Mediator.Send(query, cancellationToken);
+        if (result.IsSuccess && result.Value != null)
+        {
+            var allLogs = result.Value;
+            int totalCount = allLogs.Count;
+            var pagedLogs = allLogs.Skip((filter.Page - 1) * filter.PageSize).Take(filter.PageSize).ToList();
+            int totalPages = (int)Math.Ceiling((double)totalCount / filter.PageSize);
+
+            var paginationMetadata = new PaginationMetadata(totalCount, filter.PageSize, filter.Page, totalPages);
+            Response.Headers["X-Pagination"] = JsonSerializer.Serialize(paginationMetadata);
+
+            return Ok(pagedLogs);
+        }
+
         return HandleResult(result);
     }
 
@@ -155,7 +180,12 @@ public class FaceController : BaseApiController
 
         return null;
     }
-}
 
-public sealed record EnrollFaceRequest(Guid UserId, IFormFile Image, string? AlgorithmVersion = "v1.0");
-public sealed record ReplaceFaceTemplateRequest(Guid UserId, IFormFile Image);
+    private static string CalculateETag(object obj)
+    {
+        var json = JsonSerializer.Serialize(obj);
+        using var sha256 = SHA256.Create();
+        var hash = sha256.ComputeHash(Encoding.UTF8.GetBytes(json));
+        return $"\"W/{BitConverter.ToString(hash).Replace("-", "").Substring(0, 16)}\"";
+    }
+}
