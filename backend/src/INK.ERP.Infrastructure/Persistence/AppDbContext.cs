@@ -62,6 +62,16 @@ public sealed class AppDbContext : IdentityDbContext<ApplicationUser, Applicatio
     public DbSet<INK.ERP.Domain.Entities.IAM.UserPreference> UserPreferences => Set<INK.ERP.Domain.Entities.IAM.UserPreference>();
     public DbSet<INK.ERP.Domain.Entities.IAM.SecurityAuditLog> SecurityAuditLogs => Set<INK.ERP.Domain.Entities.IAM.SecurityAuditLog>();
 
+    // Enterprise Security DB Sets
+    public DbSet<INK.ERP.Domain.Entities.Security.FaceProfile> FaceProfiles => Set<INK.ERP.Domain.Entities.Security.FaceProfile>();
+    public DbSet<INK.ERP.Domain.Entities.Security.FaceTemplate> FaceTemplates => Set<INK.ERP.Domain.Entities.Security.FaceTemplate>();
+    public DbSet<INK.ERP.Domain.Entities.Security.FaceVerificationLog> FaceVerificationLogs => Set<INK.ERP.Domain.Entities.Security.FaceVerificationLog>();
+    public DbSet<INK.ERP.Domain.Entities.Security.FaceEnrollmentLog> FaceEnrollmentLogs => Set<INK.ERP.Domain.Entities.Security.FaceEnrollmentLog>();
+    public DbSet<INK.ERP.Domain.Entities.Security.SecurityPolicy> SecurityPolicies => Set<INK.ERP.Domain.Entities.Security.SecurityPolicy>();
+    public DbSet<INK.ERP.Domain.Entities.Security.UserSecurityPolicy> UserSecurityPolicies => Set<INK.ERP.Domain.Entities.Security.UserSecurityPolicy>();
+    public DbSet<INK.ERP.Domain.Entities.Security.RegisteredDevice> RegisteredDevices => Set<INK.ERP.Domain.Entities.Security.RegisteredDevice>();
+    public DbSet<INK.ERP.Domain.Entities.Security.SecurityIncident> SecurityIncidents => Set<INK.ERP.Domain.Entities.Security.SecurityIncident>();
+
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         UpdateAuditFields();

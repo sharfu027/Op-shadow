@@ -12,9 +12,15 @@ using INK.ERP.Application.Common.Interfaces;
 using INK.ERP.Domain.Common;
 using INK.ERP.Infrastructure.Options;
 using INK.ERP.Infrastructure.Persistence.Repositories;
+using INK.ERP.Infrastructure.Persistence.Repositories.Security;
 using INK.ERP.Infrastructure.Persistence.Outbox;
 using INK.ERP.Infrastructure.Services;
 using INK.ERP.Infrastructure.Security;
+using INK.ERP.Infrastructure.Security.Face;
+using INK.ERP.Infrastructure.Security.GPS;
+using INK.ERP.Infrastructure.Security.Devices;
+using INK.ERP.Infrastructure.Security.Risk;
+using INK.ERP.Infrastructure.Security.Health;
 using INK.ERP.Persistence;
 using OpenTelemetry.Trace;
 
@@ -62,6 +68,32 @@ public static class DependencyInjection
 
         services.AddOptions<ApplicationOptions>()
             .Bind(configuration.GetSection(ApplicationOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        // Register Enterprise Security Options
+        services.AddOptions<FaceRecognitionOptions>()
+            .Bind(configuration.GetSection(FaceRecognitionOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        services.AddOptions<OnnxOptions>()
+            .Bind(configuration.GetSection(OnnxOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        services.AddOptions<EncryptionOptions>()
+            .Bind(configuration.GetSection(EncryptionOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        services.AddOptions<GpsOptions>()
+            .Bind(configuration.GetSection(GpsOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        services.AddOptions<SecurityRiskOptions>()
+            .Bind(configuration.GetSection(SecurityRiskOptions.SectionName))
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
@@ -161,6 +193,28 @@ public static class DependencyInjection
         services.AddScoped<IPermissionResolver, PermissionResolver>();
         services.AddScoped<ITokenService, JwtTokenService>();
 
+        // Register Enterprise Security Model Loader (Singleton)
+        services.AddSingleton<IModelLoader, ModelLoader>();
+
+        // Register Enterprise Security AI & Protection Services (Scoped)
+        services.AddScoped<IImagePreprocessingService, ImagePreprocessingService>();
+        services.AddScoped<ILivenessDetectionService, LivenessDetectionService>();
+        services.AddScoped<IImageQualityService, ImageQualityService>();
+        services.AddScoped<IFaceTemplateProtectionService, FaceTemplateProtectionService>();
+        services.AddScoped<IFaceComparisonService, FaceComparisonService>();
+        services.AddScoped<IFaceEmbeddingService, FaceEmbeddingService>();
+
+        // Register Enterprise Security GPS, Geofence, Device Services (Scoped)
+        services.AddScoped<IGpsVerificationService, GpsVerificationService>();
+        services.AddScoped<IGeofenceService, GeofenceService>();
+        services.AddScoped<IDeviceFingerprintService, DeviceFingerprintService>();
+
+        // Register Risk Evaluation Strategies & Risk Engine
+        services.AddScoped<IRiskEvaluationStrategy, FaceRiskStrategy>();
+        services.AddScoped<IRiskEvaluationStrategy, GpsRiskStrategy>();
+        services.AddScoped<IRiskEvaluationStrategy, DeviceRiskStrategy>();
+        services.AddScoped<IRiskEngine, RiskEngine>();
+
         // 8. Register Repositories & Unit of Work
         services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
         services.AddScoped<IUnitOfWork, UnitOfWork>();
@@ -172,6 +226,13 @@ public static class DependencyInjection
         services.AddScoped<IUserSessionRepository, UserSessionRepository>();
         services.AddScoped<ILoginHistoryRepository, LoginHistoryRepository>();
         services.AddScoped<ISecurityAuditRepository, SecurityAuditRepository>();
+
+        // Register Enterprise Security Repositories
+        services.AddScoped<IFaceProfileRepository, FaceProfileRepository>();
+        services.AddScoped<ISecurityPolicyRepository, SecurityPolicyRepository>();
+        services.AddScoped<IUserSecurityPolicyRepository, UserSecurityPolicyRepository>();
+        services.AddScoped<IRegisteredDeviceRepository, RegisteredDeviceRepository>();
+        services.AddScoped<ISecurityIncidentRepository, SecurityIncidentRepository>();
 
         services.AddScoped<IProductRepository, ProductRepository>();
         services.AddScoped<ICustomerRepository, CustomerRepository>();
@@ -192,7 +253,8 @@ public static class DependencyInjection
             .AddHangfire(options =>
             {
                 options.MinimumAvailableServers = 1;
-            }, name: "Hangfire");
+            }, name: "Hangfire")
+            .AddCheck<FaceModelHealthCheck>("FaceModel");
 
         // 12. Configure OpenTelemetry Tracing
         var enableTracing = configuration.GetValue<bool>("OpenTelemetry:EnableTracing", false);
