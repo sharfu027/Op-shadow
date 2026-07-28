@@ -15,11 +15,7 @@ public class FaceProfileRepository : GenericRepository<FaceProfile>, IFaceProfil
 
     public async Task<FaceProfile?> GetByUserIdAsync(Guid userId, CancellationToken cancellationToken = default)
     {
-        return await _dbSet
-            .Include(p => p.Templates)
-            .Include(p => p.VerificationLogs)
-            .Include(p => p.EnrollmentLogs)
-            .FirstOrDefaultAsync(p => p.UserId == userId && !p.IsDeleted, cancellationToken);
+        return await SecurityCompiledQueries.GetFaceProfileByUserId(_context, userId);
     }
 
     public async Task<FaceTemplate?> GetActiveTemplateAsync(Guid userId, CancellationToken cancellationToken = default)
@@ -58,7 +54,7 @@ public class SecurityPolicyRepository : GenericRepository<SecurityPolicy>, ISecu
 
     public async Task<SecurityPolicy?> GetActiveGlobalPolicyAsync(CancellationToken cancellationToken = default)
     {
-        return await _dbSet.FirstOrDefaultAsync(p => p.IsActive && !p.IsDeleted, cancellationToken);
+        return await SecurityCompiledQueries.GetActiveGlobalPolicy(_context);
     }
 }
 
@@ -87,7 +83,7 @@ public class RegisteredDeviceRepository : GenericRepository<RegisteredDevice>, I
 
     public async Task<RegisteredDevice?> GetByFingerprintAsync(Guid userId, string fingerprintHash, CancellationToken cancellationToken = default)
     {
-        return await _dbSet.FirstOrDefaultAsync(d => d.UserId == userId && d.Fingerprint.FingerprintHash == fingerprintHash && !d.IsDeleted, cancellationToken);
+        return await SecurityCompiledQueries.GetDeviceByFingerprint(_context, userId, fingerprintHash);
     }
 
     public async Task<IReadOnlyList<RegisteredDevice>> GetTrustedDevicesAsync(Guid userId, CancellationToken cancellationToken = default)
@@ -120,6 +116,11 @@ public class SecurityIncidentRepository : GenericRepository<SecurityIncident>, I
 
     public async Task<IReadOnlyList<SecurityIncident>> GetCriticalIncidentsAsync(CancellationToken cancellationToken = default)
     {
-        return await _dbSet.Where(i => i.Severity == IncidentSeverity.Critical && !i.IsResolved && !i.IsDeleted).ToListAsync(cancellationToken);
+        var list = new List<SecurityIncident>();
+        await foreach (var incident in SecurityCompiledQueries.GetCriticalUnresolvedIncidents(_context))
+        {
+            list.Add(incident);
+        }
+        return list;
     }
 }

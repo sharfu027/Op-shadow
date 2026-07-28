@@ -196,12 +196,22 @@ public static class DependencyInjection
         // Register Enterprise Security Model Loader (Singleton)
         services.AddSingleton<IModelLoader, ModelLoader>();
 
-        // Register Enterprise Security AI & Protection Services (Scoped)
+        // Register Image Processing Pipeline & Stages
+        services.AddScoped<IImagePipelineStage, FaceDetectionStage>();
+        services.AddScoped<IImagePipelineStage, FaceAlignmentStage>();
+        services.AddScoped<IImagePipelineStage, ImageNormalizationStage>();
+        services.AddScoped<IImagePipelineStage, ImageQualityCheckStage>();
+        services.AddScoped<IImagePipeline, ImagePipeline>();
         services.AddScoped<IImagePreprocessingService, ImagePreprocessingService>();
+
+        // Register Comparison Strategy Engine
+        services.AddScoped<IFaceComparisonStrategy, CosineStrategy>();
+        services.AddScoped<IFaceComparisonService, FaceComparisonService>();
+
+        // Register AI Security Services (Scoped)
         services.AddScoped<ILivenessDetectionService, LivenessDetectionService>();
         services.AddScoped<IImageQualityService, ImageQualityService>();
         services.AddScoped<IFaceTemplateProtectionService, FaceTemplateProtectionService>();
-        services.AddScoped<IFaceComparisonService, FaceComparisonService>();
         services.AddScoped<IFaceEmbeddingService, FaceEmbeddingService>();
 
         // Register Enterprise Security GPS, Geofence, Device Services (Scoped)
@@ -209,10 +219,12 @@ public static class DependencyInjection
         services.AddScoped<IGeofenceService, GeofenceService>();
         services.AddScoped<IDeviceFingerprintService, DeviceFingerprintService>();
 
-        // Register Risk Evaluation Strategies & Risk Engine
-        services.AddScoped<IRiskEvaluationStrategy, FaceRiskStrategy>();
-        services.AddScoped<IRiskEvaluationStrategy, GpsRiskStrategy>();
-        services.AddScoped<IRiskEvaluationStrategy, DeviceRiskStrategy>();
+        // Register Risk Evaluation Strategy Registry & Engine
+        services.AddScoped<IRiskStrategy, FaceRiskStrategy>();
+        services.AddScoped<IRiskStrategy, GpsRiskStrategy>();
+        services.AddScoped<IRiskStrategy, DeviceRiskStrategy>();
+        services.AddScoped<IRiskStrategy, BehaviorRiskStrategy>();
+        services.AddScoped<IRiskStrategy, PolicyRiskStrategy>();
         services.AddScoped<IRiskEngine, RiskEngine>();
 
         // 8. Register Repositories & Unit of Work
@@ -254,7 +266,11 @@ public static class DependencyInjection
             {
                 options.MinimumAvailableServers = 1;
             }, name: "Hangfire")
-            .AddCheck<FaceModelHealthCheck>("FaceModel");
+            .AddCheck<FaceModelHealthCheck>("FaceModel")
+            .AddCheck<EncryptionHealthCheck>("Encryption")
+            .AddCheck<RiskEngineHealthCheck>("RiskEngine")
+            .AddCheck<OnnxRuntimeHealthCheck>("OnnxRuntime")
+            .AddCheck<GpsHealthCheck>("GpsVerification");
 
         // 12. Configure OpenTelemetry Tracing
         var enableTracing = configuration.GetValue<bool>("OpenTelemetry:EnableTracing", false);

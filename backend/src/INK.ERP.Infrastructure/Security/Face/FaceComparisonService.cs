@@ -4,60 +4,27 @@ using INK.ERP.Infrastructure.Options;
 
 namespace INK.ERP.Infrastructure.Security.Face;
 
-public interface IFaceComparisonService
-{
-    FaceComparisonResult Compare(float[] vectorA, float[] vectorB);
-    FaceComparisonResult Compare(string vectorDataA, string vectorDataB);
-}
-
-public sealed record FaceComparisonResult(
-    float SimilarityScore,
-    bool IsMatch,
-    float ConfidenceScore,
-    double EuclideanDistance);
-
 public sealed class FaceComparisonService : IFaceComparisonService
 {
+    private readonly IFaceComparisonStrategy _strategy;
     private readonly FaceRecognitionOptions _options;
     private readonly ILogger<FaceComparisonService> _logger;
 
-    public FaceComparisonService(IOptions<FaceRecognitionOptions> options, ILogger<FaceComparisonService> logger)
+    public FaceComparisonService(
+        IFaceComparisonStrategy strategy,
+        IOptions<FaceRecognitionOptions> options,
+        ILogger<FaceComparisonService> logger)
     {
+        _strategy = strategy;
         _options = options.Value;
         _logger = logger;
     }
 
     public FaceComparisonResult Compare(float[] vectorA, float[] vectorB)
     {
-        if (vectorA == null || vectorB == null || vectorA.Length == 0 || vectorA.Length != vectorB.Length)
-        {
-            return new FaceComparisonResult(0.0f, false, 0.0f, double.MaxValue);
-        }
-
-        double dotProduct = 0.0;
-        double normA = 0.0;
-        double normB = 0.0;
-        double sumSquareDiff = 0.0;
-
-        for (int i = 0; i < vectorA.Length; i++)
-        {
-            dotProduct += vectorA[i] * vectorB[i];
-            normA += vectorA[i] * vectorA[i];
-            normB += vectorB[i] * vectorB[i];
-            double diff = vectorA[i] - vectorB[i];
-            sumSquareDiff += diff * diff;
-        }
-
-        double denominator = Math.Sqrt(normA) * Math.Sqrt(normB);
-        float similarity = denominator > 0 ? (float)(dotProduct / denominator) : 0.0f;
-        double euclideanDistance = Math.Sqrt(sumSquareDiff);
-
-        bool isMatch = similarity >= _options.MatchThreshold;
-        float confidence = Math.Max(0.0f, Math.Min(1.0f, similarity));
-
-        _logger.LogDebug("Cosine Similarity evaluated: {Similarity:F4}, Match: {IsMatch}", similarity, isMatch);
-
-        return new FaceComparisonResult(similarity, isMatch, confidence, euclideanDistance);
+        var result = _strategy.Compare(vectorA, vectorB, _options.MatchThreshold);
+        _logger.LogDebug("Comparison using strategy '{Strategy}' evaluated score: {Score:F4}, Match: {IsMatch}", _strategy.StrategyName, result.SimilarityScore, result.IsMatch);
+        return result;
     }
 
     public FaceComparisonResult Compare(string vectorDataA, string vectorDataB)
