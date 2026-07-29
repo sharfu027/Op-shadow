@@ -497,3 +497,18 @@ export async function createEmployee(data: Omit<EmployeeDto, 'id' | 'createdAtUt
     return null;
   }
 }
+
+export async function deleteMasterEntity(entityEndpoint: string, id: string): Promise<boolean> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/${entityEndpoint}/${id}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+      }
+    });
+    return response.ok;
+  } catch (err) {
+    console.error(`Failed to delete ${entityEndpoint} record ${id}:`, err);
+    return false;
+  }
+}

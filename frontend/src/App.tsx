@@ -177,6 +177,7 @@ export default function App() {
             <Route path="/bi" element={<BusinessIntelligenceModule onTriggerToast={triggerToast} />} />
             <Route path="/bi/*" element={<BusinessIntelligenceModule onTriggerToast={triggerToast} />} />
             <Route path="/masters/:moduleName" element={<MasterDataRouteWrapper onTriggerToast={triggerToast} />} />
+            <Route path="/masters/:moduleName/*" element={<MasterDataRouteWrapper onTriggerToast={triggerToast} />} />
             
             {/* Fallback view representing un-built module placeholders */}
             <Route 

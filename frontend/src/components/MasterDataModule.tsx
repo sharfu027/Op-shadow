@@ -1,29 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Plus,
   Search,
-  Filter,
-  ArrowUpDown,
   ChevronLeft,
   ChevronRight,
   Eye,
   Edit2,
   Trash2,
-  Download,
-  Upload,
-  Settings2,
-  Check,
-  CheckSquare,
-  Square,
-  X,
-  ChevronDown,
-  CheckCircle2,
   AlertCircle,
-  Paperclip,
   Save,
-  RefreshCw,
-  Sliders,
-  ShieldAlert,
   Loader2,
   User,
   Tags,
@@ -33,15 +18,8 @@ import {
   Truck,
   MapPin,
   ClipboardList,
-  Calendar,
-  DollarSign,
-  Percent,
-  Hash,
   Briefcase,
-  Map,
-  ShieldCheck,
-  ToggleLeft,
-  ToggleRight
+  ShieldCheck
 } from 'lucide-react';
 
 import { 
@@ -57,7 +35,7 @@ import {
 import * as masterDataService from '../services/masterDataService';
 
 interface MasterDataModuleProps {
-  module: string; // 'companies' | 'branches' | 'departments' | 'designations' | 'employees' | 'products' | 'categories' | 'brands' | 'units' | 'warehouses' | 'customers' | 'suppliers' | 'reps'
+  module: string;
   onTriggerToast: (type: 'success' | 'error' | 'info' | 'warning', title: string, desc?: string) => void;
 }
 
@@ -66,51 +44,48 @@ export default function MasterDataModule({ module, onTriggerToast }: MasterDataM
     switch (module) {
       case 'companies':
       case 'masters/companies':
-        return { name: 'Companies', singular: 'Company', icon: Building };
+        return { name: 'Companies', singular: 'Company', icon: Building, endpoint: 'company' };
       case 'branches':
       case 'masters/branches':
-        return { name: 'Branches', singular: 'Branch', icon: Building };
+        return { name: 'Branches', singular: 'Branch', icon: Building, endpoint: 'branch' };
       case 'departments':
       case 'masters/departments':
-        return { name: 'Departments', singular: 'Department', icon: Building };
+        return { name: 'Departments', singular: 'Department', icon: Building, endpoint: 'department' };
       case 'designations':
       case 'masters/designations':
-        return { name: 'Designations', singular: 'Designation', icon: Briefcase };
+        return { name: 'Designations', singular: 'Designation', icon: Briefcase, endpoint: 'designation' };
       case 'employees':
       case 'masters/employees':
-        return { name: 'Employees', singular: 'Employee', icon: User };
+        return { name: 'Employees', singular: 'Employee', icon: User, endpoint: 'employee' };
       case 'products':
       case 'masters/products':
-        return { name: 'Products', singular: 'Product', icon: Boxes };
+        return { name: 'Products', singular: 'Product', icon: Boxes, endpoint: 'product' };
       case 'categories':
       case 'masters/categories':
-        return { name: 'Categories', singular: 'Category', icon: Tags };
+        return { name: 'Categories', singular: 'Category', icon: Tags, endpoint: 'category' };
       case 'brands':
       case 'masters/brands':
-        return { name: 'Brands', singular: 'Brand', icon: ClipboardList };
+        return { name: 'Brands', singular: 'Brand', icon: ClipboardList, endpoint: 'brand' };
       case 'units':
       case 'masters/units':
-        return { name: 'Units of Measure', singular: 'Unit of Measure', icon: Tags };
+        return { name: 'Units of Measure', singular: 'Unit of Measure', icon: Tags, endpoint: 'uom' };
       case 'warehouses':
       case 'masters/warehouses':
-        return { name: 'Warehouses', singular: 'Warehouse', icon: Building };
+        return { name: 'Warehouses', singular: 'Warehouse', icon: Building, endpoint: 'warehouse' };
       case 'customers':
       case 'masters/customers':
-        return { name: 'Customers', singular: 'Customer', icon: Users2 };
+        return { name: 'Customers', singular: 'Customer', icon: Users2, endpoint: 'customer' };
       case 'suppliers':
       case 'masters/suppliers':
-        return { name: 'Suppliers', singular: 'Supplier', icon: Truck };
-      case 'reps':
-      case 'masters/reps':
-        return { name: 'Sales Representatives', singular: 'Sales Representative', icon: User };
+        return { name: 'Suppliers', singular: 'Supplier', icon: Truck, endpoint: 'supplier' };
       default:
-        return { name: 'Master Registry', singular: 'Record', icon: Building };
+        return { name: 'Master Registry', singular: 'Record', icon: Building, endpoint: 'company' };
     }
   };
 
   const config = getModuleConfig();
 
-  // Mock Database State Repositories
+  // Master Repositories
   const [dbCompanies, setDbCompanies] = useState([
     { id: '1', code: 'CMP-001', legalName: 'INK FMCG India Private Limited', tradeName: 'INK Foods & Goods', gstin: '07AAAAA0000A1Z5', pan: 'AAAAA0000A', email: 'hq@ink-fmcg.com', phone: '+91 11 4500 8800', currency: 'INR', status: 'Active', addressLine1: 'Plot 101, Okhla Industrial Estate', city: 'New Delhi', state: 'Delhi', postalCode: '110020', country: 'India' },
     { id: '2', code: 'CMP-002', legalName: 'INK Global Exports LLC', tradeName: 'INK Overseas', gstin: '27BBBBB1111B1Z2', pan: 'BBBBB1111B', email: 'exports@ink-global.com', phone: '+91 22 6700 9900', currency: 'USD', status: 'Active', addressLine1: 'BKC Center, Bandra East', city: 'Mumbai', state: 'Maharashtra', postalCode: '400051', country: 'India' }
@@ -163,11 +138,7 @@ export default function MasterDataModule({ module, onTriggerToast }: MasterDataM
     { id: '1', code: 'SUPP-301', name: 'Hindustan Unilever Limited', contact: '+91 22441 55620', email: 'b2b.support@hul.com', balance: 3450000, category: 'National Brand Packaged', status: 'Active' }
   ]);
 
-  const [dbReps, setDbReps] = useState<SalesRep[]>([
-    { id: '1', code: 'REP-401', name: 'Amit Sharma', contact: '+91 98101 24510', email: 'amit.sharma@ink-fmcg.com', region: 'Delhi NCR', target: 2500000, status: 'Active' }
-  ]);
-
-  // UI Control
+  // Navigation State
   const [simulatedState, setSimulatedState] = useState<'normal' | 'loading' | 'empty' | 'error' | 'denied'>('normal');
   const [mode, setMode] = useState<'list' | 'create' | 'edit' | 'view'>('list');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -185,7 +156,14 @@ export default function MasterDataModule({ module, onTriggerToast }: MasterDataM
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
 
-  // 1. Company Fields
+  // Shared Address
+  const [addrLine1, setAddrLine1] = useState('');
+  const [addrCity, setAddrCity] = useState('');
+  const [addrState, setAddrState] = useState('');
+  const [addrPostalCode, setAddrPostalCode] = useState('');
+  const [addrCountry, setAddrCountry] = useState('India');
+
+  // 1. Company
   const [compLegalName, setCompLegalName] = useState('');
   const [compTradeName, setCompTradeName] = useState('');
   const [compGstin, setCompGstin] = useState('');
@@ -194,14 +172,7 @@ export default function MasterDataModule({ module, onTriggerToast }: MasterDataM
   const [compPhone, setCompPhone] = useState('');
   const [compCurrency, setCompCurrency] = useState('INR');
 
-  // Shared Address
-  const [addrLine1, setAddrLine1] = useState('');
-  const [addrCity, setAddrCity] = useState('');
-  const [addrState, setAddrState] = useState('');
-  const [addrPostalCode, setAddrPostalCode] = useState('');
-  const [addrCountry, setAddrCountry] = useState('India');
-
-  // 2. Branch Fields
+  // 2. Branch
   const [branchCompanyId, setBranchCompanyId] = useState('1');
   const [branchName, setBranchName] = useState('');
   const [branchGstin, setBranchGstin] = useState('');
@@ -209,46 +180,46 @@ export default function MasterDataModule({ module, onTriggerToast }: MasterDataM
   const [branchEmail, setBranchEmail] = useState('');
   const [branchIsHq, setBranchIsHq] = useState(false);
 
-  // 3. Department Fields
+  // 3. Department
   const [deptBranchId, setDeptBranchId] = useState('1');
   const [deptName, setDeptName] = useState('');
   const [deptDesc, setDeptDesc] = useState('');
 
-  // 4. Designation Fields
+  // 4. Designation
   const [desigCompanyId, setDesigCompanyId] = useState('1');
   const [desigTitle, setDesigTitle] = useState('');
   const [desigLevel, setDesigLevel] = useState<number>(1);
   const [desigApprovalLimit, setDesigApprovalLimit] = useState<number>(0);
 
-  // 5. UOM Fields
+  // 5. UOM
   const [uomCompanyId, setUomCompanyId] = useState('1');
   const [uomName, setUomName] = useState('');
-  const [uomBaseCode, setUomBaseCode] = useState('Piece');
-  const [uomConversionFactor, setUomConversionFactor] = useState<number>(1);
-  const [uomIsFractional, setUomIsFractional] = useState(false);
+  const [uomBaseCode, setUomBaseCode] = useState('Gram');
+  const [uomConversionFactor, setUomConversionFactor] = useState<number>(1000);
+  const [uomIsFractional, setUomIsFractional] = useState(true);
 
-  // 6. Brand Fields
+  // 6. Brand
   const [brandCompanyId, setBrandCompanyId] = useState('1');
   const [brandName, setBrandName] = useState('');
   const [brandManufacturer, setBrandManufacturer] = useState('');
   const [brandOrigin, setBrandOrigin] = useState('India');
 
-  // 7. Category Fields
+  // 7. Category
   const [catCompanyId, setCatCompanyId] = useState('1');
   const [catName, setCatName] = useState('');
   const [catParentId, setCatParentId] = useState('');
   const [catGstRate, setCatGstRate] = useState<number>(5);
-  const [catHsnDefault, setCatHsnDefault] = useState('');
+  const [catHsnDefault, setCatHsnDefault] = useState('1006.30');
 
-  // 8. Warehouse Fields
+  // 8. Warehouse
   const [whCompanyId, setWhCompanyId] = useState('1');
   const [whBranchId, setWhBranchId] = useState('1');
   const [whName, setWhName] = useState('');
   const [whType, setWhType] = useState('Central Depot');
-  const [whCapacitySqFt, setWhCapacitySqFt] = useState<number>(50000);
+  const [whCapacitySqFt, setWhCapacitySqFt] = useState<number>(150000);
   const [whTempControl, setWhTempControl] = useState(false);
 
-  // 9. Product Fields
+  // 9. Product
   const [prodCompanyId, setProdCompanyId] = useState('1');
   const [prodCategoryId, setProdCategoryId] = useState('1');
   const [prodBrandId, setProdBrandId] = useState('1');
@@ -263,30 +234,32 @@ export default function MasterDataModule({ module, onTriggerToast }: MasterDataM
   const [prodShelfLifeDays, setProdShelfLifeDays] = useState<number>(365);
   const [prodIsBatchTracked, setProdIsBatchTracked] = useState(true);
 
-  // 10. Supplier Fields
+  // 10. Supplier
   const [suppCompanyId, setSuppCompanyId] = useState('1');
   const [suppLegalName, setSuppLegalName] = useState('');
   const [suppTradeName, setSuppTradeName] = useState('');
+  const [suppContactPerson, setSuppContactPerson] = useState('');
   const [suppEmail, setSuppEmail] = useState('');
   const [suppPhone, setSuppPhone] = useState('');
   const [suppGstin, setSuppGstin] = useState('');
   const [suppPan, setSuppPan] = useState('');
-  const [suppCreditLimit, setSuppCreditLimit] = useState<number>(100000);
+  const [suppCreditLimit, setSuppCreditLimit] = useState<number>(1000000);
   const [suppPaymentTermsDays, setSuppPaymentTermsDays] = useState<number>(30);
 
-  // 11. Customer Fields
+  // 11. Customer
   const [custCompanyId, setCustCompanyId] = useState('1');
   const [custLegalName, setCustLegalName] = useState('');
   const [custType, setCustType] = useState('Retailer');
+  const [custContactPerson, setCustContactPerson] = useState('');
   const [custEmail, setCustEmail] = useState('');
   const [custPhone, setCustPhone] = useState('');
   const [custGstin, setCustGstin] = useState('');
   const [custPan, setCustPan] = useState('');
-  const [custCreditLimit, setCustCreditLimit] = useState<number>(50000);
+  const [custCreditLimit, setCustCreditLimit] = useState<number>(500000);
   const [custCreditDays, setCustCreditDays] = useState<number>(15);
   const [custSalesRouteId, setCustSalesRouteId] = useState('');
 
-  // 12. Employee Fields
+  // 12. Employee
   const [empCompanyId, setEmpCompanyId] = useState('1');
   const [empBranchId, setEmpBranchId] = useState('1');
   const [empDepartmentId, setEmpDepartmentId] = useState('1');
@@ -317,7 +290,7 @@ export default function MasterDataModule({ module, onTriggerToast }: MasterDataM
           }
         }
       } catch (err) {
-        console.error('[Master Data Dev Log] Failed to fetch live data:', err);
+        console.error('[Master Data Dev Log] Live fetch error:', err);
       }
     }
     loadLiveData();
@@ -332,56 +305,78 @@ export default function MasterDataModule({ module, onTriggerToast }: MasterDataM
         setCompPan(x.pan); setCompEmail(x.email); setCompPhone(x.phone); setCompCurrency(x.currency); setFormStatus(x.status as any);
         setAddrLine1(x.addressLine1); setAddrCity(x.city); setAddrState(x.state); setAddrPostalCode(x.postalCode); setAddrCountry(x.country);
       }
+    } else if (module === 'branches' || module === 'masters/branches') {
+      const x = dbBranches.find(b => b.id === id);
+      if (x) {
+        setFormCode(x.code); setBranchName(x.name); setBranchCompanyId(x.companyId); setBranchGstin(x.gstin); setBranchPhone(x.phone);
+        setBranchEmail(x.email); setBranchIsHq(x.isHeadquarters); setFormStatus(x.status as any);
+        setAddrLine1(x.addressLine1); setAddrCity(x.city); setAddrState(x.state); setAddrPostalCode(x.postalCode); setAddrCountry(x.country);
+      }
+    } else if (module === 'departments' || module === 'masters/departments') {
+      const x = dbDepartments.find(d => d.id === id);
+      if (x) {
+        setFormCode(x.code); setDeptName(x.name); setDeptBranchId(x.branchId); setDeptDesc(x.description); setFormStatus(x.status as any);
+      }
+    } else if (module === 'designations' || module === 'masters/designations') {
+      const x = dbDesignations.find(d => d.id === id);
+      if (x) {
+        setFormCode(x.code); setDesigTitle(x.title); setDesigCompanyId(x.companyId); setDesigLevel(x.level); setDesigApprovalLimit(x.approvalLimit); setFormStatus(x.status as any);
+      }
+    } else if (module === 'employees' || module === 'masters/employees') {
+      const x = dbEmployees.find(e => e.id === id);
+      if (x) {
+        setFormCode(x.employeeCode); setEmpFirstName(x.firstName); setEmpLastName(x.lastName); setEmpEmail(x.email); setEmpPhone(x.phone);
+        setEmpCompanyId(x.companyId); setEmpBranchId(x.branchId); setEmpDepartmentId(x.departmentId); setEmpDesignationId(x.designationId);
+        setEmpJoiningDate(x.joiningDate); setEmpSalary(x.salary); setFormStatus(x.status as any);
+      }
+    } else if (module === 'products' || module === 'masters/products') {
+      const x = dbProducts.find(p => p.id === id);
+      if (x) {
+        setFormCode(x.code); setProdName(x.name); setProdBasePrice(x.price); setProdGstRate(x.taxRate); setFormStatus(x.status as any);
+      }
+    } else if (module === 'categories' || module === 'masters/categories') {
+      const x = dbCategories.find(c => c.id === id);
+      if (x) {
+        setFormCode(x.code); setCatName(x.name); setCatHsnDefault(x.description); setFormStatus(x.status as any);
+      }
+    } else if (module === 'brands' || module === 'masters/brands') {
+      const x = dbBrands.find(b => b.id === id);
+      if (x) {
+        setFormCode(x.code); setBrandName(x.name); setBrandOrigin(x.origin); setFormStatus(x.status as any);
+      }
+    } else if (module === 'units' || module === 'masters/units') {
+      const x = dbUnits.find(u => u.id === id);
+      if (x) {
+        setFormCode(x.code); setUomName(x.name); setUomBaseCode(x.baseUnit); setUomConversionFactor(x.conversionFactor); setFormStatus(x.status as any);
+      }
+    } else if (module === 'warehouses' || module === 'masters/warehouses') {
+      const x = dbWarehouses.find(w => w.id === id);
+      if (x) {
+        setFormCode(x.code); setWhName(x.name); setWhCapacitySqFt(x.capacitySft); setWhType(x.manager); setFormStatus(x.status as any);
+      }
+    } else if (module === 'customers' || module === 'masters/customers') {
+      const x = dbCustomers.find(c => c.id === id);
+      if (x) {
+        setFormCode(x.code); setCustLegalName(x.name); setCustPhone(x.contact); setCustEmail(x.email); setCustCreditLimit(x.balance); setFormStatus(x.status as any);
+      }
+    } else if (module === 'suppliers' || module === 'masters/suppliers') {
+      const x = dbSuppliers.find(s => s.id === id);
+      if (x) {
+        setFormCode(x.code); setSuppLegalName(x.name); setSuppPhone(x.contact); setSuppEmail(x.email); setSuppCreditLimit(x.balance); setFormStatus(x.status as any);
+      }
     }
   };
 
-  // ADVANCED ENTERPRISE VALIDATION & FOCUS CONTROLLER
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     const errors: Record<string, string> = {};
 
-    // 1. Code Validation
     if (!formCode.trim()) {
       errors.code = 'Code identifier is required (e.g. CMP-001).';
-    } else if (formCode.length < 3) {
-      errors.code = 'Code must be at least 3 characters long.';
     }
 
-    // 2. Module Specific Validations
     if (module === 'companies' || module === 'masters/companies') {
-      if (!compLegalName.trim()) {
-        errors.compLegalName = 'Legal Entity Name is required.';
-      }
-
-      // GSTIN Validation (If filled)
-      const cleanGstin = compGstin.trim().toUpperCase();
-      if (cleanGstin) {
-        if (cleanGstin.length !== 15) {
-          errors.compGstin = `GSTIN must be exactly 15 characters long (currently ${cleanGstin.length}).`;
-        } else if (!/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(cleanGstin)) {
-          errors.compGstin = 'GSTIN format is invalid (e.g. 07AAAAA0000A1Z5).';
-        }
-      }
-
-      // PAN Validation (If filled)
-      const cleanPan = compPan.trim().toUpperCase();
-      if (cleanPan) {
-        if (cleanPan.length !== 10) {
-          errors.compPan = `PAN must be exactly 10 characters long (currently ${cleanPan.length}).`;
-        } else if (!/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(cleanPan)) {
-          errors.compPan = 'PAN format is invalid (e.g. AAAAA0000A).';
-        }
-      }
-
-      // Email Validation
-      if (compEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(compEmail.trim())) {
-        errors.compEmail = 'Corporate Email format is invalid (e.g. hq@company.com).';
-      }
-
-      // Phone Validation
-      if (compPhone.trim() && compPhone.trim().length < 8) {
-        errors.compPhone = 'Phone number must be at least 8 digits.';
-      }
+      if (!compLegalName.trim()) errors.compLegalName = 'Legal Entity Name is required.';
     } else if (module === 'branches' || module === 'masters/branches') {
       if (!branchName.trim()) errors.branchName = 'Branch Name is required.';
     } else if (module === 'departments' || module === 'masters/departments') {
@@ -391,7 +386,6 @@ export default function MasterDataModule({ module, onTriggerToast }: MasterDataM
     } else if (module === 'employees' || module === 'masters/employees') {
       if (!empFirstName.trim()) errors.empFirstName = 'First Name is required.';
       if (!empLastName.trim()) errors.empLastName = 'Last Name is required.';
-      if (!empEmail.trim() || !empEmail.includes('@')) errors.empEmail = 'Valid official email address is required.';
     } else if (module === 'products' || module === 'masters/products') {
       if (!prodName.trim()) errors.prodName = 'Product SKU Name is required.';
     } else if (module === 'categories' || module === 'masters/categories') {
@@ -403,69 +397,114 @@ export default function MasterDataModule({ module, onTriggerToast }: MasterDataM
     } else if (module === 'warehouses' || module === 'masters/warehouses') {
       if (!whName.trim()) errors.whName = 'Warehouse Facility Name is required.';
     } else if (module === 'customers' || module === 'masters/customers') {
-      if (!custLegalName.trim()) errors.custLegalName = 'Customer Business Name is required.';
+      if (!custLegalName.trim()) errors.custLegalName = 'Customer Name is required.';
     } else if (module === 'suppliers' || module === 'masters/suppliers') {
       if (!suppLegalName.trim()) errors.suppLegalName = 'Supplier Legal Name is required.';
     }
 
-    // IF VALIDATION FAILS
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
-      
-      const errorKeys = Object.keys(errors);
-      const firstKey = errorKeys[0];
-      const firstErrorMessage = errors[firstKey];
-
-      // Requirement 6: Log backend validation errors in browser console during development
-      console.group(' [Master Data Client & Backend Validation Audit]');
-      console.error(`Validation Failed on Module: ${module}`);
-      console.error(`Total Failing Rules: ${errorKeys.length}`);
-      console.table(Object.entries(errors).map(([field, reason]) => ({ Field: field, 'Validation Failure Reason': reason })));
-      console.groupEnd();
-
-      // Requirement 5: Automatically focus the first invalid field element
-      setTimeout(() => {
-        const firstEl = document.getElementById(firstKey);
-        if (firstEl) {
-          firstEl.focus();
-          if (firstEl instanceof HTMLInputElement) {
-            firstEl.select();
-          }
-        }
-      }, 50);
-
-      // Requirement 4: Show specific validation failure title & description
-      onTriggerToast('error', `Validation Failed: ${firstKey.replace(/^[a-z]+/, match => match.toUpperCase())}`, firstErrorMessage);
+      const firstKey = Object.keys(errors)[0];
+      onTriggerToast('error', `Validation Failed`, errors[firstKey]);
       return;
     }
 
     setIsSaving(true);
     setTimeout(() => {
       const isNew = mode === 'create';
-
       if (module === 'companies' || module === 'masters/companies') {
         if (isNew) {
-          const item = {
-            id: String(dbCompanies.length + 1), code: formCode, legalName: compLegalName, tradeName: compTradeName || compLegalName,
-            gstin: compGstin.toUpperCase(), pan: compPan.toUpperCase(), email: compEmail, phone: compPhone, currency: compCurrency, status: formStatus,
-            addressLine1: addrLine1, city: addrCity, state: addrState, postalCode: addrPostalCode, country: addrCountry
-          };
-          setDbCompanies([...dbCompanies, item]);
-          masterDataService.createCompany({ code: formCode, legalName: compLegalName, tradeName: compTradeName, taxRegistrationNumber: compGstin.toUpperCase(), panNumber: compPan.toUpperCase(), email: compEmail, phone: compPhone, currencyCode: compCurrency, isActive: formStatus === 'Active', addressLine1: addrLine1, city: addrCity, state: addrState, postalCode: addrPostalCode, country: addrCountry });
+          setDbCompanies([...dbCompanies, { id: String(dbCompanies.length + 1), code: formCode, legalName: compLegalName, tradeName: compTradeName || compLegalName, gstin: compGstin, pan: compPan, email: compEmail, phone: compPhone, currency: compCurrency, status: formStatus, addressLine1: addrLine1, city: addrCity, state: addrState, postalCode: addrPostalCode, country: addrCountry }]);
+          masterDataService.createCompany({ code: formCode, legalName: compLegalName, tradeName: compTradeName, taxRegistrationNumber: compGstin, panNumber: compPan, email: compEmail, phone: compPhone, currencyCode: compCurrency, isActive: formStatus === 'Active', addressLine1: addrLine1, city: addrCity, state: addrState, postalCode: addrPostalCode, country: addrCountry });
         } else {
-          setDbCompanies(dbCompanies.map(c => c.id === selectedId ? { ...c, code: formCode, legalName: compLegalName, tradeName: compTradeName, gstin: compGstin.toUpperCase(), pan: compPan.toUpperCase(), email: compEmail, phone: compPhone, currency: compCurrency, status: formStatus, addressLine1: addrLine1, city: addrCity, state: addrState, postalCode: addrPostalCode, country: addrCountry } : c));
+          setDbCompanies(dbCompanies.map(c => c.id === selectedId ? { ...c, code: formCode, legalName: compLegalName, tradeName: compTradeName, gstin: compGstin, pan: compPan, email: compEmail, phone: compPhone, currency: compCurrency, status: formStatus, addressLine1: addrLine1, city: addrCity, state: addrState, postalCode: addrPostalCode, country: addrCountry } : c));
         }
+      } else if (module === 'branches' || module === 'masters/branches') {
+        const comp = dbCompanies.find(c => c.id === branchCompanyId)?.legalName || 'INK FMCG';
+        if (isNew) setDbBranches([...dbBranches, { id: String(dbBranches.length + 1), companyId: branchCompanyId, companyName: comp, code: formCode, name: branchName, gstin: branchGstin, phone: branchPhone, email: branchEmail, addressLine1: addrLine1, city: addrCity, state: addrState, postalCode: addrPostalCode, country: addrCountry, isHeadquarters: branchIsHq, status: formStatus }]);
+        else setDbBranches(dbBranches.map(b => b.id === selectedId ? { ...b, companyId: branchCompanyId, companyName: comp, code: formCode, name: branchName, gstin: branchGstin, phone: branchPhone, email: branchEmail, isHeadquarters: branchIsHq, status: formStatus } : b));
+      } else if (module === 'departments' || module === 'masters/departments') {
+        const br = dbBranches.find(b => b.id === deptBranchId)?.name || 'Main Branch';
+        if (isNew) setDbDepartments([...dbDepartments, { id: String(dbDepartments.length + 1), branchId: deptBranchId, branchName: br, code: formCode, name: deptName, description: deptDesc, status: formStatus }]);
+        else setDbDepartments(dbDepartments.map(d => d.id === selectedId ? { ...d, branchId: deptBranchId, branchName: br, code: formCode, name: deptName, description: deptDesc, status: formStatus } : d));
+      } else if (module === 'designations' || module === 'masters/designations') {
+        const comp = dbCompanies.find(c => c.id === desigCompanyId)?.legalName || 'INK FMCG';
+        if (isNew) setDbDesignations([...dbDesignations, { id: String(dbDesignations.length + 1), companyId: desigCompanyId, companyName: comp, code: formCode, title: desigTitle, level: desigLevel, approvalLimit: desigApprovalLimit, status: formStatus }]);
+        else setDbDesignations(dbDesignations.map(d => d.id === selectedId ? { ...d, companyId: desigCompanyId, companyName: comp, code: formCode, title: desigTitle, level: desigLevel, approvalLimit: desigApprovalLimit, status: formStatus } : d));
+      } else if (module === 'employees' || module === 'masters/employees') {
+        if (isNew) setDbEmployees([...dbEmployees, { id: String(dbEmployees.length + 1), companyId: empCompanyId, branchId: empBranchId, departmentId: empDepartmentId, designationId: empDesignationId, employeeCode: formCode, firstName: empFirstName, lastName: empLastName, email: empEmail, phone: empPhone, joiningDate: empJoiningDate, salary: empSalary, status: formStatus }]);
+        else setDbEmployees(dbEmployees.map(e => e.id === selectedId ? { ...e, companyId: empCompanyId, branchId: empBranchId, departmentId: empDepartmentId, designationId: empDesignationId, employeeCode: formCode, firstName: empFirstName, lastName: empLastName, email: empEmail, phone: empPhone, joiningDate: empJoiningDate, salary: empSalary, status: formStatus } : e));
+      } else if (module === 'products' || module === 'masters/products') {
+        const catName = dbCategories.find(c => c.id === prodCategoryId)?.name || 'Food';
+        const brandName = dbBrands.find(b => b.id === prodBrandId)?.name || 'Generic';
+        const uomCode = dbUnits.find(u => u.id === prodBaseUomId)?.code || 'Bag';
+        if (isNew) setDbProducts([...dbProducts, { id: String(dbProducts.length + 1), code: formCode, name: prodName, category: catName, brand: brandName, unit: uomCode, price: prodBasePrice, taxRate: prodGstRate, stockLevel: 100, status: formStatus }]);
+        else setDbProducts(dbProducts.map(p => p.id === selectedId ? { ...p, code: formCode, name: prodName, category: catName, brand: brandName, unit: uomCode, price: prodBasePrice, taxRate: prodGstRate, status: formStatus } : p));
+      } else if (module === 'categories' || module === 'masters/categories') {
+        if (isNew) setDbCategories([...dbCategories, { id: String(dbCategories.length + 1), code: formCode, name: catName, description: catHsnDefault, productCount: 0, status: formStatus }]);
+        else setDbCategories(dbCategories.map(c => c.id === selectedId ? { ...c, code: formCode, name: catName, description: catHsnDefault, status: formStatus } : c));
+      } else if (module === 'brands' || module === 'masters/brands') {
+        if (isNew) setDbBrands([...dbBrands, { id: String(dbBrands.length + 1), code: formCode, name: brandName, origin: brandOrigin, productCount: 0, status: formStatus }]);
+        else setDbBrands(dbBrands.map(b => b.id === selectedId ? { ...b, code: formCode, name: brandName, origin: brandOrigin, status: formStatus } : b));
+      } else if (module === 'units' || module === 'masters/units') {
+        if (isNew) setDbUnits([...dbUnits, { id: String(dbUnits.length + 1), code: formCode, name: uomName, baseUnit: uomBaseCode, conversionFactor: uomConversionFactor, status: formStatus }]);
+        else setDbUnits(dbUnits.map(u => u.id === selectedId ? { ...u, code: formCode, name: uomName, baseUnit: uomBaseCode, conversionFactor: uomConversionFactor, status: formStatus } : u));
+      } else if (module === 'warehouses' || module === 'masters/warehouses') {
+        if (isNew) setDbWarehouses([...dbWarehouses, { id: String(dbWarehouses.length + 1), code: formCode, name: whName, address: `${addrLine1}, ${addrCity}`, capacitySft: whCapacitySqFt, manager: whType, status: formStatus }]);
+        else setDbWarehouses(dbWarehouses.map(w => w.id === selectedId ? { ...w, code: formCode, name: whName, manager: whType, capacitySft: whCapacitySqFt, status: formStatus } : w));
+      } else if (module === 'customers' || module === 'masters/customers') {
+        if (isNew) setDbCustomers([...dbCustomers, { id: String(dbCustomers.length + 1), code: formCode, name: custLegalName, contact: custPhone, email: custEmail, balance: custCreditLimit, region: addrState || 'National', status: formStatus }]);
+        else setDbCustomers(dbCustomers.map(c => c.id === selectedId ? { ...c, code: formCode, name: custLegalName, contact: custPhone, email: custEmail, balance: custCreditLimit, status: formStatus } : c));
+      } else if (module === 'suppliers' || module === 'masters/suppliers') {
+        if (isNew) setDbSuppliers([...dbSuppliers, { id: String(dbSuppliers.length + 1), code: formCode, name: suppLegalName, contact: suppPhone, email: suppEmail, balance: suppCreditLimit, category: suppTradeName || 'Packaged Goods', status: formStatus }]);
+        else setDbSuppliers(dbSuppliers.map(s => s.id === selectedId ? { ...s, code: formCode, name: suppLegalName, contact: suppPhone, email: suppEmail, balance: suppCreditLimit, status: formStatus } : s));
       }
 
       setIsSaving(false);
-      onTriggerToast('success', `${config.singular} Saved`, `Master record has been configured successfully.`);
+      onTriggerToast('success', `${config.singular} Saved`, `Master record configured.`);
       setMode('list');
       setSelectedId(null);
     }, 400);
   };
 
+  const confirmDelete = async () => {
+    if (!deleteId) return;
+    try {
+      await masterDataService.deleteMasterEntity(config.endpoint, deleteId);
+    } catch (err) {
+      console.error('[Soft Delete Error]', err);
+    }
+
+    if (module === 'companies' || module === 'masters/companies') setDbCompanies(dbCompanies.filter(x => x.id !== deleteId));
+    else if (module === 'branches' || module === 'masters/branches') setDbBranches(dbBranches.filter(x => x.id !== deleteId));
+    else if (module === 'departments' || module === 'masters/departments') setDbDepartments(dbDepartments.filter(x => x.id !== deleteId));
+    else if (module === 'designations' || module === 'masters/designations') setDbDesignations(dbDesignations.filter(x => x.id !== deleteId));
+    else if (module === 'employees' || module === 'masters/employees') setDbEmployees(dbEmployees.filter(x => x.id !== deleteId));
+    else if (module === 'products' || module === 'masters/products') setDbProducts(dbProducts.filter(x => x.id !== deleteId));
+    else if (module === 'categories' || module === 'masters/categories') setDbCategories(dbCategories.filter(x => x.id !== deleteId));
+    else if (module === 'brands' || module === 'masters/brands') setDbBrands(dbBrands.filter(x => x.id !== deleteId));
+    else if (module === 'units' || module === 'masters/units') setDbUnits(dbUnits.filter(x => x.id !== deleteId));
+    else if (module === 'warehouses' || module === 'masters/warehouses') setDbWarehouses(dbWarehouses.filter(x => x.id !== deleteId));
+    else if (module === 'customers' || module === 'masters/customers') setDbCustomers(dbCustomers.filter(x => x.id !== deleteId));
+    else if (module === 'suppliers' || module === 'masters/suppliers') setDbSuppliers(dbSuppliers.filter(x => x.id !== deleteId));
+
+    onTriggerToast('info', 'Record Soft-Deleted', `${config.singular} record deactivated.`);
+    setDeleteId(null);
+  };
+
   const getActiveArray = () => {
     if (module === 'companies' || module === 'masters/companies') return dbCompanies.map(c => ({ id: c.id, code: c.code, name: c.legalName, detail1: c.gstin || 'N/A', detail2: c.city || 'HQ', numericText: c.currency, status: c.status }));
+    if (module === 'branches' || module === 'masters/branches') return dbBranches.map(b => ({ id: b.id, code: b.code, name: b.name, detail1: b.companyName, detail2: b.city, numericText: b.isHeadquarters ? 'Headquarters' : 'Depot', status: b.status }));
+    if (module === 'departments' || module === 'masters/departments') return dbDepartments.map(d => ({ id: d.id, code: d.code, name: d.name, detail1: d.branchName, detail2: d.description, numericText: 'Dept', status: d.status }));
+    if (module === 'designations' || module === 'masters/designations') return dbDesignations.map(d => ({ id: d.id, code: d.code, name: d.title, detail1: d.companyName, detail2: `Level ${d.level}`, numericText: `Limit: ₹${d.approvalLimit.toLocaleString()}`, status: d.status }));
+    if (module === 'employees' || module === 'masters/employees') return dbEmployees.map(e => ({ id: e.id, code: e.employeeCode, name: `${e.firstName} ${e.lastName}`, detail1: e.email, detail2: e.phone, numericText: `₹${e.salary.toLocaleString()}`, status: e.status }));
+    if (module === 'products' || module === 'masters/products') return dbProducts.map(p => ({ id: p.id, code: p.code, name: p.name, detail1: p.category, detail2: p.brand, numericText: `₹${p.price}`, status: p.status }));
+    if (module === 'categories' || module === 'masters/categories') return dbCategories.map(c => ({ id: c.id, code: c.code, name: c.name, detail1: c.description, detail2: '', numericText: `${c.productCount} SKUs`, status: c.status }));
+    if (module === 'brands' || module === 'masters/brands') return dbBrands.map(b => ({ id: b.id, code: b.code, name: b.name, detail1: b.origin, detail2: '', numericText: `${b.productCount} SKUs`, status: b.status }));
+    if (module === 'units' || module === 'masters/units') return dbUnits.map(u => ({ id: u.id, code: u.code, name: u.name, detail1: u.baseUnit, detail2: '', numericText: `Factor: ${u.conversionFactor}`, status: u.status }));
+    if (module === 'warehouses' || module === 'masters/warehouses') return dbWarehouses.map(w => ({ id: w.id, code: w.code, name: w.name, detail1: w.manager, detail2: w.address, numericText: `${w.capacitySft.toLocaleString()} sq ft`, status: w.status }));
+    if (module === 'customers' || module === 'masters/customers') return dbCustomers.map(c => ({ id: c.id, code: c.code, name: c.name, detail1: c.contact, detail2: c.email, numericText: `Limit: ₹${c.balance.toLocaleString()}`, status: c.status }));
+    if (module === 'suppliers' || module === 'masters/suppliers') return dbSuppliers.map(s => ({ id: s.id, code: s.code, name: s.name, detail1: s.contact, detail2: s.email, numericText: `Limit: ₹${s.balance.toLocaleString()}`, status: s.status }));
     return dbCompanies.map(c => ({ id: c.id, code: c.code, name: c.legalName, detail1: c.gstin, detail2: c.city, numericText: c.currency, status: c.status }));
   };
 
@@ -519,7 +558,7 @@ export default function MasterDataModule({ module, onTriggerToast }: MasterDataM
         </div>
       </div>
 
-      {/* CORE DISPLAY WINDOW */}
+      {/* DISPLAY WINDOW */}
       {simulatedState === 'loading' ? (
         <div className="bg-white p-24 border border-brand-border rounded-lg text-center space-y-3 shadow-sm">
           <Loader2 className="w-8 h-8 text-brand-primary animate-spin mx-auto" />
@@ -603,8 +642,9 @@ export default function MasterDataModule({ module, onTriggerToast }: MasterDataM
                         </td>
                         <td className="p-3 text-center">
                           <div className="flex items-center justify-center gap-1">
-                            <button onClick={() => { setSelectedId(row.id); populateForm(row.id); setMode('view'); }} className="p-1 text-brand-text-secondary hover:text-brand-primary rounded"><Eye size={13} /></button>
-                            <button onClick={() => { setSelectedId(row.id); populateForm(row.id); setMode('edit'); }} className="p-1 text-brand-text-secondary hover:text-brand-primary rounded"><Edit2 size={13} /></button>
+                            <button onClick={() => { setSelectedId(row.id); populateForm(row.id); setMode('view'); }} title="View Details (Read-Only)" className="p-1 text-brand-text-secondary hover:text-brand-primary hover:bg-blue-50 rounded cursor-pointer transition"><Eye size={13} /></button>
+                            <button onClick={() => { setSelectedId(row.id); populateForm(row.id); setMode('edit'); }} title="Edit Record" className="p-1 text-brand-text-secondary hover:text-brand-primary hover:bg-blue-50 rounded cursor-pointer transition"><Edit2 size={13} /></button>
+                            <button onClick={() => setDeleteId(row.id)} title="Delete (Soft-Delete)" className="p-1 text-brand-text-secondary hover:text-brand-danger hover:bg-red-50 rounded cursor-pointer transition"><Trash2 size={13} /></button>
                           </div>
                         </td>
                       </tr>
@@ -626,7 +666,123 @@ export default function MasterDataModule({ module, onTriggerToast }: MasterDataM
             </div>
           )}
 
-          {/* CREATE & EDIT FORM MODE — ENHANCED VALIDATION & FIELD HIGHLIGHTING */}
+          {/* READ-ONLY VIEW MODE */}
+          {mode === 'view' && selectedId && (
+            <div className="bg-white border border-brand-border rounded-lg shadow-sm-flat p-6 space-y-6">
+              
+              <div className="flex items-center justify-between border-b pb-4">
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => { setMode('list'); setSelectedId(null); }}
+                    className="inline-flex items-center gap-1 text-xs text-brand-primary font-bold hover:underline mb-2 cursor-pointer"
+                  >
+                    <ChevronLeft size={14} /> Back to Master Registry List
+                  </button>
+                  <h2 className="text-lg font-bold text-brand-text-primary">
+                    {config.singular} Read-Only Master Record Profile
+                  </h2>
+                  <p className="text-xs text-brand-text-secondary">Official ERP Master Registry specifications and metadata.</p>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setMode('edit')}
+                    className="px-3.5 py-1.5 border border-brand-border text-brand-text-primary hover:bg-brand-bg-secondary font-bold text-xs rounded transition flex items-center gap-1 cursor-pointer"
+                  >
+                    <Edit2 size={13} /> Edit Specifications
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setMode('list'); setSelectedId(null); }}
+                    className="px-4 py-1.5 bg-brand-primary text-white hover:bg-blue-700 font-bold text-xs rounded transition cursor-pointer shadow-sm"
+                  >
+                    Done Reviewing
+                  </button>
+                </div>
+              </div>
+
+              {/* READ-ONLY FIELD CARDS GRID */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-xs">
+                
+                {/* Column 1: Core Identifier Card */}
+                <div className="bg-brand-bg-secondary/30 p-4 rounded-lg border border-brand-border space-y-3">
+                  <h3 className="font-bold text-brand-text-primary text-[11px] uppercase tracking-wider flex items-center gap-1.5 border-b pb-2">
+                    <Building size={14} className="text-brand-primary" /> Identity Specifications
+                  </h3>
+                  <div className="space-y-2">
+                    <div>
+                      <span className="text-brand-text-secondary font-semibold block text-[10px] uppercase">Record Code</span>
+                      <span className="font-mono text-sm font-bold text-brand-primary">{formCode || 'N/A'}</span>
+                    </div>
+                    <div>
+                      <span className="text-brand-text-secondary font-semibold block text-[10px] uppercase">Legal Entity / Title</span>
+                      <span className="font-semibold text-brand-text-primary text-sm">{compLegalName || branchName || deptName || desigTitle || `${empFirstName} ${empLastName}`.trim() || prodName || catName || brandName || uomName || whName || custLegalName || suppLegalName || 'N/A'}</span>
+                    </div>
+                    <div>
+                      <span className="text-brand-text-secondary font-semibold block text-[10px] uppercase">Status</span>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold inline-block mt-0.5 ${formStatus === 'Active' ? 'bg-green-50 text-brand-success border border-green-200' : 'bg-gray-50 text-brand-text-secondary border'}`}>
+                        {formStatus}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Column 2: Commercial & Tax Parameters */}
+                <div className="bg-brand-bg-secondary/30 p-4 rounded-lg border border-brand-border space-y-3">
+                  <h3 className="font-bold text-brand-text-primary text-[11px] uppercase tracking-wider flex items-center gap-1.5 border-b pb-2">
+                    <ShieldCheck size={14} className="text-brand-primary" /> Tax & Trade Controls
+                  </h3>
+                  <div className="space-y-2">
+                    <div>
+                      <span className="text-brand-text-secondary font-semibold block text-[10px] uppercase">GSTIN / Tax ID</span>
+                      <span className="font-mono font-bold text-brand-text-primary">{compGstin || branchGstin || custGstin || suppGstin || 'Not Registered'}</span>
+                    </div>
+                    <div>
+                      <span className="text-brand-text-secondary font-semibold block text-[10px] uppercase">PAN Account</span>
+                      <span className="font-mono font-bold text-brand-text-primary">{compPan || custPan || suppPan || 'Not Registered'}</span>
+                    </div>
+                    <div>
+                      <span className="text-brand-text-secondary font-semibold block text-[10px] uppercase">Base Currency / Pricing</span>
+                      <span className="font-mono font-bold text-brand-primary">{compCurrency || 'INR (₹)'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Column 3: Contact & Address */}
+                <div className="bg-brand-bg-secondary/30 p-4 rounded-lg border border-brand-border space-y-3">
+                  <h3 className="font-bold text-brand-text-primary text-[11px] uppercase tracking-wider flex items-center gap-1.5 border-b pb-2">
+                    <MapPin size={14} className="text-brand-primary" /> Communication & Location
+                  </h3>
+                  <div className="space-y-2">
+                    <div>
+                      <span className="text-brand-text-secondary font-semibold block text-[10px] uppercase">Email</span>
+                      <span className="font-medium text-brand-text-primary">{compEmail || branchEmail || empEmail || custEmail || suppEmail || 'N/A'}</span>
+                    </div>
+                    <div>
+                      <span className="text-brand-text-secondary font-semibold block text-[10px] uppercase">Phone</span>
+                      <span className="font-medium text-brand-text-primary">{compPhone || branchPhone || empPhone || custPhone || suppPhone || 'N/A'}</span>
+                    </div>
+                    <div>
+                      <span className="text-brand-text-secondary font-semibold block text-[10px] uppercase">Address</span>
+                      <span className="font-medium text-brand-text-primary">{addrLine1 ? `${addrLine1}, ${addrCity}, ${addrState}` : 'Headquarters'}</span>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
+              <div className="border-t pt-4 text-[10px] text-brand-text-secondary font-mono flex flex-col sm:flex-row items-center justify-between gap-2 bg-brand-bg-secondary/20 p-3 rounded">
+                <p>RECORD GUID: {selectedId}</p>
+                <p>SCHEMA: postgresql.master_data.{config.endpoint}</p>
+                <p>VERIFICATION: PostgreSQL 17 / Clean Architecture CQRS</p>
+              </div>
+
+            </div>
+          )}
+
+          {/* CREATE & EDIT FORM MODE — DEDICATED FORMS FOR ALL 12 ENTITIES */}
           {(mode === 'create' || mode === 'edit') && (
             <form onSubmit={handleSave} noValidate className="bg-white border border-brand-border rounded-lg shadow-sm-flat p-6 space-y-6">
               
@@ -681,7 +837,7 @@ export default function MasterDataModule({ module, onTriggerToast }: MasterDataM
                 </div>
               )}
 
-              {/* DEDICATED FORM LAYOUT WITH INLINE ERROR MESSAGES & HIGHLIGHTING */}
+              {/* DEDICATED FORM LAYOUTS FOR ALL 12 ENTITIES */}
               
               {/* 1. COMPANY FORM */}
               {(module === 'companies' || module === 'masters/companies') && (
@@ -689,137 +845,34 @@ export default function MasterDataModule({ module, onTriggerToast }: MasterDataM
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="space-y-1">
                       <label htmlFor="code" className="font-bold text-brand-text-primary">Company Code <span className="text-red-500">*</span></label>
-                      <input
-                        id="code"
-                        type="text"
-                        value={formCode}
-                        onChange={e => { setFormCode(e.target.value); setFormErrors(prev => ({ ...prev, code: '' })); }}
-                        disabled={mode === 'edit'}
-                        className={`w-full p-2 border rounded text-brand-text-primary ${
-                          formErrors.code ? 'border-red-500 bg-red-50/20 focus:border-red-500 focus:ring-1 focus:ring-red-500' : 'border-brand-border'
-                        }`}
-                        placeholder="CMP-001"
-                      />
-                      {formErrors.code && (
-                        <p className="text-[11px] text-red-600 font-semibold mt-1 flex items-center gap-1">
-                          <AlertCircle size={12} className="shrink-0" /> {formErrors.code}
-                        </p>
-                      )}
+                      <input id="code" type="text" value={formCode} onChange={e => setFormCode(e.target.value)} disabled={mode === 'edit'} className="w-full p-2 border border-brand-border rounded text-brand-text-primary font-mono font-bold" placeholder="CMP-001" />
                     </div>
-
                     <div className="space-y-1">
                       <label htmlFor="compLegalName" className="font-bold text-brand-text-primary">Legal Entity Name <span className="text-red-500">*</span></label>
-                      <input
-                        id="compLegalName"
-                        type="text"
-                        value={compLegalName}
-                        onChange={e => { setCompLegalName(e.target.value); setFormErrors(prev => ({ ...prev, compLegalName: '' })); }}
-                        className={`w-full p-2 border rounded text-brand-text-primary ${
-                          formErrors.compLegalName ? 'border-red-500 bg-red-50/20 focus:border-red-500 focus:ring-1 focus:ring-red-500' : 'border-brand-border'
-                        }`}
-                        placeholder="INK FMCG Private Limited"
-                      />
-                      {formErrors.compLegalName && (
-                        <p className="text-[11px] text-red-600 font-semibold mt-1 flex items-center gap-1">
-                          <AlertCircle size={12} className="shrink-0" /> {formErrors.compLegalName}
-                        </p>
-                      )}
+                      <input id="compLegalName" type="text" value={compLegalName} onChange={e => setCompLegalName(e.target.value)} className="w-full p-2 border border-brand-border rounded" placeholder="INK FMCG Private Limited" />
                     </div>
-
                     <div className="space-y-1">
                       <label htmlFor="compTradeName" className="font-bold text-brand-text-primary">Trade / Brand Name</label>
-                      <input
-                        id="compTradeName"
-                        type="text"
-                        value={compTradeName}
-                        onChange={e => setCompTradeName(e.target.value)}
-                        className="w-full p-2 border border-brand-border rounded"
-                        placeholder="INK Foods"
-                      />
+                      <input id="compTradeName" type="text" value={compTradeName} onChange={e => setCompTradeName(e.target.value)} className="w-full p-2 border border-brand-border rounded" placeholder="INK Foods" />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div className="space-y-1">
                       <label htmlFor="compGstin" className="font-bold text-brand-text-primary">GSTIN (Tax ID)</label>
-                      <input
-                        id="compGstin"
-                        type="text"
-                        maxLength={15}
-                        value={compGstin}
-                        onChange={e => { setCompGstin(e.target.value.toUpperCase()); setFormErrors(prev => ({ ...prev, compGstin: '' })); }}
-                        className={`w-full p-2 border rounded uppercase font-mono ${
-                          formErrors.compGstin ? 'border-red-500 bg-red-50/20 focus:border-red-500 focus:ring-1 focus:ring-red-500' : 'border-brand-border'
-                        }`}
-                        placeholder="07AAAAA0000A1Z5"
-                      />
-                      {formErrors.compGstin ? (
-                        <p className="text-[11px] text-red-600 font-semibold mt-1 flex items-center gap-1">
-                          <AlertCircle size={12} className="shrink-0" /> {formErrors.compGstin}
-                        </p>
-                      ) : (
-                        <p className="text-[10px] text-brand-text-secondary">15-digit Tax Identification Number</p>
-                      )}
+                      <input id="compGstin" type="text" maxLength={15} value={compGstin} onChange={e => setCompGstin(e.target.value.toUpperCase())} className="w-full p-2 border border-brand-border rounded uppercase font-mono" placeholder="07AAAAA0000A1Z5" />
                     </div>
-
                     <div className="space-y-1">
                       <label htmlFor="compPan" className="font-bold text-brand-text-primary">PAN Number</label>
-                      <input
-                        id="compPan"
-                        type="text"
-                        maxLength={10}
-                        value={compPan}
-                        onChange={e => { setCompPan(e.target.value.toUpperCase()); setFormErrors(prev => ({ ...prev, compPan: '' })); }}
-                        className={`w-full p-2 border rounded uppercase font-mono ${
-                          formErrors.compPan ? 'border-red-500 bg-red-50/20 focus:border-red-500 focus:ring-1 focus:ring-red-500' : 'border-brand-border'
-                        }`}
-                        placeholder="AAAAA0000A"
-                      />
-                      {formErrors.compPan ? (
-                        <p className="text-[11px] text-red-600 font-semibold mt-1 flex items-center gap-1">
-                          <AlertCircle size={12} className="shrink-0" /> {formErrors.compPan}
-                        </p>
-                      ) : (
-                        <p className="text-[10px] text-brand-text-secondary">10-character Tax Account Number</p>
-                      )}
+                      <input id="compPan" type="text" maxLength={10} value={compPan} onChange={e => setCompPan(e.target.value.toUpperCase())} className="w-full p-2 border border-brand-border rounded uppercase font-mono" placeholder="AAAAA0000A" />
                     </div>
-
                     <div className="space-y-1">
                       <label htmlFor="compEmail" className="font-bold text-brand-text-primary">Corporate Email</label>
-                      <input
-                        id="compEmail"
-                        type="email"
-                        value={compEmail}
-                        onChange={e => { setCompEmail(e.target.value); setFormErrors(prev => ({ ...prev, compEmail: '' })); }}
-                        className={`w-full p-2 border rounded ${
-                          formErrors.compEmail ? 'border-red-500 bg-red-50/20 focus:border-red-500 focus:ring-1 focus:ring-red-500' : 'border-brand-border'
-                        }`}
-                        placeholder="hq@ink-fmcg.com"
-                      />
-                      {formErrors.compEmail && (
-                        <p className="text-[11px] text-red-600 font-semibold mt-1 flex items-center gap-1">
-                          <AlertCircle size={12} className="shrink-0" /> {formErrors.compEmail}
-                        </p>
-                      )}
+                      <input id="compEmail" type="email" value={compEmail} onChange={e => setCompEmail(e.target.value)} className="w-full p-2 border border-brand-border rounded" placeholder="hq@ink-fmcg.com" />
                     </div>
-
                     <div className="space-y-1">
                       <label htmlFor="compPhone" className="font-bold text-brand-text-primary">Phone Number</label>
-                      <input
-                        id="compPhone"
-                        type="text"
-                        value={compPhone}
-                        onChange={e => { setCompPhone(e.target.value); setFormErrors(prev => ({ ...prev, compPhone: '' })); }}
-                        className={`w-full p-2 border rounded ${
-                          formErrors.compPhone ? 'border-red-500 bg-red-50/20 focus:border-red-500 focus:ring-1 focus:ring-red-500' : 'border-brand-border'
-                        }`}
-                        placeholder="+91 11 4500 8800"
-                      />
-                      {formErrors.compPhone && (
-                        <p className="text-[11px] text-red-600 font-semibold mt-1 flex items-center gap-1">
-                          <AlertCircle size={12} className="shrink-0" /> {formErrors.compPhone}
-                        </p>
-                      )}
+                      <input id="compPhone" type="text" value={compPhone} onChange={e => setCompPhone(e.target.value)} className="w-full p-2 border border-brand-border rounded" placeholder="+91 11 4500 8800" />
                     </div>
                   </div>
 
@@ -836,7 +889,6 @@ export default function MasterDataModule({ module, onTriggerToast }: MasterDataM
                           <option value="INR">INR (₹ - Indian Rupee)</option>
                           <option value="USD">USD ($ - US Dollar)</option>
                           <option value="EUR">EUR (€ - Euro)</option>
-                          <option value="AED">AED (Dirham)</option>
                         </select>
                       </div>
                     </div>
@@ -845,6 +897,437 @@ export default function MasterDataModule({ module, onTriggerToast }: MasterDataM
                       <div><label className="font-semibold text-brand-text-secondary">State</label><input type="text" value={addrState} onChange={e => setAddrState(e.target.value)} className="w-full p-2 border border-brand-border rounded bg-white" placeholder="Delhi" /></div>
                       <div><label className="font-semibold text-brand-text-secondary">Postal Code</label><input type="text" value={addrPostalCode} onChange={e => setAddrPostalCode(e.target.value)} className="w-full p-2 border border-brand-border rounded bg-white" placeholder="110020" /></div>
                       <div><label className="font-semibold text-brand-text-secondary">Country</label><input type="text" value={addrCountry} onChange={e => setAddrCountry(e.target.value)} className="w-full p-2 border border-brand-border rounded bg-white" placeholder="India" /></div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 2. BRANCH FORM */}
+              {(module === 'branches' || module === 'masters/branches') && (
+                <div className="space-y-6 text-xs">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-1">
+                      <label className="font-bold text-brand-text-primary">Parent Company <span className="text-red-500">*</span></label>
+                      <select value={branchCompanyId} onChange={e => setBranchCompanyId(e.target.value)} className="w-full p-2 border rounded bg-white font-semibold border-brand-border">
+                        {dbCompanies.map(c => <option key={c.id} value={c.id}>{c.legalName}</option>)}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label htmlFor="code" className="font-bold text-brand-text-primary">Branch Code <span className="text-red-500">*</span></label>
+                      <input id="code" type="text" value={formCode} onChange={e => setFormCode(e.target.value)} disabled={mode === 'edit'} className="w-full p-2 border border-brand-border rounded font-mono font-bold" placeholder="BR-DEL-01" />
+                    </div>
+                    <div className="space-y-1">
+                      <label htmlFor="branchName" className="font-bold text-brand-text-primary">Branch Name <span className="text-red-500">*</span></label>
+                      <input id="branchName" type="text" value={branchName} onChange={e => setBranchName(e.target.value)} className="w-full p-2 border border-brand-border rounded" placeholder="Delhi Main Branch" />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-1">
+                      <label className="font-bold text-brand-text-primary">Branch GSTIN</label>
+                      <input type="text" value={branchGstin} onChange={e => setBranchGstin(e.target.value)} className="w-full p-2 border border-brand-border rounded uppercase font-mono" placeholder="07AAAAA0000A1Z5" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-brand-text-primary">Branch Phone</label>
+                      <input type="text" value={branchPhone} onChange={e => setBranchPhone(e.target.value)} className="w-full p-2 border border-brand-border rounded" placeholder="+91 11 4500 8801" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-brand-text-primary">Branch Email</label>
+                      <input type="email" value={branchEmail} onChange={e => setBranchEmail(e.target.value)} className="w-full p-2 border border-brand-border rounded" placeholder="delhi@ink-fmcg.com" />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 p-3 bg-blue-50/50 rounded border border-blue-100">
+                    <input type="checkbox" id="hqCheck" checked={branchIsHq} onChange={e => setBranchIsHq(e.target.checked)} className="w-4 h-4 text-brand-primary rounded" />
+                    <label htmlFor="hqCheck" className="font-bold text-brand-text-primary cursor-pointer">Designate as Corporate Headquarters Branch</label>
+                  </div>
+                </div>
+              )}
+
+              {/* 3. DEPARTMENT FORM */}
+              {(module === 'departments' || module === 'masters/departments') && (
+                <div className="space-y-6 text-xs">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-1">
+                      <label className="font-bold text-brand-text-primary">Parent Branch <span className="text-red-500">*</span></label>
+                      <select value={deptBranchId} onChange={e => setDeptBranchId(e.target.value)} className="w-full p-2 border rounded bg-white font-semibold border-brand-border">
+                        {dbBranches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label htmlFor="code" className="font-bold text-brand-text-primary">Department Code <span className="text-red-500">*</span></label>
+                      <input id="code" type="text" value={formCode} onChange={e => setFormCode(e.target.value)} disabled={mode === 'edit'} className="w-full p-2 border border-brand-border rounded font-mono font-bold" placeholder="DEP-SCM" />
+                    </div>
+                    <div className="space-y-1">
+                      <label htmlFor="deptName" className="font-bold text-brand-text-primary">Department Name <span className="text-red-500">*</span></label>
+                      <input id="deptName" type="text" value={deptName} onChange={e => setDeptName(e.target.value)} className="w-full p-2 border border-brand-border rounded" placeholder="Supply Chain & Logistics" />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-brand-text-primary">Description & Operational Mandate</label>
+                    <textarea rows={3} value={deptDesc} onChange={e => setDeptDesc(e.target.value)} className="w-full p-2 border border-brand-border rounded" placeholder="Oversees raw material procurement, warehouse inventory, and trade routes." />
+                  </div>
+                </div>
+              )}
+
+              {/* 4. DESIGNATION FORM */}
+              {(module === 'designations' || module === 'masters/designations') && (
+                <div className="space-y-6 text-xs">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-1">
+                      <label className="font-bold text-brand-text-primary">Company <span className="text-red-500">*</span></label>
+                      <select value={desigCompanyId} onChange={e => setDesigCompanyId(e.target.value)} className="w-full p-2 border rounded bg-white font-semibold border-brand-border">
+                        {dbCompanies.map(c => <option key={c.id} value={c.id}>{c.legalName}</option>)}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label htmlFor="code" className="font-bold text-brand-text-primary">Designation Code <span className="text-red-500">*</span></label>
+                      <input id="code" type="text" value={formCode} onChange={e => setFormCode(e.target.value)} disabled={mode === 'edit'} className="w-full p-2 border border-brand-border rounded font-mono font-bold" placeholder="DSG-RSM" />
+                    </div>
+                    <div className="space-y-1">
+                      <label htmlFor="desigTitle" className="font-bold text-brand-text-primary">Designation Title <span className="text-red-500">*</span></label>
+                      <input id="desigTitle" type="text" value={desigTitle} onChange={e => setDesigTitle(e.target.value)} className="w-full p-2 border border-brand-border rounded" placeholder="Regional Sales Manager" />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="font-bold text-brand-text-primary">Hierarchy Level (1 = Executive, 10 = Entry)</label>
+                      <input type="number" min={1} max={20} value={desigLevel} onChange={e => setDesigLevel(Number(e.target.value))} className="w-full p-2 border border-brand-border rounded font-mono font-bold" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-brand-text-primary">Financial Approval Limit (₹)</label>
+                      <input type="number" value={desigApprovalLimit} onChange={e => setDesigApprovalLimit(Number(e.target.value))} className="w-full p-2 border border-brand-border rounded font-mono font-bold text-brand-primary" placeholder="500000" />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 5. EMPLOYEE FORM */}
+              {(module === 'employees' || module === 'masters/employees') && (
+                <div className="space-y-6 text-xs">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="space-y-1">
+                      <label htmlFor="code" className="font-bold text-brand-text-primary">Employee Code <span className="text-red-500">*</span></label>
+                      <input id="code" type="text" value={formCode} onChange={e => setFormCode(e.target.value)} disabled={mode === 'edit'} className="w-full p-2 border border-brand-border rounded font-mono font-bold" placeholder="EMP-1001" />
+                    </div>
+                    <div className="space-y-1">
+                      <label htmlFor="empFirstName" className="font-bold text-brand-text-primary">First Name <span className="text-red-500">*</span></label>
+                      <input id="empFirstName" type="text" value={empFirstName} onChange={e => setEmpFirstName(e.target.value)} className="w-full p-2 border border-brand-border rounded" placeholder="Rajesh" />
+                    </div>
+                    <div className="space-y-1">
+                      <label htmlFor="empLastName" className="font-bold text-brand-text-primary">Last Name <span className="text-red-500">*</span></label>
+                      <input id="empLastName" type="text" value={empLastName} onChange={e => setEmpLastName(e.target.value)} className="w-full p-2 border border-brand-border rounded" placeholder="Kumar" />
+                    </div>
+                    <div className="space-y-1">
+                      <label htmlFor="empEmail" className="font-bold text-brand-text-primary">Official Email <span className="text-red-500">*</span></label>
+                      <input id="empEmail" type="email" value={empEmail} onChange={e => setEmpEmail(e.target.value)} className="w-full p-2 border border-brand-border rounded" placeholder="rajesh@ink-fmcg.com" />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="space-y-1">
+                      <label className="font-bold text-brand-text-primary">Branch Location</label>
+                      <select value={empBranchId} onChange={e => setEmpBranchId(e.target.value)} className="w-full p-2 border border-brand-border rounded bg-white">
+                        {dbBranches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-brand-text-primary">Department</label>
+                      <select value={empDepartmentId} onChange={e => setEmpDepartmentId(e.target.value)} className="w-full p-2 border border-brand-border rounded bg-white">
+                        {dbDepartments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-brand-text-primary">Designation</label>
+                      <select value={empDesignationId} onChange={e => setEmpDesignationId(e.target.value)} className="w-full p-2 border border-brand-border rounded bg-white">
+                        {dbDesignations.map(d => <option key={d.id} value={d.id}>{d.title}</option>)}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-brand-text-primary">Joining Date</label>
+                      <input type="date" value={empJoiningDate} onChange={e => setEmpJoiningDate(e.target.value)} className="w-full p-2 border border-brand-border rounded bg-white font-mono" />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 6. PRODUCT FORM */}
+              {(module === 'products' || module === 'masters/products') && (
+                <div className="space-y-6 text-xs">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="space-y-1">
+                      <label htmlFor="code" className="font-bold text-brand-text-primary">SKU Code <span className="text-red-500">*</span></label>
+                      <input id="code" type="text" value={formCode} onChange={e => setFormCode(e.target.value)} disabled={mode === 'edit'} className="w-full p-2 border border-brand-border rounded font-mono font-bold" placeholder="PROD-001" />
+                    </div>
+                    <div className="space-y-1 md:col-span-2">
+                      <label htmlFor="prodName" className="font-bold text-brand-text-primary">Product Name <span className="text-red-500">*</span></label>
+                      <input id="prodName" type="text" value={prodName} onChange={e => setProdName(e.target.value)} className="w-full p-2 border border-brand-border rounded" placeholder="Premium Basmati Rice 5kg" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-brand-text-primary">Barcode / EAN</label>
+                      <input type="text" value={prodBarcode} onChange={e => setProdBarcode(e.target.value)} className="w-full p-2 border border-brand-border rounded font-mono" placeholder="8901234567890" />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-1">
+                      <label className="font-bold text-brand-text-primary">Category</label>
+                      <select value={prodCategoryId} onChange={e => setProdCategoryId(e.target.value)} className="w-full p-2 border border-brand-border rounded bg-white">
+                        {dbCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-brand-text-primary">Brand</label>
+                      <select value={prodBrandId} onChange={e => setProdBrandId(e.target.value)} className="w-full p-2 border border-brand-border rounded bg-white">
+                        {dbBrands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-brand-text-primary">Base Unit of Measure</label>
+                      <select value={prodBaseUomId} onChange={e => setProdBaseUomId(e.target.value)} className="w-full p-2 border border-brand-border rounded bg-white">
+                        {dbUnits.map(u => <option key={u.id} value={u.id}>{u.name} ({u.code})</option>)}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-brand-bg-secondary/30 rounded border border-brand-border">
+                    <div className="space-y-1">
+                      <label className="font-bold text-brand-text-primary">MRP (₹)</label>
+                      <input type="number" value={prodMrp} onChange={e => setProdMrp(Number(e.target.value))} className="w-full p-2 border border-brand-border rounded bg-white font-mono font-bold" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-brand-text-primary">Base B2B Price (₹)</label>
+                      <input type="number" value={prodBasePrice} onChange={e => setProdBasePrice(Number(e.target.value))} className="w-full p-2 border border-brand-border rounded bg-white font-mono font-bold text-brand-primary" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-brand-text-primary">GST Rate %</label>
+                      <select value={prodGstRate} onChange={e => setProdGstRate(Number(e.target.value))} className="w-full p-2 border border-brand-border rounded bg-white font-mono">
+                        <option value={0}>0%</option>
+                        <option value={5}>5%</option>
+                        <option value={12}>12%</option>
+                        <option value={18}>18%</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-brand-text-primary">HSN Code</label>
+                      <input type="text" value={prodHsnCode} onChange={e => setProdHsnCode(e.target.value)} className="w-full p-2 border border-brand-border rounded bg-white font-mono" />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 7. CATEGORY FORM */}
+              {(module === 'categories' || module === 'masters/categories') && (
+                <div className="space-y-6 text-xs">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-1">
+                      <label className="font-bold text-brand-text-primary">Company</label>
+                      <select value={catCompanyId} onChange={e => setCatCompanyId(e.target.value)} className="w-full p-2 border border-brand-border rounded bg-white">
+                        {dbCompanies.map(c => <option key={c.id} value={c.id}>{c.legalName}</option>)}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label htmlFor="code" className="font-bold text-brand-text-primary">Category Code <span className="text-red-500">*</span></label>
+                      <input id="code" type="text" value={formCode} onChange={e => setFormCode(e.target.value)} disabled={mode === 'edit'} className="w-full p-2 border border-brand-border rounded font-mono font-bold" placeholder="CAT-001" />
+                    </div>
+                    <div className="space-y-1">
+                      <label htmlFor="catName" className="font-bold text-brand-text-primary">Category Name <span className="text-red-500">*</span></label>
+                      <input id="catName" type="text" value={catName} onChange={e => setCatName(e.target.value)} className="w-full p-2 border border-brand-border rounded" placeholder="Food & Grains" />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-1">
+                      <label className="font-bold text-brand-text-primary">Default GST Rate %</label>
+                      <select value={catGstRate} onChange={e => setCatGstRate(Number(e.target.value))} className="w-full p-2 border border-brand-border rounded bg-white font-mono font-bold">
+                        <option value={0}>0%</option>
+                        <option value={5}>5%</option>
+                        <option value={12}>12%</option>
+                        <option value={18}>18%</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-brand-text-primary">HSN Code Default</label>
+                      <input type="text" value={catHsnDefault} onChange={e => setCatHsnDefault(e.target.value)} className="w-full p-2 border border-brand-border rounded font-mono" placeholder="1006.30" />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 8. BRAND FORM */}
+              {(module === 'brands' || module === 'masters/brands') && (
+                <div className="space-y-6 text-xs">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-1">
+                      <label className="font-bold text-brand-text-primary">Company</label>
+                      <select value={brandCompanyId} onChange={e => setBrandCompanyId(e.target.value)} className="w-full p-2 border border-brand-border rounded bg-white">
+                        {dbCompanies.map(c => <option key={c.id} value={c.id}>{c.legalName}</option>)}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label htmlFor="code" className="font-bold text-brand-text-primary">Brand Code <span className="text-red-500">*</span></label>
+                      <input id="code" type="text" value={formCode} onChange={e => setFormCode(e.target.value)} disabled={mode === 'edit'} className="w-full p-2 border border-brand-border rounded font-mono font-bold" placeholder="BRND-001" />
+                    </div>
+                    <div className="space-y-1">
+                      <label htmlFor="brandName" className="font-bold text-brand-text-primary">Brand Name <span className="text-red-500">*</span></label>
+                      <input id="brandName" type="text" value={brandName} onChange={e => setBrandName(e.target.value)} className="w-full p-2 border border-brand-border rounded" placeholder="India Gate" />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="font-bold text-brand-text-primary">Manufacturer Name</label>
+                      <input type="text" value={brandManufacturer} onChange={e => setBrandManufacturer(e.target.value)} className="w-full p-2 border border-brand-border rounded" placeholder="KRBL Limited" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-brand-text-primary">Origin Country</label>
+                      <input type="text" value={brandOrigin} onChange={e => setBrandOrigin(e.target.value)} className="w-full p-2 border border-brand-border rounded" placeholder="India" />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 9. UOM FORM */}
+              {(module === 'units' || module === 'masters/units') && (
+                <div className="space-y-6 text-xs">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-1">
+                      <label className="font-bold text-brand-text-primary">Company</label>
+                      <select value={uomCompanyId} onChange={e => setUomCompanyId(e.target.value)} className="w-full p-2 border border-brand-border rounded bg-white">
+                        {dbCompanies.map(c => <option key={c.id} value={c.id}>{c.legalName}</option>)}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label htmlFor="code" className="font-bold text-brand-text-primary">UOM Code <span className="text-red-500">*</span></label>
+                      <input id="code" type="text" value={formCode} onChange={e => setFormCode(e.target.value)} disabled={mode === 'edit'} className="w-full p-2 border border-brand-border rounded font-mono font-bold" placeholder="UOM-KG" />
+                    </div>
+                    <div className="space-y-1">
+                      <label htmlFor="uomName" className="font-bold text-brand-text-primary">Unit Name <span className="text-red-500">*</span></label>
+                      <input id="uomName" type="text" value={uomName} onChange={e => setUomName(e.target.value)} className="w-full p-2 border border-brand-border rounded" placeholder="Kilograms" />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-1">
+                      <label className="font-bold text-brand-text-primary">Base Unit Code Reference</label>
+                      <input type="text" value={uomBaseCode} onChange={e => setUomBaseCode(e.target.value)} className="w-full p-2 border border-brand-border rounded" placeholder="Gram" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-brand-text-primary">Conversion Factor</label>
+                      <input type="number" step="0.001" value={uomConversionFactor} onChange={e => setUomConversionFactor(Number(e.target.value))} className="w-full p-2 border border-brand-border rounded font-mono" placeholder="1000" />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 10. WAREHOUSE FORM */}
+              {(module === 'warehouses' || module === 'masters/warehouses') && (
+                <div className="space-y-6 text-xs">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-1">
+                      <label className="font-bold text-brand-text-primary">Branch Link <span className="text-red-500">*</span></label>
+                      <select value={whBranchId} onChange={e => setWhBranchId(e.target.value)} className="w-full p-2 border border-brand-border rounded bg-white font-semibold">
+                        {dbBranches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label htmlFor="code" className="font-bold text-brand-text-primary">Warehouse Code <span className="text-red-500">*</span></label>
+                      <input id="code" type="text" value={formCode} onChange={e => setFormCode(e.target.value)} disabled={mode === 'edit'} className="w-full p-2 border border-brand-border rounded font-mono font-bold" placeholder="WH-DEL-HQ" />
+                    </div>
+                    <div className="space-y-1">
+                      <label htmlFor="whName" className="font-bold text-brand-text-primary">Warehouse Name <span className="text-red-500">*</span></label>
+                      <input id="whName" type="text" value={whName} onChange={e => setWhName(e.target.value)} className="w-full p-2 border border-brand-border rounded" placeholder="Delhi Central Depot" />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-1">
+                      <label className="font-bold text-brand-text-primary">Depot Type</label>
+                      <select value={whType} onChange={e => setWhType(e.target.value)} className="w-full p-2 border border-brand-border rounded bg-white">
+                        <option value="Central Depot">Central Depot</option>
+                        <option value="Regional Warehouse">Regional Warehouse</option>
+                        <option value="Cold Storage">Cold Storage</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-brand-text-primary">Capacity (Square Feet)</label>
+                      <input type="number" value={whCapacitySqFt} onChange={e => setWhCapacitySqFt(Number(e.target.value))} className="w-full p-2 border border-brand-border rounded font-mono font-bold" placeholder="150000" />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 11. CUSTOMER FORM */}
+              {(module === 'customers' || module === 'masters/customers') && (
+                <div className="space-y-6 text-xs">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-1">
+                      <label htmlFor="code" className="font-bold text-brand-text-primary">Customer Code <span className="text-red-500">*</span></label>
+                      <input id="code" type="text" value={formCode} onChange={e => setFormCode(e.target.value)} disabled={mode === 'edit'} className="w-full p-2 border border-brand-border rounded font-mono font-bold" placeholder="CUST-201" />
+                    </div>
+                    <div className="space-y-1">
+                      <label htmlFor="custLegalName" className="font-bold text-brand-text-primary">Customer / Business Name <span className="text-red-500">*</span></label>
+                      <input id="custLegalName" type="text" value={custLegalName} onChange={e => setCustLegalName(e.target.value)} className="w-full p-2 border border-brand-border rounded" placeholder="Apex Retail Distributors" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-brand-text-primary">Channel Type</label>
+                      <select value={custType} onChange={e => setCustType(e.target.value)} className="w-full p-2 border border-brand-border rounded bg-white font-semibold">
+                        <option value="Retailer">Kirana / Retailer Store</option>
+                        <option value="Wholesaler">Wholesaler Dealer</option>
+                        <option value="Key Account">Key Account / Supermarket</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-1">
+                      <label className="font-bold text-brand-text-primary">Email Address</label>
+                      <input type="email" value={custEmail} onChange={e => setCustEmail(e.target.value)} className="w-full p-2 border border-brand-border rounded" placeholder="billing@apex.com" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-brand-text-primary">Phone Number</label>
+                      <input type="text" value={custPhone} onChange={e => setCustPhone(e.target.value)} className="w-full p-2 border border-brand-border rounded" placeholder="+91 98110 24512" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-brand-text-primary">Credit Limit (₹)</label>
+                      <input type="number" value={custCreditLimit} onChange={e => setCustCreditLimit(Number(e.target.value))} className="w-full p-2 border border-brand-border rounded font-mono font-bold text-brand-primary" />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 12. SUPPLIER FORM */}
+              {(module === 'suppliers' || module === 'masters/suppliers') && (
+                <div className="space-y-6 text-xs">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-1">
+                      <label htmlFor="code" className="font-bold text-brand-text-primary">Vendor Code <span className="text-red-500">*</span></label>
+                      <input id="code" type="text" value={formCode} onChange={e => setFormCode(e.target.value)} disabled={mode === 'edit'} className="w-full p-2 border border-brand-border rounded font-mono font-bold" placeholder="SUPP-301" />
+                    </div>
+                    <div className="space-y-1">
+                      <label htmlFor="suppLegalName" className="font-bold text-brand-text-primary">Legal Entity Name <span className="text-red-500">*</span></label>
+                      <input id="suppLegalName" type="text" value={suppLegalName} onChange={e => setSuppLegalName(e.target.value)} className="w-full p-2 border border-brand-border rounded" placeholder="Hindustan Unilever Ltd" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-brand-text-primary">Trade Name</label>
+                      <input type="text" value={suppTradeName} onChange={e => setSuppTradeName(e.target.value)} className="w-full p-2 border border-brand-border rounded" placeholder="HUL Foods" />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-1">
+                      <label className="font-bold text-brand-text-primary">Email Address</label>
+                      <input type="email" value={suppEmail} onChange={e => setSuppEmail(e.target.value)} className="w-full p-2 border border-brand-border rounded" placeholder="vendor@hul.com" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-brand-text-primary">Phone Number</label>
+                      <input type="text" value={suppPhone} onChange={e => setSuppPhone(e.target.value)} className="w-full p-2 border border-brand-border rounded" placeholder="+91 22 4415 5620" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-brand-text-primary">Credit Limit (₹)</label>
+                      <input type="number" value={suppCreditLimit} onChange={e => setSuppCreditLimit(Number(e.target.value))} className="w-full p-2 border border-brand-border rounded font-mono font-bold text-brand-primary" />
                     </div>
                   </div>
                 </div>
@@ -864,6 +1347,27 @@ export default function MasterDataModule({ module, onTriggerToast }: MasterDataM
             </form>
           )}
 
+        </div>
+      )}
+
+      {/* SOFT-DELETE CONFIRMATION DIALOG */}
+      {deleteId && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg border border-brand-border p-6 max-w-sm w-full space-y-4 shadow-xl">
+            <div className="w-10 h-10 rounded-full bg-red-50 text-brand-danger flex items-center justify-center">
+              <AlertCircle size={20} />
+            </div>
+            <div>
+              <h3 className="font-bold text-sm text-brand-text-primary">Confirm Master Record Soft-Delete</h3>
+              <p className="text-xs text-brand-text-secondary mt-1">
+                Are you sure you want to deactivate and soft-delete this {config.singular.toLowerCase()} record? This will call the backend DELETE API endpoint.
+              </p>
+            </div>
+            <div className="flex justify-end gap-2 text-xs font-bold pt-2">
+              <button onClick={() => setDeleteId(null)} className="px-3.5 py-1.5 border rounded hover:bg-gray-50 cursor-pointer">Cancel</button>
+              <button onClick={confirmDelete} className="px-3.5 py-1.5 bg-brand-danger text-white rounded hover:bg-red-700 cursor-pointer shadow-sm">Deactivate & Soft Delete</button>
+            </div>
+          </div>
         </div>
       )}
 
