@@ -1,22 +1,22 @@
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using INK.ERP.Domain.Common;
+using INK.ERP.Domain.Entities.IAM;
+using INK.ERP.Domain.Entities.Security;
+using INK.ERP.Domain.Entities.MasterData;
 
 namespace INK.ERP.Persistence;
 
-public sealed class AppDbContext : IdentityDbContext<ApplicationUser, ApplicationRole, Guid>
+public class AppDbContext : IdentityDbContext<ApplicationUser, ApplicationRole, Guid>
 {
-    public AppDbContext(DbContextOptions<AppDbContext> options)
-        : base(options)
+    public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
     {
     }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
-
-        // Apply schema configurations and clean architecture mapping conventions
-        builder.HasDefaultSchema("iam");
 
         // Identity Table Renaming for enterprise schema alignment
         builder.Entity<IdentityUserClaim<Guid>>().ToTable("user_claims", "iam");
@@ -34,8 +34,6 @@ public sealed class AppDbContext : IdentityDbContext<ApplicationUser, Applicatio
             entity.Property(e => e.OccurredOnUtc).IsRequired();
         });
 
-        builder.Entity<INK.ERP.Domain.Entities.Product>(entity => { entity.ToTable("products", "product"); });
-        builder.Entity<INK.ERP.Domain.Entities.Customer>(entity => { entity.ToTable("customers", "customer"); });
         builder.Entity<INK.ERP.Domain.Entities.Warehouse>(entity => { entity.ToTable("warehouses", "warehouse"); });
         builder.Entity<INK.ERP.Domain.Entities.SalesOrder>(entity => { entity.ToTable("sales_orders", "sales"); });
 
@@ -44,107 +42,78 @@ public sealed class AppDbContext : IdentityDbContext<ApplicationUser, Applicatio
     }
 
     public DbSet<INK.ERP.Infrastructure.Persistence.Outbox.OutboxMessage> OutboxMessages => Set<INK.ERP.Infrastructure.Persistence.Outbox.OutboxMessage>();
-    public DbSet<INK.ERP.Domain.Entities.Product> Products => Set<INK.ERP.Domain.Entities.Product>();
-    public DbSet<INK.ERP.Domain.Entities.Customer> Customers => Set<INK.ERP.Domain.Entities.Customer>();
     public DbSet<INK.ERP.Domain.Entities.Warehouse> Warehouses => Set<INK.ERP.Domain.Entities.Warehouse>();
     public DbSet<INK.ERP.Domain.Entities.SalesOrder> SalesOrders => Set<INK.ERP.Domain.Entities.SalesOrder>();
 
+    // Master Data DB Sets
+    public DbSet<Company> Companies => Set<Company>();
+    public DbSet<Branch> Branches => Set<Branch>();
+    public DbSet<Department> Departments => Set<Department>();
+    public DbSet<Designation> Designations => Set<Designation>();
+    public DbSet<UnitOfMeasure> UnitsOfMeasure => Set<UnitOfMeasure>();
+    public DbSet<Brand> Brands => Set<Brand>();
+    public DbSet<Category> Categories => Set<Category>();
+    public DbSet<Product> Products => Set<Product>();
+    public DbSet<Supplier> Suppliers => Set<Supplier>();
+    public DbSet<Customer> Customers => Set<Customer>();
+    public DbSet<Employee> Employees => Set<Employee>();
+
     // IAM DB Sets
-    public DbSet<INK.ERP.Domain.Entities.IAM.PermissionGroup> PermissionGroups => Set<INK.ERP.Domain.Entities.IAM.PermissionGroup>();
-    public DbSet<INK.ERP.Domain.Entities.IAM.Permission> Permissions => Set<INK.ERP.Domain.Entities.IAM.Permission>();
-    public DbSet<INK.ERP.Domain.Entities.IAM.UserRole> IAMUserRoles => Set<INK.ERP.Domain.Entities.IAM.UserRole>();
-    public DbSet<INK.ERP.Domain.Entities.IAM.RolePermission> RolePermissions => Set<INK.ERP.Domain.Entities.IAM.RolePermission>();
-    public DbSet<INK.ERP.Domain.Entities.IAM.RefreshToken> RefreshTokens => Set<INK.ERP.Domain.Entities.IAM.RefreshToken>();
-    public DbSet<INK.ERP.Domain.Entities.IAM.UserSession> UserSessions => Set<INK.ERP.Domain.Entities.IAM.UserSession>();
-    public DbSet<INK.ERP.Domain.Entities.IAM.LoginHistory> LoginHistories => Set<INK.ERP.Domain.Entities.IAM.LoginHistory>();
-    public DbSet<INK.ERP.Domain.Entities.IAM.PasswordResetToken> PasswordResetTokens => Set<INK.ERP.Domain.Entities.IAM.PasswordResetToken>();
-    public DbSet<INK.ERP.Domain.Entities.IAM.EmailVerificationToken> EmailVerificationTokens => Set<INK.ERP.Domain.Entities.IAM.EmailVerificationToken>();
-    public DbSet<INK.ERP.Domain.Entities.IAM.UserPreference> UserPreferences => Set<INK.ERP.Domain.Entities.IAM.UserPreference>();
-    public DbSet<INK.ERP.Domain.Entities.IAM.SecurityAuditLog> SecurityAuditLogs => Set<INK.ERP.Domain.Entities.IAM.SecurityAuditLog>();
+    public DbSet<PermissionGroup> PermissionGroups => Set<PermissionGroup>();
+    public DbSet<Permission> Permissions => Set<Permission>();
+    public DbSet<UserRole> IAMUserRoles => Set<UserRole>();
+    public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<UserSession> UserSessions => Set<UserSession>();
+    public DbSet<LoginHistory> LoginHistories => Set<LoginHistory>();
+    public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
+    public DbSet<EmailVerificationToken> EmailVerificationTokens => Set<EmailVerificationToken>();
+    public DbSet<UserPreference> UserPreferences => Set<UserPreference>();
+    public DbSet<SecurityAuditLog> SecurityAuditLogs => Set<SecurityAuditLog>();
 
     // Enterprise Security DB Sets
-    public DbSet<INK.ERP.Domain.Entities.Security.FaceProfile> FaceProfiles => Set<INK.ERP.Domain.Entities.Security.FaceProfile>();
-    public DbSet<INK.ERP.Domain.Entities.Security.FaceTemplate> FaceTemplates => Set<INK.ERP.Domain.Entities.Security.FaceTemplate>();
-    public DbSet<INK.ERP.Domain.Entities.Security.FaceVerificationLog> FaceVerificationLogs => Set<INK.ERP.Domain.Entities.Security.FaceVerificationLog>();
-    public DbSet<INK.ERP.Domain.Entities.Security.FaceEnrollmentLog> FaceEnrollmentLogs => Set<INK.ERP.Domain.Entities.Security.FaceEnrollmentLog>();
-    public DbSet<INK.ERP.Domain.Entities.Security.SecurityPolicy> SecurityPolicies => Set<INK.ERP.Domain.Entities.Security.SecurityPolicy>();
-    public DbSet<INK.ERP.Domain.Entities.Security.UserSecurityPolicy> UserSecurityPolicies => Set<INK.ERP.Domain.Entities.Security.UserSecurityPolicy>();
-    public DbSet<INK.ERP.Domain.Entities.Security.RegisteredDevice> RegisteredDevices => Set<INK.ERP.Domain.Entities.Security.RegisteredDevice>();
-    public DbSet<INK.ERP.Domain.Entities.Security.SecurityIncident> SecurityIncidents => Set<INK.ERP.Domain.Entities.Security.SecurityIncident>();
+    public DbSet<FaceProfile> FaceProfiles => Set<FaceProfile>();
+    public DbSet<FaceTemplate> FaceTemplates => Set<FaceTemplate>();
+    public DbSet<FaceVerificationLog> FaceVerificationLogs => Set<FaceVerificationLog>();
+    public DbSet<FaceEnrollmentLog> FaceEnrollmentLogs => Set<FaceEnrollmentLog>();
+    public DbSet<SecurityPolicy> SecurityPolicies => Set<SecurityPolicy>();
+    public DbSet<UserSecurityPolicy> UserSecurityPolicies => Set<UserSecurityPolicy>();
+    public DbSet<RegisteredDevice> RegisteredDevices => Set<RegisteredDevice>();
+    public DbSet<SecurityIncident> SecurityIncidents => Set<SecurityIncident>();
 
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         UpdateAuditFields();
-        ConvertDomainEventsToOutboxMessages();
         return base.SaveChangesAsync(cancellationToken);
-    }
-
-    public override int SaveChanges()
-    {
-        UpdateAuditFields();
-        ConvertDomainEventsToOutboxMessages();
-        return base.SaveChanges();
-    }
-
-    private void ConvertDomainEventsToOutboxMessages()
-    {
-        var domainEntities = ChangeTracker.Entries<BaseEntity>()
-            .Where(x => x.Entity.DomainEvents.Any())
-            .ToList();
-
-        var domainEvents = domainEntities
-            .SelectMany(x => x.Entity.DomainEvents)
-            .ToList();
-
-        foreach (var domainEvent in domainEvents)
-        {
-            var outboxMessage = new INK.ERP.Infrastructure.Persistence.Outbox.OutboxMessage
-            {
-                Type = domainEvent.GetType().AssemblyQualifiedName ?? domainEvent.GetType().FullName ?? string.Empty,
-                Content = System.Text.Json.JsonSerializer.Serialize(domainEvent, domainEvent.GetType()),
-                OccurredOnUtc = DateTime.UtcNow
-            };
-
-            Set<INK.ERP.Infrastructure.Persistence.Outbox.OutboxMessage>().Add(outboxMessage);
-        }
-
-        foreach (var entity in domainEntities)
-        {
-            entity.Entity.ClearDomainEvents();
-        }
     }
 
     private void UpdateAuditFields()
     {
-        var entries = ChangeTracker.Entries();
-        var utcNow = DateTime.UtcNow;
+        var entries = ChangeTracker.Entries<BaseEntity>();
 
         foreach (var entry in entries)
         {
-            if (entry.Entity is BaseEntity baseEntity)
+            if (entry.State == EntityState.Added)
             {
-                if (entry.State == EntityState.Added)
+                entry.Entity.CreatedAtUtc = DateTime.UtcNow;
+                if (string.IsNullOrEmpty(entry.Entity.CreatedBy))
                 {
-                    // Use reflection/backing field to set Id and CreatedAtUtc since setters are protected
-                    entry.Property(nameof(BaseEntity.CreatedAtUtc)).CurrentValue = utcNow;
-                }
-                else if (entry.State == EntityState.Modified)
-                {
-                    entry.Property(nameof(BaseEntity.LastModifiedAtUtc)).CurrentValue = utcNow;
+                    entry.Entity.CreatedBy = "System";
                 }
             }
-
-            // Audit custom application user edits
-            if (entry.Entity is ApplicationUser appUser)
+            else if (entry.State == EntityState.Modified)
             {
-                if (entry.State == EntityState.Added)
+                entry.Entity.LastModifiedAtUtc = DateTime.UtcNow;
+                if (string.IsNullOrEmpty(entry.Entity.LastModifiedBy))
                 {
-                    appUser.CreatedAtUtc = utcNow;
+                    entry.Entity.LastModifiedBy = "System";
                 }
-                else if (entry.State == EntityState.Modified)
-                {
-                    appUser.LastModifiedAtUtc = utcNow;
-                }
+            }
+            else if (entry.State == EntityState.Deleted)
+            {
+                entry.State = EntityState.Modified;
+                entry.Entity.IsDeleted = true;
+                entry.Entity.DeletedAtUtc = DateTime.UtcNow;
             }
         }
     }

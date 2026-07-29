@@ -246,10 +246,19 @@ public static class DependencyInjection
         services.AddScoped<IRegisteredDeviceRepository, RegisteredDeviceRepository>();
         services.AddScoped<ISecurityIncidentRepository, SecurityIncidentRepository>();
 
-        services.AddScoped<IProductRepository, ProductRepository>();
-        services.AddScoped<ICustomerRepository, CustomerRepository>();
         services.AddScoped<IWarehouseRepository, WarehouseRepository>();
         services.AddScoped<ISalesOrderRepository, SalesOrderRepository>();
+        services.AddScoped<ICompanyRepository, CompanyRepository>();
+        services.AddScoped<IBranchRepository, BranchRepository>();
+        services.AddScoped<IDepartmentRepository, DepartmentRepository>();
+        services.AddScoped<IDesignationRepository, DesignationRepository>();
+        services.AddScoped<IUnitOfMeasureRepository, UnitOfMeasureRepository>();
+        services.AddScoped<IBrandRepository, BrandRepository>();
+        services.AddScoped<ICategoryRepository, CategoryRepository>();
+        services.AddScoped<IProductRepository, ProductRepository>();
+        services.AddScoped<ISupplierRepository, SupplierRepository>();
+        services.AddScoped<ICustomerRepository, CustomerRepository>();
+        services.AddScoped<IEmployeeRepository, EmployeeRepository>();
 
         // 9. Register Current User Abstraction & Context Accessor
         services.AddHttpContextAccessor();

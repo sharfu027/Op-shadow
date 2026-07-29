@@ -10,6 +10,26 @@ export interface Company {
   status: 'Active' | 'Inactive';
 }
 
+export interface CompanyDto {
+  id: string;
+  code: string;
+  legalName: string;
+  tradeName?: string;
+  taxRegistrationNumber: string;
+  panNumber: string;
+  email: string;
+  phone: string;
+  currencyCode: string;
+  addressLine1: string;
+  addressLine2?: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  country: string;
+  isActive: boolean;
+  createdAtUtc: string;
+}
+
 export interface Branch {
   id: string;
   code: string;
@@ -22,6 +42,26 @@ export interface Branch {
   status: 'Active' | 'Inactive';
 }
 
+export interface BranchDto {
+  id: string;
+  companyId: string;
+  companyName?: string;
+  code: string;
+  name: string;
+  gstin: string;
+  email: string;
+  phone: string;
+  addressLine1: string;
+  addressLine2?: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  country: string;
+  isHeadquarters: boolean;
+  isActive: boolean;
+  createdAtUtc: string;
+}
+
 export interface Department {
   id: string;
   code: string;
@@ -32,6 +72,17 @@ export interface Department {
   status: 'Active' | 'Inactive';
 }
 
+export interface DepartmentDto {
+  id: string;
+  branchId: string;
+  branchName?: string;
+  code: string;
+  name: string;
+  description?: string;
+  isActive: boolean;
+  createdAtUtc: string;
+}
+
 export interface Designation {
   id: string;
   code: string;
@@ -39,6 +90,18 @@ export interface Designation {
   departmentId: string;
   level: string;
   status: 'Active' | 'Inactive';
+}
+
+export interface DesignationDto {
+  id: string;
+  companyId: string;
+  companyName?: string;
+  code: string;
+  title: string;
+  level: number;
+  approvalLimit?: number;
+  isActive: boolean;
+  createdAtUtc: string;
 }
 
 export interface Employee {
@@ -51,6 +114,28 @@ export interface Employee {
   designation: string;
   branch: string;
   status: 'Active' | 'Inactive';
+}
+
+export interface EmployeeDto {
+  id: string;
+  companyId: string;
+  companyName?: string;
+  branchId: string;
+  branchName?: string;
+  departmentId: string;
+  departmentName?: string;
+  designationId: string;
+  designationTitle?: string;
+  employeeCode: string;
+  firstName: string;
+  lastName: string;
+  fullName: string;
+  email: string;
+  phone: string;
+  joiningDate: string;
+  salary?: number;
+  isActive: boolean;
+  createdAtUtc: string;
 }
 
 export interface Customer {
@@ -66,6 +151,31 @@ export interface Customer {
   status: 'Active' | 'Inactive';
 }
 
+export interface CustomerDto {
+  id: string;
+  companyId: string;
+  companyName?: string;
+  code: string;
+  legalName: string;
+  tradeName?: string;
+  customerType: string;
+  gstin?: string;
+  pan?: string;
+  email: string;
+  phone: string;
+  addressLine1: string;
+  addressLine2?: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  country: string;
+  creditLimit: number;
+  creditDays: number;
+  routeId?: string;
+  isActive: boolean;
+  createdAtUtc: string;
+}
+
 export interface Supplier {
   id: string;
   code: string;
@@ -79,6 +189,29 @@ export interface Supplier {
   status: 'Active' | 'Inactive';
 }
 
+export interface SupplierDto {
+  id: string;
+  companyId: string;
+  companyName?: string;
+  code: string;
+  legalName: string;
+  tradeName?: string;
+  gstin: string;
+  pan: string;
+  email: string;
+  phone: string;
+  addressLine1: string;
+  addressLine2?: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  country: string;
+  paymentTermsDays: number;
+  creditLimit?: number;
+  isActive: boolean;
+  createdAtUtc: string;
+}
+
 export interface ProductCategory {
   id: string;
   code: string;
@@ -90,6 +223,20 @@ export interface ProductCategory {
 
 export type Category = ProductCategory;
 
+export interface CategoryDto {
+  id: string;
+  companyId: string;
+  companyName?: string;
+  code: string;
+  name: string;
+  parentCategoryId?: string;
+  parentCategoryName?: string;
+  gstTaxRatePercent: number;
+  hsnCodeDefault: string;
+  isActive: boolean;
+  createdAtUtc: string;
+}
+
 export interface Brand {
   id: string;
   code: string;
@@ -97,6 +244,18 @@ export interface Brand {
   origin: string;
   productCount: number;
   status: 'Active' | 'Inactive';
+}
+
+export interface BrandDto {
+  id: string;
+  companyId: string;
+  companyName?: string;
+  code: string;
+  name: string;
+  manufacturerName?: string;
+  originCountry?: string;
+  isActive: boolean;
+  createdAtUtc: string;
 }
 
 export interface Product {
@@ -112,6 +271,31 @@ export interface Product {
   status: 'Active' | 'Inactive';
 }
 
+export interface ProductDto {
+  id: string;
+  companyId: string;
+  companyName?: string;
+  categoryId: string;
+  categoryName?: string;
+  brandId: string;
+  brandName?: string;
+  baseUomId: string;
+  baseUomCode?: string;
+  code: string;
+  name: string;
+  sku: string;
+  barcode?: string;
+  hsnCode: string;
+  gstRatePercent: number;
+  mrp: number;
+  basePrice: number;
+  minOrderQty: number;
+  shelfLifeDays?: number;
+  isBatchTracked: boolean;
+  isActive: boolean;
+  createdAtUtc: string;
+}
+
 export interface Unit {
   id: string;
   code: string;
@@ -121,14 +305,49 @@ export interface Unit {
   status: 'Active' | 'Inactive';
 }
 
+export interface UnitOfMeasureDto {
+  id: string;
+  companyId: string;
+  companyName?: string;
+  code: string;
+  name: string;
+  baseUnitCode: string;
+  conversionFactor: number;
+  isFractionalAllowed: boolean;
+  isActive: boolean;
+  createdAtUtc: string;
+}
+
 export interface Warehouse {
   id: string;
   code: string;
   name: string;
-  address: string;
-  capacitySft: number;
+  address?: string;
+  capacitySft?: number;
+  type?: string;
+  capacity?: string;
   manager: string;
   status: 'Active' | 'Inactive';
+}
+
+export interface WarehouseDto {
+  id: string;
+  companyId: string;
+  branchId: string;
+  code: string;
+  name: string;
+  warehouseType: string;
+  managerEmployeeId?: string;
+  addressLine1: string;
+  addressLine2?: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  country: string;
+  capacitySqFt?: number;
+  isTemperatureControlled: boolean;
+  isActive: boolean;
+  createdAtUtc: string;
 }
 
 export interface SalesRep {

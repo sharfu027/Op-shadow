@@ -45,6 +45,7 @@ import {
   Supplier, 
   SalesRep 
 } from '../types';
+import * as masterDataService from '../services/masterDataService';
 
 interface MasterDataModuleProps {
   module: string; // 'masters/products' | 'masters/categories' | 'masters/brands' | etc.
@@ -239,7 +240,7 @@ export default function MasterDataModule({ module, onTriggerToast }: MasterDataM
   const [secGpsRadius, setSecGpsRadius] = useState<number>(200);
   const [secRequireSelfie, setSecRequireSelfie] = useState<boolean>(false);
 
-  // Clean form states upon switching sub-modules or modes
+  // Fetch real backend data on mount or module change
   useEffect(() => {
     setMode('list');
     setSelectedId(null);
@@ -248,6 +249,108 @@ export default function MasterDataModule({ module, onTriggerToast }: MasterDataM
     setFormErrors({});
     setAttachment(null);
     setAutosaveMsg('');
+
+    async function loadLiveData() {
+      try {
+        if (module === 'masters/products' || module === 'products') {
+          const apiProducts = await masterDataService.fetchProducts();
+          if (apiProducts && apiProducts.length > 0) {
+            setDbProducts(apiProducts.map(p => ({
+              id: p.id,
+              code: p.code,
+              name: p.name,
+              category: p.categoryName || 'General',
+              brand: p.brandName || 'Standard',
+              unit: p.baseUomCode || 'Pcs',
+              price: p.basePrice,
+              taxRate: p.gstRatePercent,
+              stockLevel: 100,
+              status: p.isActive ? 'Active' : 'Inactive'
+            })));
+          }
+        } else if (module === 'masters/categories' || module === 'categories') {
+          const apiCategories = await masterDataService.fetchCategories();
+          if (apiCategories && apiCategories.length > 0) {
+            setDbCategories(apiCategories.map(c => ({
+              id: c.id,
+              code: c.code,
+              name: c.name,
+              description: c.hsnCodeDefault || 'Category',
+              productCount: 0,
+              status: c.isActive ? 'Active' : 'Inactive'
+            })));
+          }
+        } else if (module === 'masters/brands' || module === 'brands') {
+          const apiBrands = await masterDataService.fetchBrands();
+          if (apiBrands && apiBrands.length > 0) {
+            setDbBrands(apiBrands.map(b => ({
+              id: b.id,
+              code: b.code,
+              name: b.name,
+              origin: b.originCountry || 'India',
+              productCount: 0,
+              status: b.isActive ? 'Active' : 'Inactive'
+            })));
+          }
+        } else if (module === 'masters/units' || module === 'units') {
+          const apiUnits = await masterDataService.fetchUnitsOfMeasure();
+          if (apiUnits && apiUnits.length > 0) {
+            setDbUnits(apiUnits.map(u => ({
+              id: u.id,
+              code: u.code,
+              name: u.name,
+              baseUnit: u.baseUnitCode,
+              conversionFactor: u.conversionFactor,
+              status: u.isActive ? 'Active' : 'Inactive'
+            })));
+          }
+        } else if (module === 'masters/warehouses' || module === 'warehouses') {
+          const apiWarehouses = await masterDataService.fetchWarehouses();
+          if (apiWarehouses && apiWarehouses.length > 0) {
+            setDbWarehouses(apiWarehouses.map(w => ({
+              id: w.id,
+              code: w.code,
+              name: w.name,
+              address: `${w.addressLine1}, ${w.city}`,
+              capacitySft: w.capacitySqFt || 50000,
+              manager: w.warehouseType,
+              status: w.isActive ? 'Active' : 'Inactive'
+            })));
+          }
+        } else if (module === 'masters/customers' || module === 'customers') {
+          const apiCustomers = await masterDataService.fetchCustomers();
+          if (apiCustomers && apiCustomers.length > 0) {
+            setDbCustomers(apiCustomers.map(c => ({
+              id: c.id,
+              code: c.code,
+              name: c.legalName,
+              contact: c.phone,
+              email: c.email,
+              balance: c.creditLimit,
+              region: c.state,
+              status: c.isActive ? 'Active' : 'Inactive'
+            })));
+          }
+        } else if (module === 'masters/suppliers' || module === 'suppliers') {
+          const apiSuppliers = await masterDataService.fetchSuppliers();
+          if (apiSuppliers && apiSuppliers.length > 0) {
+            setDbSuppliers(apiSuppliers.map(s => ({
+              id: s.id,
+              code: s.code,
+              name: s.legalName,
+              contact: s.phone,
+              email: s.email,
+              balance: s.creditLimit || 0,
+              category: s.tradeName || 'Vendor',
+              status: s.isActive ? 'Active' : 'Inactive'
+            })));
+          }
+        }
+      } catch (err) {
+        console.error('Failed loading live master data:', err);
+      }
+    }
+    loadLiveData();
   }, [module]);
 
   // Load selected record into form upon entering Edit/View mode
