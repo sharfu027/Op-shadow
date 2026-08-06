@@ -19,6 +19,8 @@ public sealed class TransactionBehaviorTests
     {
         _loggerMock = new Mock<ILogger<TransactionBehavior<SampleCommand, string>>>();
         _unitOfWorkMock = new Mock<IUnitOfWork>();
+        _unitOfWorkMock.Setup(u => u.ExecuteInTransactionAsync(It.IsAny<Func<Task<string>>>(), It.IsAny<CancellationToken>()))
+            .Returns<Func<Task<string>>, CancellationToken>((action, ct) => action());
     }
 
     [Fact]
@@ -38,7 +40,7 @@ public sealed class TransactionBehaviorTests
     }
 
     [Fact]
-    public async Task Handle_CommandSuccess_BeginsAndCommitsTransaction()
+    public async Task Handle_CommandSuccess_ExecutesInTransaction()
     {
         // Arrange
         var behavior = new TransactionBehavior<SampleCommand, string>(_loggerMock.Object, _unitOfWorkMock.Object);
@@ -49,13 +51,11 @@ public sealed class TransactionBehaviorTests
 
         // Assert
         result.Should().Be("CommandResult");
-        _unitOfWorkMock.Verify(u => u.BeginTransactionAsync(It.IsAny<CancellationToken>()), Times.Once);
-        _unitOfWorkMock.Verify(u => u.CommitTransactionAsync(It.IsAny<CancellationToken>()), Times.Once);
-        _unitOfWorkMock.Verify(u => u.RollbackTransactionAsync(It.IsAny<CancellationToken>()), Times.Never);
+        _unitOfWorkMock.Verify(u => u.ExecuteInTransactionAsync(It.IsAny<Func<Task<string>>>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
-    public async Task Handle_CommandFailure_RollsBackTransactionAndRethrows()
+    public async Task Handle_CommandFailure_RethrowsException()
     {
         // Arrange
         var behavior = new TransactionBehavior<SampleCommand, string>(_loggerMock.Object, _unitOfWorkMock.Object);
@@ -65,9 +65,6 @@ public sealed class TransactionBehaviorTests
         var act = async () => await behavior.Handle(request, () => throw new InvalidOperationException("DB Failure"), CancellationToken.None);
 
         await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("DB Failure");
-
-        _unitOfWorkMock.Verify(u => u.BeginTransactionAsync(It.IsAny<CancellationToken>()), Times.Once);
-        _unitOfWorkMock.Verify(u => u.CommitTransactionAsync(It.IsAny<CancellationToken>()), Times.Never);
-        _unitOfWorkMock.Verify(u => u.RollbackTransactionAsync(It.IsAny<CancellationToken>()), Times.Once);
+        _unitOfWorkMock.Verify(u => u.ExecuteInTransactionAsync(It.IsAny<Func<Task<string>>>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 }

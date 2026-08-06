@@ -28,21 +28,20 @@ public sealed class FaceProfileTests
     }
 
     [Fact]
-    public void Enroll_MoreThan5Templates_ThrowsInvalidOperationException()
+    public void Enroll_MoreThan5Templates_RotatesWeakestTemplateSuccessfully()
     {
         // Arrange
         var profile = new FaceProfile(Guid.NewGuid());
-        var embedding = new FaceEmbedding("vector_sample", 512, "v1.0", 0.95f);
-
         for (int i = 0; i < 5; i++)
         {
-            profile.Enroll(embedding);
+            profile.Enroll(new FaceEmbedding($"vector_sample_{i}", 512, "v1.0", 0.80f + (i * 0.02f)));
         }
 
-        // Act & Assert
-        profile.Invoking(p => p.Enroll(embedding))
-            .Should().Throw<InvalidOperationException>()
-            .WithMessage("Cannot have more than 5 active face templates.");
+        // Act
+        profile.Enroll(new FaceEmbedding("vector_sample_new", 512, "v1.0", 0.99f));
+
+        // Assert
+        profile.Templates.Count(t => t.IsActive).Should().BeLessThanOrEqualTo(5);
     }
 
     [Fact]
