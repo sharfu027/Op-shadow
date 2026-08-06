@@ -35,8 +35,8 @@ public sealed class GlobalExceptionHandler : IExceptionHandler
         else
         {
             problemDetails.Status = StatusCodes.Status500InternalServerError;
-            problemDetails.Title = "Internal Server Error";
-            problemDetails.Detail = "An unexpected error occurred in the enterprise API pipeline.";
+            problemDetails.Title = exception.GetType().FullName ?? "Internal Server Error";
+            problemDetails.Detail = exception.ToString();
         }
 
         httpContext.Response.StatusCode = problemDetails.Status.Value;

@@ -1,43 +1,65 @@
 using System.Text.Json;
-using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging;
 using INK.ERP.Application.Common.Interfaces;
 
 namespace INK.ERP.Infrastructure.Services;
 
 public sealed class RedisCacheService : ICacheService
 {
-    private readonly IDistributedCache _cache;
+    private readonly IMemoryCache _memoryCache;
+    private readonly ILogger<RedisCacheService> _logger;
 
-    public RedisCacheService(IDistributedCache cache)
+    public RedisCacheService(IMemoryCache memoryCache, ILogger<RedisCacheService> logger)
     {
-        _cache = cache;
+        _memoryCache = memoryCache;
+        _logger = logger;
     }
 
-    public async Task<T?> GetAsync<T>(string key, CancellationToken cancellationToken = default)
+    public Task<T?> GetAsync<T>(string key, CancellationToken cancellationToken = default)
     {
-        var cachedValue = await _cache.GetStringAsync(key, cancellationToken);
-        if (string.IsNullOrEmpty(cachedValue))
+        try
         {
-            return default;
+            if (_memoryCache.TryGetValue(key, out T? cachedValue))
+            {
+                return Task.FromResult(cachedValue);
+            }
+            return Task.FromResult<T?>(default);
         }
-
-        return JsonSerializer.Deserialize<T>(cachedValue);
-    }
-
-    public async Task SetAsync<T>(string key, T value, TimeSpan? expiration = null, CancellationToken cancellationToken = default)
-    {
-        var options = new DistributedCacheEntryOptions();
-        if (expiration.HasValue)
+        catch (Exception ex)
         {
-            options.AbsoluteExpirationRelativeToNow = expiration.Value;
+            _logger.LogWarning(ex, "Memory cache GET operation failed for key '{CacheKey}'. Falling back to primary data source.", key);
+            return Task.FromResult<T?>(default);
         }
-
-        var serializedValue = JsonSerializer.Serialize(value);
-        await _cache.SetStringAsync(key, serializedValue, options, cancellationToken);
     }
 
-    public async Task RemoveAsync(string key, CancellationToken cancellationToken = default)
+    public Task SetAsync<T>(string key, T value, TimeSpan? expiration = null, CancellationToken cancellationToken = default)
     {
-        await _cache.RemoveAsync(key, cancellationToken);
+        try
+        {
+            var options = new MemoryCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow = expiration ?? TimeSpan.FromMinutes(30)
+            };
+            _memoryCache.Set(key, value, options);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Memory cache SET operation failed for key '{CacheKey}'. Proceeding without cache.", key);
+        }
+        return Task.CompletedTask;
+    }
+
+    public Task RemoveAsync(string key, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            _memoryCache.Remove(key);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Memory cache REMOVE operation failed for key '{CacheKey}'. Proceeding without cache.", key);
+        }
+        return Task.CompletedTask;
     }
 }

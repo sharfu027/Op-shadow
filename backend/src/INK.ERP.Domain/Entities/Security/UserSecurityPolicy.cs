@@ -5,15 +5,15 @@ namespace INK.ERP.Domain.Entities.Security;
 
 public sealed class UserSecurityPolicy : AuditableEntity
 {
-    public Guid UserId { get; private me; }
+    public Guid UserId { get; private set; }
 
-    public FaceVerificationMode? FaceModeOverride { get; private me; }
-    public GpsVerificationMode? GpsModeOverride { get; private me; }
-    public double? MaxAllowedGpsRadiusMetersOverride { get; private me; }
-    public AttendanceMode? AttendanceModeOverride { get; private me; }
-    public bool? RequireDeviceRegistrationOverride { get; private me; }
+    public FaceVerificationMode? FaceModeOverride { get; private set; }
+    public GpsVerificationMode? GpsModeOverride { get; private set; }
+    public double? MaxAllowedGpsRadiusMetersOverride { get; private set; }
+    public AttendanceMode? AttendanceModeOverride { get; private set; }
+    public bool? RequireDeviceRegistrationOverride { get; private set; }
 
-    public DateTime? ExpiresAtUtc { get; private me; }
+    public DateTime? ExpiresAtUtc { get; private set; }
     public bool IsExpired => ExpiresAtUtc.HasValue && ExpiresAtUtc.Value <= DateTime.UtcNow;
 
     private UserSecurityPolicy() { } // EF Core

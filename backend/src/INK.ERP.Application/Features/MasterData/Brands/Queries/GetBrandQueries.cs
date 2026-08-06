@@ -83,7 +83,7 @@ public class GetBrandsPagedQueryHandler : IRequestHandler<GetBrandsPagedQuery, R
             .Select(brand => new BrandDto(
                 brand.Id,
                 brand.CompanyId,
-                brand.Company?.LegalName,
+                brand.Company != null ? brand.Company.LegalName : null,
                 brand.Code,
                 brand.Name,
                 brand.ManufacturerName,
@@ -92,6 +92,6 @@ public class GetBrandsPagedQueryHandler : IRequestHandler<GetBrandsPagedQuery, R
                 brand.CreatedAtUtc))
             .ToList();
 
-        return Result<IReadOnlyList<BrandDto>>.Success(list);
+        return Result.Success<IReadOnlyList<BrandDto>>(list);
     }
 }

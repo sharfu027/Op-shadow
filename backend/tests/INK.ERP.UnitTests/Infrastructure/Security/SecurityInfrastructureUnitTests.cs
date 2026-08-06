@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
+using INK.ERP.Application.Common.Interfaces;
 using INK.ERP.Application.Features.Security.Common;
 using INK.ERP.Domain.ValueObjects.Security;
 using INK.ERP.Infrastructure.Options;
@@ -22,8 +23,10 @@ public sealed class SecurityInfrastructureUnitTests
     {
         // Arrange
         var optionsMock = Options.Create(new FaceRecognitionOptions { MatchThreshold = 0.85f });
+        var strategy = new CosineStrategy();
         var loggerMock = new Mock<ILogger<FaceComparisonService>>();
-        var service = new FaceComparisonService(optionsMock, loggerMock.Object);
+        var protectionServiceMock = new Mock<IFaceTemplateProtectionService>();
+        var service = new FaceComparisonService(strategy, protectionServiceMock.Object, optionsMock, loggerMock.Object);
 
         var vectorA = new float[] { 0.5f, 0.5f, 0.5f, 0.5f };
         var vectorB = new float[] { 0.5f, 0.5f, 0.5f, 0.5f };

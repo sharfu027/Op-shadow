@@ -9,6 +9,7 @@ using INK.ERP.Application.Features.IAM.Commands.Users;
 using INK.ERP.Application.Features.IAM.DTOs;
 using INK.ERP.Application.Features.IAM.Queries.Users;
 using INK.ERP.Domain.Common;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace INK.ERP.UnitTests.Controllers;
 
@@ -40,7 +41,7 @@ public sealed class UsersControllerTests
     {
         // Arrange
         var userId = Guid.NewGuid();
-        var userDto = new UserDto(userId, "john.doe", "john@example.com", null, "John", "Doe", "John Doe", null, true, false, null, false, true, false, "en", "UTC", null, DateTime.UtcNow, null, new List<string> { "USER" });
+        var userDto = new UserDto(userId, "john.doe", "john@example.com", null, "John", "Doe", "John Doe", null, true, false, false, null, false, true, false, "en", "UTC", null, DateTime.UtcNow, null, new List<string> { "USER" });
 
         _mediatorMock.Setup(m => m.Send(It.IsAny<GetUserByIdQuery>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result.Success(userDto));

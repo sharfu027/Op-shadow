@@ -95,7 +95,7 @@ public class GetSuppliersPagedQueryHandler : IRequestHandler<GetSuppliersPagedQu
             .Select(supplier => new SupplierDto(
                 supplier.Id,
                 supplier.CompanyId,
-                supplier.Company?.LegalName,
+                supplier.Company != null ? supplier.Company.LegalName : null,
                 supplier.Code,
                 supplier.LegalName,
                 supplier.TradeName,
@@ -115,6 +115,6 @@ public class GetSuppliersPagedQueryHandler : IRequestHandler<GetSuppliersPagedQu
                 supplier.CreatedAtUtc))
             .ToList();
 
-        return Result<IReadOnlyList<SupplierDto>>.Success(list);
+        return Result.Success<IReadOnlyList<SupplierDto>>(list);
     }
 }

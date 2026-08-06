@@ -1,4 +1,6 @@
-export type PolicyRequirementLevel = 'Required' | 'Optional' | 'Disabled';
+import { PolicyRequirementLevel, AuthenticationPolicy, SecurityProfile } from './auth';
+
+export type { PolicyRequirementLevel, AuthenticationPolicy, SecurityProfile };
 
 export interface RoleSecurityPolicy {
   requireFace: boolean;
@@ -10,26 +12,6 @@ export interface RoleSecurityPolicy {
   allowOffline: boolean;
   autoMarkAttendance: boolean;
   radius: number;
-}
-
-export interface AuthenticationPolicy {
-  policyId: string;
-  policyName: string;
-  loginFaceRequirement: PolicyRequirementLevel;
-  loginGpsRequirement: PolicyRequirementLevel;
-  otpRequirement: PolicyRequirementLevel;
-  sessionTimeoutMinutes: number;
-  allowedGeofenceRadiusMeters: number;
-  officeHoursOnly: boolean;
-  allowOffline: boolean;
-}
-
-export interface SecurityProfile {
-  profileId: string;
-  profileName: string; // e.g. 'Admin Security', 'Sales Security', 'Warehouse Security', 'Finance Security', 'HR Security', 'Driver Security', 'Manager Security', 'Support Security'
-  description: string;
-  defaultPolicy: AuthenticationPolicy;
-  grantedPermissions: string[];
 }
 
 export interface EmployeeSecurityConfig {

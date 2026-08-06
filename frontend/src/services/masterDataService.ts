@@ -1,45 +1,42 @@
+import { apiClient } from '../api/apiClient';
 import { CompanyDto, BranchDto, DepartmentDto, DesignationDto, UnitOfMeasureDto, BrandDto, CategoryDto, WarehouseDto, ProductDto, SupplierDto, CustomerDto, EmployeeDto } from '../types/masterData';
 
 const API_BASE_URL = '/api/v1/masters';
 
-export async function fetchCompanies(search?: string, status?: string): Promise<CompanyDto[]> {
-  try {
-    const params = new URLSearchParams();
-    if (search) params.append('search', search);
-    if (status) params.append('status', status);
+const getAuthToken = () => {
+  return typeof window !== 'undefined' ? localStorage.getItem('ink_erp_auth_token') || '' : '';
+};
 
-    const response = await fetch(`${API_BASE_URL}/company?${params.toString()}`, {
-      headers: {
-        'Accept': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
-      }
-    });
-
-    if (!response.ok) return [];
-    return await response.json();
-  } catch (err) {
-    console.error('Failed to fetch companies:', err);
-    return [];
-  }
+export async function fetchCompanies(params?: Record<string, string | number | boolean | undefined>): Promise<any> {
+  return apiClient.get<any>(`${API_BASE_URL}/company`, { params });
 }
 
-export async function createCompany(data: Omit<CompanyDto, 'id' | 'createdAtUtc'>): Promise<CompanyDto | null> {
-  try {
-    const response = await fetch(`${API_BASE_URL}/company`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
-      },
-      body: JSON.stringify(data)
-    });
+export async function fetchCompanyById(id: string): Promise<CompanyDto> {
+  return apiClient.get<CompanyDto>(`${API_BASE_URL}/company/${id}`);
+}
 
-    if (!response.ok) return null;
-    return await response.json();
-  } catch (err) {
-    console.error('Failed to create company:', err);
-    return null;
-  }
+export async function fetchCompanyLookup(): Promise<any[]> {
+  return apiClient.get<any[]>(`${API_BASE_URL}/company/lookup`);
+}
+
+export async function createCompany(data: Partial<CompanyDto>): Promise<CompanyDto> {
+  return apiClient.post<CompanyDto>(`${API_BASE_URL}/company`, data);
+}
+
+export async function updateCompany(id: string, data: Partial<CompanyDto>): Promise<CompanyDto> {
+  return apiClient.put<CompanyDto>(`${API_BASE_URL}/company/${id}`, data);
+}
+
+export async function archiveCompany(id: string): Promise<CompanyDto> {
+  return apiClient.post<CompanyDto>(`${API_BASE_URL}/company/${id}/archive`);
+}
+
+export async function restoreCompany(id: string): Promise<CompanyDto> {
+  return apiClient.post<CompanyDto>(`${API_BASE_URL}/company/${id}/restore`);
+}
+
+export async function deleteCompany(id: string): Promise<void> {
+  return apiClient.delete<void>(`${API_BASE_URL}/company/${id}`);
 }
 
 export async function fetchBranches(companyId?: string, search?: string, status?: string): Promise<BranchDto[]> {
@@ -52,7 +49,7 @@ export async function fetchBranches(companyId?: string, search?: string, status?
     const response = await fetch(`${API_BASE_URL}/branch?${params.toString()}`, {
       headers: {
         'Accept': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+        'Authorization': `Bearer ${getAuthToken()}`
       }
     });
 
@@ -70,7 +67,7 @@ export async function createBranch(data: Omit<BranchDto, 'id' | 'createdAtUtc' |
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+        'Authorization': `Bearer ${getAuthToken()}`
       },
       body: JSON.stringify(data)
     });
@@ -93,7 +90,7 @@ export async function fetchDepartments(branchId?: string, search?: string, statu
     const response = await fetch(`${API_BASE_URL}/department?${params.toString()}`, {
       headers: {
         'Accept': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+        'Authorization': `Bearer ${getAuthToken()}`
       }
     });
 
@@ -111,7 +108,7 @@ export async function createDepartment(data: Omit<DepartmentDto, 'id' | 'created
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+        'Authorization': `Bearer ${getAuthToken()}`
       },
       body: JSON.stringify(data)
     });
@@ -134,7 +131,7 @@ export async function fetchDesignations(companyId?: string, search?: string, sta
     const response = await fetch(`${API_BASE_URL}/designation?${params.toString()}`, {
       headers: {
         'Accept': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+        'Authorization': `Bearer ${getAuthToken()}`
       }
     });
 
@@ -152,7 +149,7 @@ export async function createDesignation(data: Omit<DesignationDto, 'id' | 'creat
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+        'Authorization': `Bearer ${getAuthToken()}`
       },
       body: JSON.stringify(data)
     });
@@ -175,7 +172,7 @@ export async function fetchUnitsOfMeasure(companyId?: string, search?: string, s
     const response = await fetch(`${API_BASE_URL}/uom?${params.toString()}`, {
       headers: {
         'Accept': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+        'Authorization': `Bearer ${getAuthToken()}`
       }
     });
 
@@ -193,7 +190,7 @@ export async function createUnitOfMeasure(data: Omit<UnitOfMeasureDto, 'id' | 'c
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+        'Authorization': `Bearer ${getAuthToken()}`
       },
       body: JSON.stringify(data)
     });
@@ -216,7 +213,7 @@ export async function fetchBrands(companyId?: string, search?: string, status?: 
     const response = await fetch(`${API_BASE_URL}/brand?${params.toString()}`, {
       headers: {
         'Accept': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+        'Authorization': `Bearer ${getAuthToken()}`
       }
     });
 
@@ -234,7 +231,7 @@ export async function createBrand(data: Omit<BrandDto, 'id' | 'createdAtUtc' | '
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+        'Authorization': `Bearer ${getAuthToken()}`
       },
       body: JSON.stringify(data)
     });
@@ -257,7 +254,7 @@ export async function fetchCategories(companyId?: string, search?: string, statu
     const response = await fetch(`${API_BASE_URL}/category?${params.toString()}`, {
       headers: {
         'Accept': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+        'Authorization': `Bearer ${getAuthToken()}`
       }
     });
 
@@ -275,7 +272,7 @@ export async function createCategory(data: Omit<CategoryDto, 'id' | 'createdAtUt
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+        'Authorization': `Bearer ${getAuthToken()}`
       },
       body: JSON.stringify(data)
     });
@@ -299,7 +296,7 @@ export async function fetchWarehouses(companyId?: string, branchId?: string, sea
     const response = await fetch(`${API_BASE_URL}/warehouse?${params.toString()}`, {
       headers: {
         'Accept': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+        'Authorization': `Bearer ${getAuthToken()}`
       }
     });
 
@@ -317,7 +314,7 @@ export async function createWarehouse(data: Omit<WarehouseDto, 'id' | 'createdAt
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+        'Authorization': `Bearer ${getAuthToken()}`
       },
       body: JSON.stringify(data)
     });
@@ -342,7 +339,7 @@ export async function fetchProducts(companyId?: string, categoryId?: string, bra
     const response = await fetch(`${API_BASE_URL}/product?${params.toString()}`, {
       headers: {
         'Accept': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+        'Authorization': `Bearer ${getAuthToken()}`
       }
     });
 
@@ -360,7 +357,7 @@ export async function createProduct(data: Omit<ProductDto, 'id' | 'createdAtUtc'
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+        'Authorization': `Bearer ${getAuthToken()}`
       },
       body: JSON.stringify(data)
     });
@@ -383,7 +380,7 @@ export async function fetchSuppliers(companyId?: string, search?: string, status
     const response = await fetch(`${API_BASE_URL}/supplier?${params.toString()}`, {
       headers: {
         'Accept': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+        'Authorization': `Bearer ${getAuthToken()}`
       }
     });
 
@@ -401,7 +398,7 @@ export async function createSupplier(data: Omit<SupplierDto, 'id' | 'createdAtUt
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+        'Authorization': `Bearer ${getAuthToken()}`
       },
       body: JSON.stringify(data)
     });
@@ -424,7 +421,7 @@ export async function fetchCustomers(companyId?: string, search?: string, status
     const response = await fetch(`${API_BASE_URL}/customer?${params.toString()}`, {
       headers: {
         'Accept': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+        'Authorization': `Bearer ${getAuthToken()}`
       }
     });
 
@@ -442,7 +439,7 @@ export async function createCustomer(data: Omit<CustomerDto, 'id' | 'createdAtUt
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+        'Authorization': `Bearer ${getAuthToken()}`
       },
       body: JSON.stringify(data)
     });
@@ -467,7 +464,7 @@ export async function fetchEmployees(companyId?: string, branchId?: string, depa
     const response = await fetch(`${API_BASE_URL}/employee?${params.toString()}`, {
       headers: {
         'Accept': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+        'Authorization': `Bearer ${getAuthToken()}`
       }
     });
 
@@ -485,7 +482,7 @@ export async function createEmployee(data: Omit<EmployeeDto, 'id' | 'createdAtUt
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+        'Authorization': `Bearer ${getAuthToken()}`
       },
       body: JSON.stringify(data)
     });
@@ -503,7 +500,7 @@ export async function deleteMasterEntity(entityEndpoint: string, id: string): Pr
     const response = await fetch(`${API_BASE_URL}/${entityEndpoint}/${id}`, {
       method: 'DELETE',
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+        'Authorization': `Bearer ${getAuthToken()}`
       }
     });
     return response.ok;

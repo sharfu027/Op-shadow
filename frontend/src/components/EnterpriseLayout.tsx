@@ -29,6 +29,9 @@ import {
 } from 'lucide-react';
 import { UserRole, NavItem, UserProfile } from '../types';
 import { NAVIGATION_MENU, ROLES } from '../constants';
+import DevOnly from './dev/DevOnly';
+import HeaderRoleSelector from './dev/HeaderRoleSelector';
+import { useAuth } from '../context/AuthContext';
 
 const IconMap: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
   TrendingUp,
@@ -72,6 +75,7 @@ export default function EnterpriseLayout({
   onTriggerToast,
   user
 }: EnterpriseLayoutProps) {
+  const { logout } = useAuth();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -277,19 +281,74 @@ export default function EnterpriseLayout({
             </div>
 
             <div className="flex-1 overflow-y-auto space-y-4">
+              <span className="px-3 text-[10px] font-bold text-brand-text-secondary uppercase tracking-widest block mb-2">
+                ERP Modules
+              </span>
               <nav className="space-y-1">
-                {filteredMenu.map((item, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => {
-                      onNavigate(item.href);
-                      setMobileMenuOpen(false);
-                    }}
-                    className="w-full text-left px-3 py-2 text-xs font-semibold text-brand-text-secondary hover:text-brand-text-primary hover:bg-brand-bg-secondary rounded-md block transition"
-                  >
-                    {item.title}
-                  </button>
-                ))}
+                {filteredMenu.map((item, idx) => {
+                  const isItemActive = activeView === item.href || activeView.startsWith(item.href + '/');
+                  const hasChildren = !!item.children && item.children.length > 0;
+                  const isSubOpen = !!openSubMenus[item.title];
+
+                  return (
+                    <div key={idx} className="space-y-1">
+                      <button
+                        onClick={() => {
+                          if (hasChildren) {
+                            toggleSubMenu(item.title);
+                          } else {
+                            onNavigate(item.href);
+                            setMobileMenuOpen(false);
+                          }
+                        }}
+                        className={`w-full text-left px-3 py-2 text-xs font-semibold rounded-md flex items-center justify-between transition cursor-pointer ${
+                          isItemActive
+                            ? 'bg-blue-50/70 text-brand-primary'
+                            : 'text-brand-text-secondary hover:text-brand-text-primary hover:bg-brand-bg-secondary'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <div className="w-5 h-5 flex items-center justify-center shrink-0">
+                            <NavIcon name={item.icon} size={14} className={isItemActive ? 'text-brand-primary' : 'text-brand-text-secondary'} />
+                          </div>
+                          <span>{item.title}</span>
+                        </div>
+                        {hasChildren && (
+                          <ChevronRight 
+                            size={12} 
+                            className={`transition-transform duration-200 ${isSubOpen ? 'rotate-90' : ''}`} 
+                          />
+                        )}
+                      </button>
+
+                      {/* Nested Children for Mobile Drawer */}
+                      {hasChildren && isSubOpen && (
+                        <div className="pl-4 space-y-1 border-l border-brand-border/60 ml-5.5 mt-1">
+                          {item.children?.map((child, cIdx) => {
+                            const isChildActive = activeView === child.href;
+                            return (
+                              <button
+                                key={cIdx}
+                                onClick={() => {
+                                  onNavigate(child.href);
+                                  setMobileMenuOpen(false);
+                                }}
+                                className={`w-full text-left px-3 py-1.5 text-xs rounded transition flex items-center justify-between cursor-pointer ${
+                                  isChildActive 
+                                    ? 'text-brand-primary font-bold bg-blue-50/40' 
+                                    : 'text-brand-text-secondary hover:text-brand-text-primary hover:bg-brand-bg-secondary'
+                                }`}
+                              >
+                                <span>{child.title}</span>
+                                {isChildActive && <span className="w-1 h-1 rounded-full bg-brand-primary animate-pulse" />}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </nav>
             </div>
           </div>
@@ -379,22 +438,14 @@ export default function EnterpriseLayout({
           <div className="flex items-center gap-3">
             
             {/* ROLE SIMULATION INDICATOR SELECTOR */}
-            <div className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 bg-yellow-50 text-brand-warning rounded border border-yellow-200 text-xs">
-              <Shield size={13} className="shrink-0" />
-              <span className="font-semibold text-[11px]">Role Simulation:</span>
-              <select 
-                value={activeRole} 
-                onChange={(e) => {
-                  onRoleChange(e.target.value as UserRole);
-                  onTriggerToast('info', 'Permissions Shifted', `Simulated workspace role updated to ${e.target.value}`);
-                }}
-                className="bg-transparent border-none text-[11px] font-bold focus:outline-none cursor-pointer text-brand-text-primary"
-              >
-                {roles.map((r, i) => (
-                  <option key={i} value={r}>{r}</option>
-                ))}
-              </select>
-            </div>
+            <DevOnly>
+              <HeaderRoleSelector
+                activeRole={activeRole}
+                roles={roles}
+                onRoleChange={onRoleChange}
+                onTriggerToast={onTriggerToast}
+              />
+            </DevOnly>
 
             {/* Quick Actions Triggers */}
             <div className="relative">
@@ -540,8 +591,9 @@ export default function EnterpriseLayout({
                     <TrendingUp size={13} /> Return to Dashboard
                   </button>
                   <button 
-                    onClick={() => {
+                    onClick={async () => {
                       setShowProfileMenu(false);
+                      await logout();
                       onNavigate('auth/login');
                     }}
                     className="w-full text-left px-3 py-2 hover:bg-brand-bg-secondary text-brand-danger font-semibold rounded border-t border-brand-border mt-1 flex items-center gap-2 cursor-pointer"

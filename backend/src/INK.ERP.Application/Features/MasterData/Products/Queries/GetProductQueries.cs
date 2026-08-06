@@ -110,13 +110,13 @@ public class GetProductsPagedQueryHandler : IRequestHandler<GetProductsPagedQuer
             .Select(product => new ProductDto(
                 product.Id,
                 product.CompanyId,
-                product.Company?.LegalName,
+                product.Company != null ? product.Company.LegalName : null,
                 product.CategoryId,
-                product.Category?.Name,
+                product.Category != null ? product.Category.Name : null,
                 product.BrandId,
-                product.Brand?.Name,
+                product.Brand != null ? product.Brand.Name : null,
                 product.BaseUomId,
-                product.BaseUom?.Code,
+                product.BaseUom != null ? product.BaseUom.Code : null,
                 product.Code,
                 product.Name,
                 product.Sku,
@@ -132,6 +132,6 @@ public class GetProductsPagedQueryHandler : IRequestHandler<GetProductsPagedQuer
                 product.CreatedAtUtc))
             .ToList();
 
-        return Result<IReadOnlyList<ProductDto>>.Success(list);
+        return Result.Success<IReadOnlyList<ProductDto>>(list);
     }
 }

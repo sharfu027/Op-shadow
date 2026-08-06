@@ -9,6 +9,7 @@ using INK.ERP.API.Controllers;
 using INK.ERP.Application.Features.IAM.Commands.Auth;
 using INK.ERP.Application.Features.IAM.DTOs;
 using INK.ERP.Domain.Common;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace INK.ERP.UnitTests.Controllers;
 
@@ -39,7 +40,7 @@ public sealed class AuthControllerTests
     public async Task Login_ValidCredentials_ReturnsOkResultWithAuthResponse()
     {
         // Arrange
-        var userDto = new UserDto(Guid.NewGuid(), "admin", "admin@example.com", null, "Admin", "User", "Admin User", null, true, false, null, false, true, false, "en", "UTC", null, DateTime.UtcNow, null, new List<string> { "ADMIN" });
+        var userDto = new UserDto(Guid.NewGuid(), "admin", "admin@example.com", null, "Admin", "User", "Admin User", null, true, false, false, null, false, true, false, "en", "UTC", null, DateTime.UtcNow, null, new List<string> { "ADMIN" });
         var authResponse = new AuthResponseDto("access_token", "refresh_token", DateTime.UtcNow.AddHours(1), userDto);
 
         _mediatorMock.Setup(m => m.Send(It.IsAny<LoginCommand>(), It.IsAny<CancellationToken>()))

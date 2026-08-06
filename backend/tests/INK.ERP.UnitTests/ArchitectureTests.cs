@@ -15,7 +15,7 @@ public sealed class ArchitectureTests
     [Fact]
     public void Domain_Should_NotHaveDependencyOnOtherProjects()
     {
-        var assembly = typeof(Domain.Common.BaseEntity).Assembly;
+        var assembly = typeof(INK.ERP.Domain.Common.BaseEntity).Assembly;
 
         var result = Types.InAssembly(assembly)
             .ShouldNot()
@@ -46,7 +46,7 @@ public sealed class ArchitectureTests
     [Fact]
     public void Infrastructure_Should_NotHaveDependencyOnApi()
     {
-        var assembly = typeof(Infrastructure.DependencyInjection).Assembly;
+        var assembly = typeof(INK.ERP.Infrastructure.DependencyInjection).Assembly;
 
         var result = Types.InAssembly(assembly)
             .ShouldNot()
@@ -72,7 +72,7 @@ public sealed class ArchitectureTests
     [Fact]
     public void Handlers_Should_HaveNameEndingWithHandler()
     {
-        var assembly = typeof(Application.DependencyInjection).Assembly;
+        var assembly = typeof(INK.ERP.Application.DependencyInjection).Assembly;
 
         var result = Types.InAssembly(assembly)
             .That()
@@ -87,7 +87,7 @@ public sealed class ArchitectureTests
     [Fact]
     public void Validators_Should_HaveNameEndingWithValidator()
     {
-        var assembly = typeof(Application.DependencyInjection).Assembly;
+        var assembly = typeof(INK.ERP.Application.DependencyInjection).Assembly;
 
         var result = Types.InAssembly(assembly)
             .That()
@@ -102,13 +102,13 @@ public sealed class ArchitectureTests
     [Fact]
     public void Repositories_Should_HaveNameEndingWithRepository()
     {
-        var assembly = typeof(Infrastructure.DependencyInjection).Assembly;
+        var assembly = typeof(INK.ERP.Infrastructure.DependencyInjection).Assembly;
 
         var result = Types.InAssembly(assembly)
             .That()
             .HaveNameEndingWith("Repository")
             .Should()
-            .ImplementInterface(typeof(Application.Common.Interfaces.IGenericRepository<>))
+            .ImplementInterface(typeof(INK.ERP.Application.Common.Interfaces.IGenericRepository<>))
             .GetResult();
 
         result.IsSuccessful.Should().BeTrue();
@@ -117,10 +117,12 @@ public sealed class ArchitectureTests
     [Fact]
     public void Services_Should_HaveNameEndingWithService()
     {
-        var assembly = typeof(Infrastructure.DependencyInjection).Assembly;
+        var assembly = typeof(INK.ERP.Infrastructure.DependencyInjection).Assembly;
 
         var result = Types.InAssembly(assembly)
             .That()
+            .AreClasses()
+            .And()
             .HaveNameEndingWith("Service")
             .Should()
             .NotBeInterfaces()

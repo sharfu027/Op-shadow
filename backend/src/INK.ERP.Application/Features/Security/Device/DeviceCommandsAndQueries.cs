@@ -212,7 +212,7 @@ public sealed class HeartbeatCommandHandler : IRequestHandler<HeartbeatCommand, 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
             return Result.Success(Unit.Value);
         }
-        catch (InvalidOperationException ex)
+        catch (InvalidOperationException)
         {
             return Result.Failure<Unit>(SecurityErrors.Device.HeartbeatRejected);
         }

@@ -16,6 +16,7 @@ public sealed class FaceProfileConfiguration : IEntityTypeConfiguration<FaceProf
         builder.Property(x => x.Status).HasConversion<string>().HasMaxLength(50).IsRequired();
         builder.Property(x => x.IsActive).IsRequired();
         builder.Property(x => x.ActiveTemplateVersion).IsRequired();
+        builder.Property(x => x.ConcurrencyToken).HasMaxLength(100);
 
         builder.HasIndex(x => x.UserId).IsUnique();
 
@@ -48,6 +49,19 @@ public sealed class FaceTemplateConfiguration : IEntityTypeConfiguration<FaceTem
         builder.Property(x => x.AlgorithmVersion).HasMaxLength(50).IsRequired();
         builder.Property(x => x.QualityScore).IsRequired();
         builder.Property(x => x.IsActive).IsRequired();
+        builder.Property(x => x.ConcurrencyToken).HasMaxLength(100);
+
+        // Explicitly Ignore Unmapped Metadata Fields To Prevent PostgreSQL Undefined Column Exceptions (42703)
+        builder.Ignore(x => x.ModelName);
+        builder.Ignore(x => x.ModelChecksum);
+        builder.Ignore(x => x.ModelDate);
+        builder.Ignore(x => x.EmbeddingDimension);
+        builder.Ignore(x => x.Provider);
+        builder.Ignore(x => x.NormalizationVersion);
+        builder.Ignore(x => x.TimesUsed);
+        builder.Ignore(x => x.SuccessCount);
+        builder.Ignore(x => x.AverageSimilarity);
+        builder.Ignore(x => x.LastSuccessfulLoginUtc);
 
         builder.HasIndex(x => x.Version);
     }

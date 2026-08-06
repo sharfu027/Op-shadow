@@ -162,28 +162,71 @@ public static class DependencyInjection
                 IssuerSigningKey = new SymmetricSecurityKey(jwtKey),
                 ClockSkew = TimeSpan.Zero
             };
+
+            options.Events = new JwtBearerEvents
+            {
+                OnTokenValidated = async context =>
+                {
+                    var dbContext = context.HttpContext.RequestServices.GetRequiredService<AppDbContext>();
+                    var userIdClaim = context.Principal?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                    if (Guid.TryParse(userIdClaim, out var userId))
+                    {
+                        var userExists = await dbContext.Users.AnyAsync(u => u.Id == userId && !u.IsDeleted && u.IsActive);
+                        if (!userExists)
+                        {
+                            context.Fail("User does not exist or is inactive/deleted.");
+                        }
+                    }
+                    else
+                    {
+                        context.Fail("Invalid user ID in token.");
+                    }
+                }
+            };
         });
 
-        // 5. Configure Redis Caching
+        // 5. Configure Redis Caching with fast fallback when local daemon is absent
         services.AddStackExchangeRedisCache(options =>
         {
-            options.Configuration = redisOptions.ConnectionString;
+            options.Configuration = $"{redisOptions.ConnectionString},abortConnect=false,connectTimeout=500";
             options.InstanceName = redisOptions.InstanceName;
         });
 
-        // 6. Configure Hangfire Background Job Processing with PostgreSQL Storage
-        services.AddHangfire(config => config
-            .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
-            .UseSimpleAssemblyNameTypeSerializer()
-            .UseRecommendedSerializerSettings()
-            .UsePostgreSqlStorage(options =>
+        // 6. Configure Hangfire Background Job Processing with PostgreSQL Storage (fallback to InMemory when database offline)
+        services.AddHangfire(config =>
+        {
+            config.SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+                  .UseSimpleAssemblyNameTypeSerializer()
+                  .UseRecommendedSerializerSettings();
+
+            bool canConnectToPostgres = false;
+            try
             {
-                options.UseNpgsqlConnection(hangfireOptions.ConnectionString);
-            }, new PostgreSqlStorageOptions
+                using var conn = new Npgsql.NpgsqlConnection(hangfireOptions.ConnectionString);
+                conn.Open();
+                canConnectToPostgres = true;
+            }
+            catch
             {
-                SchemaName = hangfireOptions.SchemaName,
-                PrepareSchemaIfNecessary = true
-            }));
+                canConnectToPostgres = false;
+            }
+
+            if (canConnectToPostgres)
+            {
+                config.UsePostgreSqlStorage(options =>
+                {
+                    options.UseNpgsqlConnection(hangfireOptions.ConnectionString);
+                }, new PostgreSqlStorageOptions
+                {
+                    SchemaName = hangfireOptions.SchemaName,
+                    PrepareSchemaIfNecessary = true
+                });
+            }
+            else
+            {
+                config.UseInMemoryStorage();
+            }
+        });
 
         services.AddHangfireServer();
 
@@ -192,6 +235,7 @@ public static class DependencyInjection
         services.AddScoped<IIdentityService, IdentityService>();
         services.AddScoped<IPermissionResolver, PermissionResolver>();
         services.AddScoped<ITokenService, JwtTokenService>();
+        services.AddScoped<IEmailService, EmailService>();
 
         // Register Enterprise Security Model Loader (Singleton)
         services.AddSingleton<IModelLoader, ModelLoader>();
@@ -204,8 +248,8 @@ public static class DependencyInjection
         services.AddScoped<IImagePipeline, ImagePipeline>();
         services.AddScoped<IImagePreprocessingService, ImagePreprocessingService>();
 
-        // Register Comparison Strategy Engine
-        services.AddScoped<IFaceComparisonStrategy, CosineStrategy>();
+        // Register Comparison Strategy Engine (Exact Euclidean Distance Matching)
+        services.AddScoped<IFaceComparisonStrategy, EuclideanStrategy>();
         services.AddScoped<IFaceComparisonService, FaceComparisonService>();
 
         // Register AI Security Services (Scoped)
@@ -232,6 +276,7 @@ public static class DependencyInjection
         services.AddScoped<IUnitOfWork, UnitOfWork>();
 
         services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<IGenericRepository<ApplicationUser>, UserRepository>();
         services.AddScoped<IRoleRepository, RoleRepository>();
         services.AddScoped<IPermissionRepository, PermissionRepository>();
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
@@ -259,6 +304,7 @@ public static class DependencyInjection
         services.AddScoped<ISupplierRepository, SupplierRepository>();
         services.AddScoped<ICustomerRepository, CustomerRepository>();
         services.AddScoped<IEmployeeRepository, EmployeeRepository>();
+        services.AddScoped<IPriceListRepository, PriceListRepository>();
 
         // 9. Register Current User Abstraction & Context Accessor
         services.AddHttpContextAccessor();
@@ -294,9 +340,15 @@ public static class DependencyInjection
 
         // 13. Register StackExchange.Redis ConnectionMultiplexer
         services.AddSingleton<IConnectionMultiplexer>(sp => 
-            ConnectionMultiplexer.Connect(redisOptions.ConnectionString));
+        {
+            var options = ConfigurationOptions.Parse(redisOptions.ConnectionString);
+            options.AbortOnConnectFail = false;
+            options.ConnectTimeout = 3000;
+            return ConnectionMultiplexer.Connect(options);
+        });
 
         // 14. Register Caching, File Storage, and Distributed Lock Services
+        services.AddMemoryCache();
         services.AddScoped<ICacheService, RedisCacheService>();
         services.AddScoped<IDistributedLockService, RedisDistributedLockService>();
         services.AddScoped<IPostgresAdvisoryLockService, PostgresAdvisoryLockService>();

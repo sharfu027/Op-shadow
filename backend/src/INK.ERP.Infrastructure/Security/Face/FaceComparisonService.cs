@@ -1,21 +1,25 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using INK.ERP.Infrastructure.Options;
+using INK.ERP.Application.Common.Interfaces;
 
 namespace INK.ERP.Infrastructure.Security.Face;
 
 public sealed class FaceComparisonService : IFaceComparisonService
 {
     private readonly IFaceComparisonStrategy _strategy;
+    private readonly IFaceTemplateProtectionService _protectionService;
     private readonly FaceRecognitionOptions _options;
     private readonly ILogger<FaceComparisonService> _logger;
 
     public FaceComparisonService(
         IFaceComparisonStrategy strategy,
+        IFaceTemplateProtectionService protectionService,
         IOptions<FaceRecognitionOptions> options,
         ILogger<FaceComparisonService> logger)
     {
         _strategy = strategy;
+        _protectionService = protectionService;
         _options = options.Value;
         _logger = logger;
     }
@@ -29,8 +33,11 @@ public sealed class FaceComparisonService : IFaceComparisonService
 
     public FaceComparisonResult Compare(string vectorDataA, string vectorDataB)
     {
-        var floatsA = ParseVector(vectorDataA);
-        var floatsB = ParseVector(vectorDataB);
+        var decryptedA = _protectionService.DecryptEmbedding(vectorDataA);
+        var decryptedB = _protectionService.DecryptEmbedding(vectorDataB);
+
+        var floatsA = ParseVector(decryptedA);
+        var floatsB = ParseVector(decryptedB);
 
         return Compare(floatsA, floatsB);
     }

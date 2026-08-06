@@ -37,6 +37,6 @@ public class WarehouseConfiguration : IEntityTypeConfiguration<Warehouse>
 
         builder.HasIndex(w => new { w.CompanyId, w.Code })
             .IsUnique()
-            .HasFilter("is_deleted = false");
+            ;
     }
 }

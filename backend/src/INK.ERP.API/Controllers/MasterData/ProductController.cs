@@ -88,7 +88,7 @@ public class ProductController : BaseApiController
     /// </summary>
     [HttpDelete("{id:guid}")]
     [Authorize(Policy = "IAM.Users.Delete")]
-    [ProducesResponseType(StatusCodes.Status24NoContent)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteProduct(Guid id, CancellationToken cancellationToken)
     {

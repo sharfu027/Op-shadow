@@ -32,19 +32,16 @@ public sealed class TransactionBehavior<TRequest, TResponse> : IPipelineBehavior
         try
         {
             _logger.LogInformation("Beginning Database Transaction for Request: {Name}", requestName);
-            await _unitOfWork.BeginTransactionAsync(cancellationToken);
-
-            var response = await next();
-
-            await _unitOfWork.CommitTransactionAsync(cancellationToken);
-            _logger.LogInformation("Committed Database Transaction for Request: {Name}", requestName);
-
-            return response;
+            return await _unitOfWork.ExecuteInTransactionAsync(async () =>
+            {
+                var response = await next();
+                _logger.LogInformation("Committed Database Transaction for Request: {Name}", requestName);
+                return response;
+            }, cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Rolling back Database Transaction for Request: {Name} due to error", requestName);
-            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+            _logger.LogError(ex, "Database Transaction failed for Request: {Name}", requestName);
             throw;
         }
     }

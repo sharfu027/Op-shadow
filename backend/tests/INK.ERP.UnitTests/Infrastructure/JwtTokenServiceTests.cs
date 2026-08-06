@@ -45,7 +45,7 @@ public sealed class JwtTokenServiceTests
         _dateTimeMock = new Mock<IDateTime>();
         _loggerMock = new Mock<ILogger<JwtTokenService>>();
 
-        _dateTimeMock.Setup(d => d.UtcNow).Returns(new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+        _dateTimeMock.Setup(d => d.UtcNow).Returns(() => DateTime.UtcNow);
         _unitOfWorkMock.Setup(u => u.Repository<RefreshToken>()).Returns(_refreshTokenRepoMock.Object);
 
         _jwtTokenService = new JwtTokenService(

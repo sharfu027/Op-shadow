@@ -1,16 +1,19 @@
+using System;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace INK.ERP.API.Models;
 
 public record PaginationParameters
 {
-    [FromQuery(Name = "page")]
-    public int Page { int get => _page; init => _page = value < 1 ? 1 : value; }
     private readonly int _page = 1;
+    private readonly int _pageSize = 10;
+
+    [FromQuery(Name = "page")]
+    public int Page { get => _page; init => _page = value < 1 ? 1 : value; }
 
     [FromQuery(Name = "pageSize")]
-    public int PageSize { int get => _pageSize; init => _pageSize = value > 100 ? 100 : (value < 1 ? 10 : value); }
-    private readonly int _pageSize = 10;
+    public int PageSize { get => _pageSize; init => _pageSize = value > 100 ? 100 : (value < 1 ? 10 : value); }
 }
 
 public record SecurityFilterParameters : PaginationParameters
@@ -39,3 +42,12 @@ public sealed record PaginationMetadata(
     int PageSize,
     int CurrentPage,
     int TotalPages);
+
+public record EnrollFaceRequest(
+    [FromForm(Name = "userId")] Guid UserId,
+    [FromForm(Name = "image")] IFormFile Image,
+    [FromForm(Name = "algorithmVersion")] string? AlgorithmVersion = "v1.0");
+
+public record ReplaceFaceTemplateRequest(
+    [FromForm(Name = "userId")] Guid UserId,
+    [FromForm(Name = "image")] IFormFile Image);

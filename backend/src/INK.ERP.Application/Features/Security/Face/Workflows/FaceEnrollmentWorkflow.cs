@@ -17,6 +17,7 @@ public class FaceEnrollmentWorkflow : IFaceEnrollmentWorkflow
 {
     private readonly IFaceValidationWorkflow _validationWorkflow;
     private readonly IFaceEmbeddingService _embeddingService;
+    private readonly IFaceProfileRepository _faceProfileRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IPublisher _publisher;
     private readonly ILogger<FaceEnrollmentWorkflow> _logger;
@@ -24,12 +25,14 @@ public class FaceEnrollmentWorkflow : IFaceEnrollmentWorkflow
     public FaceEnrollmentWorkflow(
         IFaceValidationWorkflow validationWorkflow,
         IFaceEmbeddingService embeddingService,
+        IFaceProfileRepository faceProfileRepository,
         IUnitOfWork unitOfWork,
         IPublisher publisher,
         ILogger<FaceEnrollmentWorkflow> logger)
     {
         _validationWorkflow = validationWorkflow;
         _embeddingService = embeddingService;
+        _faceProfileRepository = faceProfileRepository;
         _unitOfWork = unitOfWork;
         _publisher = publisher;
         _logger = logger;
@@ -38,9 +41,14 @@ public class FaceEnrollmentWorkflow : IFaceEnrollmentWorkflow
     public async Task<Result<FaceProfileDto>> ExecuteAsync(EnrollFaceCommand command, CancellationToken cancellationToken = default)
     {
         var validationResult = await _validationWorkflow.ValidateAsync(command.ImageData, cancellationToken);
-        if (validationResult.IsFailure || !validationResult.Value.IsValid)
+        if (validationResult.IsFailure)
         {
-            var firstError = validationResult.Value.ValidationErrors.FirstOrDefault() ?? "Face validation failed.";
+            return Result.Failure<FaceProfileDto>(validationResult.Error);
+        }
+
+        if (validationResult.Value == null || !validationResult.Value.IsValid)
+        {
+            var firstError = validationResult.Value?.ValidationErrors?.FirstOrDefault() ?? "Face validation failed.";
             return Result.Failure<FaceProfileDto>(SecurityErrors.Face.QualityCheckFailed(firstError));
         }
 
@@ -50,14 +58,12 @@ public class FaceEnrollmentWorkflow : IFaceEnrollmentWorkflow
             return Result.Failure<FaceProfileDto>(embeddingResult.Error);
         }
 
-        var faceProfileRepo = _unitOfWork.Repository<FaceProfile>();
-        var profiles = await faceProfileRepo.FindAsync(p => p.UserId == command.UserId && !p.IsDeleted, cancellationToken);
-        var profile = profiles.FirstOrDefault();
+        var profile = await _faceProfileRepository.GetByUserIdAsync(command.UserId, cancellationToken);
 
         if (profile == null)
         {
             profile = new FaceProfile(command.UserId);
-            await faceProfileRepo.AddAsync(profile, cancellationToken);
+            await _faceProfileRepository.AddAsync(profile, cancellationToken);
         }
 
         try
@@ -70,7 +76,16 @@ public class FaceEnrollmentWorkflow : IFaceEnrollmentWorkflow
         }
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
-        _logger.LogInformation("Enrollment workflow succeeded for user {UserId}", command.UserId);
+
+        var latestTemplate = profile.Templates.OrderByDescending(t => t.Version).FirstOrDefault();
+        _logger.LogInformation(
+            "[BIOMETRIC AUDIT PERSISTENCE] UserId: {UserId} | FaceProfileId: {FaceProfileId} | TemplateId: {TemplateId} | ActiveTemplateVersion: {ActiveTemplateVersion} | Registered: {Registered} | TemplateCount: {TemplateCount}",
+            profile.UserId,
+            profile.Id,
+            latestTemplate?.Id ?? Guid.Empty,
+            profile.ActiveTemplateVersion,
+            profile.Status == Domain.Enums.Security.FaceEnrollmentStatus.Enrolled,
+            profile.Templates.Count);
 
         // Publish lightweight Application Event
         await _publisher.Publish(new FaceEnrollmentCompletedEvent(profile.Id, profile.UserId, profile.ActiveTemplateVersion, DateTime.UtcNow), cancellationToken);
@@ -78,8 +93,10 @@ public class FaceEnrollmentWorkflow : IFaceEnrollmentWorkflow
         var templatesDto = profile.Templates.Select(t => new FaceTemplateDto(
             t.Id, t.Version, t.AlgorithmVersion, t.QualityScore, t.IsActive, t.CreatedAtUtc)).ToList();
 
+        string statusStr = profile.Status == Domain.Enums.Security.FaceEnrollmentStatus.Enrolled ? "Registered" : profile.Status.ToString();
+
         var profileDto = new FaceProfileDto(
-            profile.Id, profile.UserId, profile.Status.ToString(), profile.IsActive, profile.ActiveTemplateVersion, templatesDto);
+            profile.Id, profile.UserId, statusStr, profile.IsActive, profile.ActiveTemplateVersion, templatesDto);
 
         return Result.Success(profileDto);
     }

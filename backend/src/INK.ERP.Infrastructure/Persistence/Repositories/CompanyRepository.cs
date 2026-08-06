@@ -1,3 +1,6 @@
+using System;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using INK.ERP.Application.Common.Interfaces;
 using INK.ERP.Domain.Entities.MasterData;
@@ -7,19 +10,31 @@ namespace INK.ERP.Infrastructure.Persistence.Repositories;
 
 public class CompanyRepository : GenericRepository<Company>, ICompanyRepository
 {
-    public CompanyRepository(AppDbContext context) : base(context)
+    private readonly AppDbContext _dbContext;
+
+    public CompanyRepository(AppDbContext dbContext) : base(dbContext)
     {
+        _dbContext = dbContext;
     }
 
-    public async Task<bool> IsCodeUniqueAsync(string code, Guid? excludeId = null, CancellationToken cancellationToken = default)
+    public async Task<bool> ExistsCodeAsync(string code, Guid? excludeId = null, CancellationToken cancellationToken = default)
     {
-        var normalizedCode = code.ToUpperInvariant().Trim();
-        return !await _dbSet.AnyAsync(c => c.Code == normalizedCode && (!excludeId.HasValue || c.Id != excludeId.Value), cancellationToken);
+        var normalized = code.Trim().ToUpperInvariant();
+        return await _dbContext.Companies
+            .AnyAsync(c => c.Code.ToUpper() == normalized && (!excludeId.HasValue || c.Id != excludeId.Value), cancellationToken);
     }
 
-    public async Task<bool> IsTaxRegistrationNumberUniqueAsync(string taxRegistrationNumber, Guid? excludeId = null, CancellationToken cancellationToken = default)
+    public async Task<bool> ExistsGstinAsync(string gstin, Guid? excludeId = null, CancellationToken cancellationToken = default)
     {
-        var normalizedTaxReg = taxRegistrationNumber.Trim();
-        return !await _dbSet.AnyAsync(c => c.TaxRegistrationNumber == normalizedTaxReg && (!excludeId.HasValue || c.Id != excludeId.Value), cancellationToken);
+        var normalized = gstin.Trim().ToUpperInvariant();
+        return await _dbContext.Companies
+            .AnyAsync(c => c.TaxRegistrationNumber.ToUpper() == normalized && (!excludeId.HasValue || c.Id != excludeId.Value), cancellationToken);
+    }
+
+    public async Task<bool> ExistsLegalNameAsync(string legalName, Guid? excludeId = null, CancellationToken cancellationToken = default)
+    {
+        var normalized = legalName.Trim().ToLowerInvariant();
+        return await _dbContext.Companies
+            .AnyAsync(c => c.LegalName.ToLower() == normalized && (!excludeId.HasValue || c.Id != excludeId.Value), cancellationToken);
     }
 }

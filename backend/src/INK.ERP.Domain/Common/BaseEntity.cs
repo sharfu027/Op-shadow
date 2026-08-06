@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace INK.ERP.Domain.Common;
@@ -6,9 +8,9 @@ public abstract class BaseEntity
 {
     private readonly List<IDomainEvent> _domainEvents = new();
 
-    public Guid Id { get; protected set; } = Guid.NewGuid();
-    public DateTime CreatedAtUtc { get; protected set; } = DateTime.UtcNow;
-    public DateTime? LastModifiedAtUtc { get; protected set; }
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+    public DateTime? LastModifiedAtUtc { get; set; }
 
     [NotMapped]
     public IReadOnlyCollection<IDomainEvent> DomainEvents => _domainEvents.AsReadOnly();

@@ -86,17 +86,17 @@ public class GetCategoriesPagedQueryHandler : IRequestHandler<GetCategoriesPaged
             .Select(category => new CategoryDto(
                 category.Id,
                 category.CompanyId,
-                category.Company?.LegalName,
+                category.Company != null ? category.Company.LegalName : null,
                 category.Code,
                 category.Name,
                 category.ParentCategoryId,
-                category.ParentCategory?.Name,
+                category.ParentCategory != null ? category.ParentCategory.Name : null,
                 category.GstTaxRatePercent,
                 category.HsnCodeDefault,
                 category.IsActive,
                 category.CreatedAtUtc))
             .ToList();
 
-        return Result<IReadOnlyList<CategoryDto>>.Success(list);
+        return Result.Success<IReadOnlyList<CategoryDto>>(list);
     }
 }

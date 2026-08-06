@@ -30,3 +30,18 @@ public sealed record FaceProfileDto(
     bool IsActive,
     int ActiveTemplateVersion,
     IReadOnlyList<FaceTemplateDto> Templates);
+
+public sealed record FaceVerificationResultDto(
+    bool Success,
+    float SimilarityScore,
+    float ConfidenceScore,
+    string Message,
+    string? FailureReason,
+    long ProcessingTimeMs);
+
+public sealed record VerifyFaceRequest(
+    string? UserId,
+    string? ImageBase64,
+    string? ImageBlob,
+    string? DeviceId);
+

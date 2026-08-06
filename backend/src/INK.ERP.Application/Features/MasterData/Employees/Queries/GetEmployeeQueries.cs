@@ -107,13 +107,13 @@ public class GetEmployeesPagedQueryHandler : IRequestHandler<GetEmployeesPagedQu
             .Select(employee => new EmployeeDto(
                 employee.Id,
                 employee.CompanyId,
-                employee.Company?.LegalName,
+                employee.Company != null ? employee.Company.LegalName : null,
                 employee.BranchId,
-                employee.Branch?.Name,
+                employee.Branch != null ? employee.Branch.Name : null,
                 employee.DepartmentId,
-                employee.Department?.Name,
+                employee.Department != null ? employee.Department.Name : null,
                 employee.DesignationId,
-                employee.Designation?.Title,
+                employee.Designation != null ? employee.Designation.Title : null,
                 employee.EmployeeCode,
                 employee.FirstName,
                 employee.LastName,
@@ -126,6 +126,6 @@ public class GetEmployeesPagedQueryHandler : IRequestHandler<GetEmployeesPagedQu
                 employee.CreatedAtUtc))
             .ToList();
 
-        return Result<IReadOnlyList<EmployeeDto>>.Success(list);
+        return Result.Success<IReadOnlyList<EmployeeDto>>(list);
     }
 }

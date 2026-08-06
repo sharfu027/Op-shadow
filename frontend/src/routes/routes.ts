@@ -133,7 +133,6 @@ export const ROUTES = {
     LOGIN: '/auth/login',
     FORGOT_PASSWORD: '/auth/forgot-password',
     RESET_PASSWORD: '/auth/reset-password',
-    MFA_OTP: '/auth/2fa',
     SESSION_EXPIRED: '/auth/expired',
     ACCESS_DENIED: '/auth/access-denied',
     CHANGE_PASSWORD: '/auth/change-password'

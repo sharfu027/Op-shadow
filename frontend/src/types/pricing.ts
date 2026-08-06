@@ -1,29 +1,52 @@
-export type PriceListStatus = 'Active' | 'Draft' | 'Archived' | 'Expired';
+export type PriceListStatus = 'Draft' | 'Published' | 'Archived' | 'Expired' | 'Active';
 
 export interface PriceListItem {
-  id: string;
+  id?: string;
+  priceListId?: string;
   productId: string;
-  productCode: string;
-  productName: string;
+  productCode?: string;
+  productName?: string;
   basePrice: number;
-  costPrice: number;
-  wholesalePrice: number;
-  msrp: number;
-  sellingPrice: number;
+  costPrice?: number;
+  wholesalePrice?: number;
+  msrp?: number;
+  minSellingPrice?: number;
+  sellingPrice?: number;
+  currencyCode?: string;
+  effectiveDate?: string;
+  isActive?: boolean;
 }
 
 export interface PriceList {
   id: string;
-  code: string;
+  companyId?: string;
+  code?: string;
   name: string;
-  type: 'Standard' | 'Distributor' | 'Retail' | 'Special';
-  currency: string;
-  effectiveDate: string;
-  expiryDate: string;
+  type?: 'Standard' | 'Distributor' | 'Retail' | 'Special';
+  currency?: string;
+  description?: string;
+  effectiveFrom?: string;
+  effectiveTo?: string;
+  effectiveDate?: string;
+  expiryDate?: string;
   version: number;
   status: PriceListStatus;
+  concurrencyToken?: string;
+  isDeleted?: boolean;
+  createdAtUtc?: string;
+  lastModifiedAtUtc?: string;
   itemsCount?: number;
   items?: PriceListItem[];
+}
+
+export interface PagedPriceListResult {
+  items: PriceList[];
+  totalCount: number;
+  pageNumber: number;
+  pageSize: number;
+  totalPages: number;
+  hasPreviousPage: boolean;
+  hasNextPage: boolean;
 }
 
 export interface CustomerPricingRule {

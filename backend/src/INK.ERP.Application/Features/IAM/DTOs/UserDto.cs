@@ -11,6 +11,7 @@ public sealed record UserDto(
     Guid? EmployeeId,
     bool IsActive,
     bool IsLocked,
+    bool IsDeleted,
     DateTime? LastLoginUtc,
     bool TwoFactorEnabled,
     bool EmailConfirmed,

@@ -1,5 +1,9 @@
+using System;
+using System.Threading;
+using System.Threading.Tasks;
 using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using INK.ERP.Application.Features.IAM.Commands.Auth;
@@ -13,7 +17,7 @@ namespace INK.ERP.API.Controllers;
 public sealed class AuthController : BaseApiController
 {
     /// <summary>
-    /// Authenticate user credentials and issue Access & Refresh tokens.
+    /// Authenticate user credentials and issue production Access & Refresh tokens.
     /// </summary>
     [HttpPost("login")]
     [AllowAnonymous]
@@ -153,7 +157,95 @@ public sealed class AuthController : BaseApiController
         var result = await Mediator.Send(command, cancellationToken);
         return HandleResult(result);
     }
+
+    /// <summary>
+    /// Biometric face authentication verification endpoint.
+    /// </summary>
+    [HttpPost("verify-face")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(INK.ERP.Application.Features.Security.Face.DTOs.FaceVerificationResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> VerifyFace([FromBody] INK.ERP.Application.Features.Security.Face.DTOs.VerifyFaceRequest request, CancellationToken cancellationToken)
+    {
+        // 1. Resolve User ID: Accept Guid string, username, email, or fall back to JWT claim
+        Guid targetUserId = Guid.Empty;
+
+        if (!string.IsNullOrWhiteSpace(request.UserId))
+        {
+            if (Guid.TryParse(request.UserId, out var parsedUid) && parsedUid != Guid.Empty)
+            {
+                targetUserId = parsedUid;
+            }
+            else
+            {
+                var userRepo = HttpContext.RequestServices.GetRequiredService<INK.ERP.Application.Common.Interfaces.IUserRepository>();
+                var search = request.UserId.Trim();
+                var matches = await userRepo.FindAsync(u => u.UserName == search || u.Email == search, cancellationToken);
+                var foundUser = matches.FirstOrDefault();
+                if (foundUser != null)
+                {
+                    targetUserId = foundUser.Id;
+                }
+            }
+        }
+
+        if (targetUserId == Guid.Empty && Guid.TryParse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value, out var claimUid))
+        {
+            targetUserId = claimUid;
+        }
+
+        if (targetUserId == Guid.Empty)
+        {
+            return BadRequest(new ProblemDetails { Title = "Invalid User", Detail = $"No active user account found matching identifier '{request.UserId}'." });
+        }
+
+        // 2. Parse Image Bytes: Support either ImageBase64 or ImageBlob payload field
+        byte[] imageBytes = ParseImageData(request.ImageBase64 ?? request.ImageBlob);
+        if (imageBytes.Length == 0)
+        {
+            return BadRequest(new ProblemDetails { Title = "Invalid Image", Detail = "No valid image data provided for verification." });
+        }
+
+        var clientIp = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1";
+        var userAgent = Request.Headers.UserAgent.ToString();
+
+        var command = new INK.ERP.Application.Features.Security.Face.VerifyFaceBiometricsCommand(
+            targetUserId,
+            imageBytes,
+            request.DeviceId,
+            clientIp,
+            userAgent);
+
+        var result = await Mediator.Send(command, cancellationToken);
+        return HandleResult(result);
+    }
+
+    [HttpGet("claims")]
+    [Authorize]
+    public IActionResult GetClaims()
+    {
+        var claims = User.Claims.Select(c => new { c.Type, c.Value }).ToList();
+        return Ok(claims);
+    }
+
+    private static byte[] ParseImageData(string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return Array.Empty<byte>();
+
+        try
+        {
+            var clean = input.Contains(",") ? input.Split(',')[1] : input;
+            return Convert.FromBase64String(clean.Trim());
+        }
+        catch
+        {
+            return Array.Empty<byte>();
+        }
+    }
 }
+
+
+
 
 public record LoginRequest(string Username, string Password);
 public record RefreshTokenRequest(string RefreshToken);

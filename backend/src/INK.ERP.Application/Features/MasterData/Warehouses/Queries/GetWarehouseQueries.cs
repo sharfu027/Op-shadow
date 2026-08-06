@@ -114,6 +114,6 @@ public class GetWarehousesPagedQueryHandler : IRequestHandler<GetWarehousesPaged
                 warehouse.CreatedAtUtc))
             .ToList();
 
-        return Result<IReadOnlyList<WarehouseDto>>.Success(list);
+        return Result.Success<IReadOnlyList<WarehouseDto>>(list);
     }
 }

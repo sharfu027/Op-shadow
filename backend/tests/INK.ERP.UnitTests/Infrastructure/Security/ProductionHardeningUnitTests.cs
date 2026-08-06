@@ -75,7 +75,8 @@ public sealed class ProductionHardeningUnitTests
         var strategy = new EuclideanStrategy();
         var optionsMock = Options.Create(new FaceRecognitionOptions { MatchThreshold = 0.80f });
         var loggerMock = new Mock<ILogger<FaceComparisonService>>();
-        var service = new FaceComparisonService(strategy, optionsMock, loggerMock.Object);
+        var protectionServiceMock = new Mock<IFaceTemplateProtectionService>();
+        var service = new FaceComparisonService(strategy, protectionServiceMock.Object, optionsMock, loggerMock.Object);
 
         var vectorA = new float[] { 0.5f, 0.5f };
         var vectorB = new float[] { 0.5f, 0.5f };
@@ -115,8 +116,8 @@ public sealed class ProductionHardeningUnitTests
 
         // Assert
         result.IsSuccess.Should().BeTrue();
-        result.Value.Score.Should().BeGreaterThanOrEqualTo(30); // DeviceId missing adds 30
-        result.Value.Reasons.Should().Contain(r => r.Contains("Unregistered hardware device"));
+        result.Value.RiskScore.Should().BeGreaterThanOrEqualTo(30); // DeviceId missing adds 30
+        result.Value.RiskFactors.Should().Contain(r => r.Contains("Unregistered hardware device"));
     }
 
     [Fact]

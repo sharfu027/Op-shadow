@@ -1,7 +1,15 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using MediatR;
 using INK.ERP.Application.Common.Interfaces;
+using INK.ERP.Application.Common.Models;
 using INK.ERP.Application.Features.MasterData.Companies.DTOs;
 using INK.ERP.Domain.Common;
+using INK.ERP.Domain.Entities.MasterData;
+using INK.ERP.Domain.Enums.MasterData;
 
 namespace INK.ERP.Application.Features.MasterData.Companies.Queries;
 
@@ -18,42 +26,28 @@ public class GetCompanyByIdQueryHandler : IRequestHandler<GetCompanyByIdQuery, R
 
     public async Task<Result<CompanyDto>> Handle(GetCompanyByIdQuery request, CancellationToken cancellationToken)
     {
-        var company = await _companyRepository.GetByIdAsync(request.Id, cancellationToken);
-        if (company == null)
-        {
-            return Result<CompanyDto>.Failure(Error.NotFound("Company.NotFound", $"Company with ID '{request.Id}' was not found."));
-        }
+        var c = await _companyRepository.GetByIdAsync(request.Id, cancellationToken);
 
-        var dto = new CompanyDto(
-            company.Id,
-            company.Code,
-            company.LegalName,
-            company.TradeName,
-            company.TaxRegistrationNumber,
-            company.PanNumber,
-            company.Email,
-            company.Phone,
-            company.CurrencyCode,
-            company.Address.AddressLine1,
-            company.Address.AddressLine2,
-            company.Address.City,
-            company.Address.State,
-            company.Address.PostalCode,
-            company.Address.Country,
-            company.IsActive,
-            company.CreatedAtUtc);
+        if (c == null || c.IsDeleted)
+            return Result.Failure<CompanyDto>(Error.NotFound("Company.NotFound", $"Company with ID '{request.Id}' was not found."));
 
-        return Result<CompanyDto>.Success(dto);
+        return Result.Success(MapToDto(c));
     }
+
+    private static CompanyDto MapToDto(Company c) => new(
+        c.Id, c.TenantId, c.Code, c.LegalName, c.TradeName, c.TaxRegistrationNumber, c.PanNumber, c.CinNumber,
+        c.Email, c.Phone, c.Website, c.LogoUrl, c.CurrencyId, c.CurrencyCode, c.FinancialYearStartMonth, c.TimeZoneId,
+        c.Address.AddressLine1, c.Address.AddressLine2, c.Address.City, c.Address.State, c.Address.PostalCode, c.Address.Country, null,
+        c.Status, c.IsActive, c.RowVersion, c.CreatedAtUtc, c.CreatedBy, c.LastModifiedAtUtc, c.LastModifiedBy);
 }
 
 public record GetCompaniesPagedQuery(
-    int Page = 1,
+    int PageNumber = 1,
     int PageSize = 10,
     string? Search = null,
-    string? Status = null) : IRequest<Result<IReadOnlyList<CompanyDto>>>;
+    string? Status = null) : IRequest<Result<PagedResult<CompanyDto>>>;
 
-public class GetCompaniesPagedQueryHandler : IRequestHandler<GetCompaniesPagedQuery, Result<IReadOnlyList<CompanyDto>>>
+public class GetCompaniesPagedQueryHandler : IRequestHandler<GetCompaniesPagedQuery, Result<PagedResult<CompanyDto>>>
 {
     private readonly ICompanyRepository _companyRepository;
 
@@ -62,47 +56,87 @@ public class GetCompaniesPagedQueryHandler : IRequestHandler<GetCompaniesPagedQu
         _companyRepository = companyRepository;
     }
 
-    public async Task<Result<IReadOnlyList<CompanyDto>>> Handle(GetCompaniesPagedQuery request, CancellationToken cancellationToken)
+    public async Task<Result<PagedResult<CompanyDto>>> Handle(GetCompaniesPagedQuery request, CancellationToken cancellationToken)
     {
-        var companies = await _companyRepository.GetAllAsync(cancellationToken);
-        var query = companies.AsQueryable();
+        var search = request.Search?.Trim().ToLower();
+        Enum.TryParse<CompanyStatus>(request.Status, true, out var statusEnum);
+        var hasStatusFilter = !string.IsNullOrWhiteSpace(request.Status);
 
-        if (!string.IsNullOrWhiteSpace(request.Search))
-        {
-            var search = request.Search.Trim();
-            query = query.Where(c => c.Code.Contains(search, StringComparison.OrdinalIgnoreCase) ||
-                                     c.LegalName.Contains(search, StringComparison.OrdinalIgnoreCase) ||
-                                     c.TaxRegistrationNumber.Contains(search, StringComparison.OrdinalIgnoreCase));
-        }
+        var allCompanies = await _companyRepository.FindAsync(c =>
+            !c.IsDeleted &&
+            (string.IsNullOrEmpty(search) || c.Code.ToLower().Contains(search) || c.LegalName.ToLower().Contains(search) || c.TaxRegistrationNumber.ToLower().Contains(search)) &&
+            (!hasStatusFilter || c.Status == statusEnum), cancellationToken);
 
-        if (!string.IsNullOrWhiteSpace(request.Status) && !string.Equals(request.Status, "All", StringComparison.OrdinalIgnoreCase))
-        {
-            bool isActive = string.Equals(request.Status, "Active", StringComparison.OrdinalIgnoreCase);
-            query = query.Where(c => c.IsActive == isActive);
-        }
+        var totalCount = allCompanies.Count;
+        var page = request.PageNumber <= 0 ? 1 : request.PageNumber;
+        var size = request.PageSize <= 0 ? 10 : request.PageSize;
 
-        var list = query
+        var items = allCompanies
             .OrderBy(c => c.Code)
-            .Select(company => new CompanyDto(
-                company.Id,
-                company.Code,
-                company.LegalName,
-                company.TradeName,
-                company.TaxRegistrationNumber,
-                company.PanNumber,
-                company.Email,
-                company.Phone,
-                company.CurrencyCode,
-                company.Address.AddressLine1,
-                company.Address.AddressLine2,
-                company.Address.City,
-                company.Address.State,
-                company.Address.PostalCode,
-                company.Address.Country,
-                company.IsActive,
-                company.CreatedAtUtc))
+            .Skip((page - 1) * size)
+            .Take(size)
+            .Select(c => new CompanyDto(
+                c.Id, c.TenantId, c.Code, c.LegalName, c.TradeName, c.TaxRegistrationNumber, c.PanNumber, c.CinNumber,
+                c.Email, c.Phone, c.Website, c.LogoUrl, c.CurrencyId, c.CurrencyCode, c.FinancialYearStartMonth, c.TimeZoneId,
+                c.Address.AddressLine1, c.Address.AddressLine2, c.Address.City, c.Address.State, c.Address.PostalCode, c.Address.Country, null,
+                c.Status, c.IsActive, c.RowVersion, c.CreatedAtUtc, c.CreatedBy, c.LastModifiedAtUtc, c.LastModifiedBy))
             .ToList();
 
-        return Result<IReadOnlyList<CompanyDto>>.Success(list);
+        var pagedResult = PagedResult<CompanyDto>.Create(items, page, size, totalCount);
+        return Result.Success(pagedResult);
+    }
+}
+
+public record GetCompanyLookupQuery() : IRequest<Result<IReadOnlyList<CompanyLookupDto>>>;
+
+public class GetCompanyLookupQueryHandler : IRequestHandler<GetCompanyLookupQuery, Result<IReadOnlyList<CompanyLookupDto>>>
+{
+    private readonly ICompanyRepository _companyRepository;
+
+    public GetCompanyLookupQueryHandler(ICompanyRepository companyRepository)
+    {
+        _companyRepository = companyRepository;
+    }
+
+    public async Task<Result<IReadOnlyList<CompanyLookupDto>>> Handle(GetCompanyLookupQuery request, CancellationToken cancellationToken)
+    {
+        var activeCompanies = await _companyRepository.FindAsync(c =>
+            !c.IsDeleted && c.IsActive && c.Status == CompanyStatus.Active, cancellationToken);
+
+        var items = activeCompanies
+            .OrderBy(c => c.LegalName)
+            .Select(c => new CompanyLookupDto(c.Id, c.Code, c.LegalName, c.CurrencyCode))
+            .ToList();
+
+        return Result.Success<IReadOnlyList<CompanyLookupDto>>(items);
+    }
+}
+
+public record GetActiveCompaniesQuery() : IRequest<Result<IReadOnlyList<CompanyDto>>>;
+
+public class GetActiveCompaniesQueryHandler : IRequestHandler<GetActiveCompaniesQuery, Result<IReadOnlyList<CompanyDto>>>
+{
+    private readonly ICompanyRepository _companyRepository;
+
+    public GetActiveCompaniesQueryHandler(ICompanyRepository companyRepository)
+    {
+        _companyRepository = companyRepository;
+    }
+
+    public async Task<Result<IReadOnlyList<CompanyDto>>> Handle(GetActiveCompaniesQuery request, CancellationToken cancellationToken)
+    {
+        var activeCompanies = await _companyRepository.FindAsync(c =>
+            !c.IsDeleted && c.IsActive && c.Status == CompanyStatus.Active, cancellationToken);
+
+        var items = activeCompanies
+            .OrderBy(c => c.LegalName)
+            .Select(c => new CompanyDto(
+                c.Id, c.TenantId, c.Code, c.LegalName, c.TradeName, c.TaxRegistrationNumber, c.PanNumber, c.CinNumber,
+                c.Email, c.Phone, c.Website, c.LogoUrl, c.CurrencyId, c.CurrencyCode, c.FinancialYearStartMonth, c.TimeZoneId,
+                c.Address.AddressLine1, c.Address.AddressLine2, c.Address.City, c.Address.State, c.Address.PostalCode, c.Address.Country, null,
+                c.Status, c.IsActive, c.RowVersion, c.CreatedAtUtc, c.CreatedBy, c.LastModifiedAtUtc, c.LastModifiedBy))
+            .ToList();
+
+        return Result.Success<IReadOnlyList<CompanyDto>>(items);
     }
 }

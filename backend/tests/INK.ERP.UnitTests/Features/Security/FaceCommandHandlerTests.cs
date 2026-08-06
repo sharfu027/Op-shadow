@@ -1,50 +1,30 @@
 using FluentAssertions;
-using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
-using INK.ERP.Application.Common.Interfaces;
 using INK.ERP.Domain.Common;
-using INK.ERP.Domain.Entities.Security;
-using INK.ERP.Domain.ValueObjects.Security;
 using INK.ERP.Application.Features.Security.Face;
+using INK.ERP.Application.Features.Security.Face.DTOs;
+using INK.ERP.Application.Features.Security.Face.Workflows;
 
 namespace INK.ERP.UnitTests.Features.Security;
 
 public sealed class FaceCommandHandlerTests
 {
-    private readonly Mock<IUnitOfWork> _unitOfWorkMock;
-    private readonly Mock<IGenericRepository<FaceProfile>> _faceProfileRepoMock;
-    private readonly Mock<IFaceEmbeddingService> _embeddingServiceMock;
-    private readonly Mock<IImageQualityService> _qualityServiceMock;
-    private readonly Mock<ILivenessDetectionService> _livenessServiceMock;
-    private readonly Mock<ILogger<EnrollFaceCommandHandler>> _loggerMock;
+    private readonly Mock<IFaceEnrollmentWorkflow> _workflowMock;
     private readonly EnrollFaceCommandHandler _enrollHandler;
 
     public FaceCommandHandlerTests()
     {
-        _unitOfWorkMock = new Mock<IUnitOfWork>();
-        _faceProfileRepoMock = new Mock<IGenericRepository<FaceProfile>>();
-        _embeddingServiceMock = new Mock<IFaceEmbeddingService>();
-        _qualityServiceMock = new Mock<IImageQualityService>();
-        _livenessServiceMock = new Mock<ILivenessDetectionService>();
-        _loggerMock = new Mock<ILogger<EnrollFaceCommandHandler>>();
-
-        _unitOfWorkMock.Setup(u => u.Repository<FaceProfile>()).Returns(_faceProfileRepoMock.Object);
-
-        _enrollHandler = new EnrollFaceCommandHandler(
-            _unitOfWorkMock.Object,
-            _embeddingServiceMock.Object,
-            _qualityServiceMock.Object,
-            _livenessServiceMock.Object,
-            _loggerMock.Object);
+        _workflowMock = new Mock<IFaceEnrollmentWorkflow>();
+        _enrollHandler = new EnrollFaceCommandHandler(_workflowMock.Object);
     }
 
     [Fact]
-    public async Task EnrollFaceCommand_LivenessFailed_ReturnsLivenessError()
+    public async Task EnrollFaceCommand_WorkflowFails_ReturnsFailure()
     {
         // Arrange
-        _livenessServiceMock.Setup(l => l.DetectLivenessAsync(It.IsAny<byte[]>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result.Success(false));
+        _workflowMock.Setup(w => w.ExecuteAsync(It.IsAny<EnrollFaceCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Failure<FaceProfileDto>(new Error("SECURITY.FACE.LIVENESS_FAILED", "Liveness check failed.", ErrorType.Validation)));
 
         var command = new EnrollFaceCommand(Guid.NewGuid(), new byte[] { 1, 2, 3 });
 
@@ -57,14 +37,11 @@ public sealed class FaceCommandHandlerTests
     }
 
     [Fact]
-    public async Task EnrollFaceCommand_QualityScoreLow_ReturnsQualityError()
+    public async Task EnrollFaceCommand_WorkflowQualityFails_ReturnsQualityError()
     {
         // Arrange
-        _livenessServiceMock.Setup(l => l.DetectLivenessAsync(It.IsAny<byte[]>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result.Success(true));
-
-        _qualityServiceMock.Setup(q => q.ValidateQualityAsync(It.IsAny<byte[]>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result.Success(0.50f)); // Below 0.70 threshold!
+        _workflowMock.Setup(w => w.ExecuteAsync(It.IsAny<EnrollFaceCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Failure<FaceProfileDto>(new Error("SECURITY.FACE.QUALITY_CHECK_FAILED", "Image quality too low.", ErrorType.Validation)));
 
         var command = new EnrollFaceCommand(Guid.NewGuid(), new byte[] { 1, 2, 3 });
 
@@ -81,18 +58,11 @@ public sealed class FaceCommandHandlerTests
     {
         // Arrange
         var userId = Guid.NewGuid();
-        _livenessServiceMock.Setup(l => l.DetectLivenessAsync(It.IsAny<byte[]>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result.Success(true));
+        var profileId = Guid.NewGuid();
+        var profileDto = new FaceProfileDto(profileId, userId, "Active", true, 1, new List<FaceTemplateDto>());
 
-        _qualityServiceMock.Setup(q => q.ValidateQualityAsync(It.IsAny<byte[]>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result.Success(0.90f));
-
-        var embedding = new FaceEmbedding("vector_123", 512, "v1.0", 0.90f);
-        _embeddingServiceMock.Setup(e => e.GenerateEmbeddingAsync(It.IsAny<byte[]>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result.Success(embedding));
-
-        _faceProfileRepoMock.Setup(r => r.FindAsync(It.IsAny<System.Linq.Expressions.Expression<Func<FaceProfile, bool>>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<FaceProfile>());
+        _workflowMock.Setup(w => w.ExecuteAsync(It.IsAny<EnrollFaceCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success(profileDto));
 
         var command = new EnrollFaceCommand(userId, new byte[] { 1, 2, 3 });
 
@@ -101,6 +71,6 @@ public sealed class FaceCommandHandlerTests
 
         // Assert
         result.IsSuccess.Should().BeTrue();
-        result.Value.Should().NotBeEmpty();
+        result.Value.Should().Be(profileId);
     }
 }

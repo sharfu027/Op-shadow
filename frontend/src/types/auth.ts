@@ -1,42 +1,62 @@
-export type UserRole =
-  | 'Super Administrator'
-  | 'Administrator'
-  | 'Procurement Manager'
-  | 'Warehouse Manager'
-  | 'Inventory Controller'
-  | 'Sales Manager'
-  | 'Sales Representative'
-  | 'Finance Manager'
-  | 'Accountant'
-  | 'Branch Manager'
-  | 'Director';
+export type UserRole = string;
 
-export type UserPermission =
-  | 'read:dashboard'
-  | 'manage:masters'
-  | 'manage:procurement'
-  | 'manage:warehouse'
-  | 'manage:inventory'
-  | 'manage:sales'
-  | 'manage:finance'
-  | 'manage:security'
-  | 'manage:users';
+export type PolicyRequirementLevel = 'Required' | 'Optional' | 'Disabled';
+export type AuthenticationMode = 'BiometricFace' | 'GeofenceGPS';
 
-import { SecurityProfile, AuthenticationPolicy } from './security';
+export type UserPermission = string | {
+  id: string;
+  code: string;
+  name: string;
+  category: string;
+};
+
+export interface SecurityProfile {
+  id: string;
+  profileId?: string;
+  key?: string;
+  name?: string;
+  profileName?: string;
+  description: string;
+  badgeColor?: string;
+  defaultPolicy?: AuthenticationPolicy;
+  grantedPermissions?: string[];
+  loginPolicy?: {
+    faceScan: AuthenticationMode;
+    gpsLocation: AuthenticationMode;
+  };
+}
+
+export interface AuthenticationPolicy {
+  policyId: string;
+  policyName: string;
+  loginFaceRequirement: PolicyRequirementLevel;
+  loginGpsRequirement: PolicyRequirementLevel;
+  sessionTimeoutMinutes?: number;
+  allowedGeofenceRadiusMeters?: number;
+  officeHoursOnly?: boolean;
+  allowOffline?: boolean;
+}
 
 export interface UserProfile {
   id: string;
-  name: string;
+  username?: string;
   email: string;
+  name: string;
+  firstName?: string;
+  lastName?: string;
+  displayName?: string;
   role: UserRole;
-  securityProfileId?: string;
-  securityProfileName?: string;
-  useGlobalPolicy?: boolean;
+  roles?: string[];
+  department?: string;
+  designation?: string;
+  employeeId?: string;
   employeeOverridePolicy?: Partial<AuthenticationPolicy>;
+  useGlobalPolicy?: boolean;
+  assignedSecurityProfileId?: string;
   assignedSecurityProfile?: SecurityProfile;
   permissions?: UserPermission[];
   avatarUrl?: string;
-  branch: string;
+  branch?: string;
 }
 
 export interface LoginCredentials {
@@ -46,15 +66,10 @@ export interface LoginCredentials {
 }
 
 export interface AuthResponse {
-  token: string;
-  refreshToken?: string;
+  accessToken: string;
+  refreshToken: string;
+  expiresAtUtc: string;
   user: UserProfile;
-  expiresIn?: number;
-}
-
-export interface OtpVerificationParams {
-  code: string;
-  email: string;
 }
 
 export interface PasswordResetParams {
@@ -73,15 +88,25 @@ export interface ChangePasswordParams {
 }
 
 export interface FaceAuthParams {
-  imageBlob: Blob | string;
+  imageBlob?: Blob | string;
+  imageBase64?: string;
   userId?: string;
+  deviceId?: string;
 }
 
 export interface FaceAuthResult {
-  success: boolean;
-  confidenceScore: number;
-  hashVector?: string;
-  message: string;
+  success?: boolean;
+  Success?: boolean;
+  confidenceScore?: number;
+  ConfidenceScore?: number;
+  similarityScore?: number;
+  SimilarityScore?: number;
+  processingTimeMs?: number;
+  ProcessingTimeMs?: number;
+  failureReason?: string;
+  FailureReason?: string;
+  message?: string;
+  Message?: string;
 }
 
 export interface GpsAuthParams {

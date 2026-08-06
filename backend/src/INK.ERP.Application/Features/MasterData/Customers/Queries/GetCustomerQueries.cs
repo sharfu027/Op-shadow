@@ -97,7 +97,7 @@ public class GetCustomersPagedQueryHandler : IRequestHandler<GetCustomersPagedQu
             .Select(customer => new CustomerDto(
                 customer.Id,
                 customer.CompanyId,
-                customer.Company?.LegalName,
+                customer.Company != null ? customer.Company.LegalName : null,
                 customer.Code,
                 customer.LegalName,
                 customer.TradeName,
@@ -119,6 +119,6 @@ public class GetCustomersPagedQueryHandler : IRequestHandler<GetCustomersPagedQu
                 customer.CreatedAtUtc))
             .ToList();
 
-        return Result<IReadOnlyList<CustomerDto>>.Success(list);
+        return Result.Success<IReadOnlyList<CustomerDto>>(list);
     }
 }

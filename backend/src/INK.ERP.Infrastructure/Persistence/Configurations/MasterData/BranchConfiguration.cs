@@ -49,6 +49,6 @@ public class BranchConfiguration : IEntityTypeConfiguration<Branch>
 
         builder.HasIndex(b => new { b.CompanyId, b.Code })
             .IsUnique()
-            .HasFilter("is_deleted = false");
+            .HasFilter("\"IsDeleted\" = false");
     }
 }

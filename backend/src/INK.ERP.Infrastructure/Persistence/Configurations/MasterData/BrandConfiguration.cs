@@ -33,6 +33,6 @@ public class BrandConfiguration : IEntityTypeConfiguration<Brand>
 
         builder.HasIndex(b => new { b.CompanyId, b.Code })
             .IsUnique()
-            .HasFilter("is_deleted = false");
+            ;
     }
 }

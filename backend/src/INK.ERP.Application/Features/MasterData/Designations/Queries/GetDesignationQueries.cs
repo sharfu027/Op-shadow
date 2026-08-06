@@ -84,7 +84,7 @@ public class GetDesignationsPagedQueryHandler : IRequestHandler<GetDesignationsP
             .Select(designation => new DesignationDto(
                 designation.Id,
                 designation.CompanyId,
-                designation.Company?.LegalName,
+                designation.Company != null ? designation.Company.LegalName : null,
                 designation.Code,
                 designation.Title,
                 designation.Level,
@@ -93,6 +93,6 @@ public class GetDesignationsPagedQueryHandler : IRequestHandler<GetDesignationsP
                 designation.CreatedAtUtc))
             .ToList();
 
-        return Result<IReadOnlyList<DesignationDto>>.Success(list);
+        return Result.Success<IReadOnlyList<DesignationDto>>(list);
     }
 }

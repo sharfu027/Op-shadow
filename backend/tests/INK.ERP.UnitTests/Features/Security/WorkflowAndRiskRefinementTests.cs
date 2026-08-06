@@ -19,7 +19,7 @@ namespace INK.ERP.UnitTests.Features.Security;
 public sealed class WorkflowAndRiskRefinementTests
 {
     private readonly Mock<IUnitOfWork> _unitOfWorkMock;
-    private readonly Mock<IGenericRepository<FaceProfile>> _faceProfileRepoMock;
+    private readonly Mock<IFaceProfileRepository> _faceProfileRepoMock;
     private readonly Mock<IFaceEmbeddingService> _embeddingServiceMock;
     private readonly Mock<IImageQualityService> _qualityServiceMock;
     private readonly Mock<ILivenessDetectionService> _livenessServiceMock;
@@ -29,7 +29,7 @@ public sealed class WorkflowAndRiskRefinementTests
     public WorkflowAndRiskRefinementTests()
     {
         _unitOfWorkMock = new Mock<IUnitOfWork>();
-        _faceProfileRepoMock = new Mock<IGenericRepository<FaceProfile>>();
+        _faceProfileRepoMock = new Mock<IFaceProfileRepository>();
         _embeddingServiceMock = new Mock<IFaceEmbeddingService>();
         _qualityServiceMock = new Mock<IImageQualityService>();
         _livenessServiceMock = new Mock<ILivenessDetectionService>();
@@ -37,11 +37,18 @@ public sealed class WorkflowAndRiskRefinementTests
 
         _unitOfWorkMock.Setup(u => u.Repository<FaceProfile>()).Returns(_faceProfileRepoMock.Object);
 
+        var validationWorkflowMock = new Mock<IFaceValidationWorkflow>();
+        validationWorkflowMock
+            .Setup(v => v.ValidateAsync(It.IsAny<byte[]>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success(new FaceValidationResult(true, 0.95f, true, new List<string>())));
+        var publisherMock = new Mock<MediatR.IPublisher>();
+
         _workflow = new FaceEnrollmentWorkflow(
-            _unitOfWorkMock.Object,
+            validationWorkflowMock.Object,
             _embeddingServiceMock.Object,
-            _qualityServiceMock.Object,
-            _livenessServiceMock.Object,
+            _faceProfileRepoMock.Object,
+            _unitOfWorkMock.Object,
+            publisherMock.Object,
             _loggerMock.Object);
     }
 
@@ -57,7 +64,7 @@ public sealed class WorkflowAndRiskRefinementTests
             .ReturnsAsync(Result.Success(0.95f));
 
         var embedding = new FaceEmbedding("vector_xyz", 512, "v1.0", 0.95f);
-        var embeddingResult = new FaceEmbeddingResult(embedding, 0.95f, "v1.0", 512, TimeSpan.FromMilliseconds(50), new List<string>());
+        var embeddingResult = new FaceEmbeddingResult(embedding, 0.95f, "v1.0", 512, TimeSpan.FromMilliseconds(50), "LocalProvider", "checksum123", "CPU", "v1.0", new List<string>());
 
         _embeddingServiceMock.Setup(e => e.GenerateEmbeddingAsync(It.IsAny<byte[]>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result.Success(embeddingResult));

@@ -1,6 +1,7 @@
 import { apiClient } from '../api/apiClient';
 import {
   PriceList,
+  PagedPriceListResult,
   CustomerPricingRule,
   DistributorPricingRule,
   DiscountRule,
@@ -10,9 +11,9 @@ import {
 } from '../types/pricing';
 
 export const pricingService = {
-  // Price Lists
-  async getPriceLists(params?: Record<string, string | number | boolean | undefined>): Promise<PriceList[]> {
-    return apiClient.get<PriceList[]>('/api/v1/pricing/price-lists', { params });
+  // Price Lists API
+  async getPriceLists(params?: Record<string, string | number | boolean | undefined>): Promise<PagedPriceListResult | PriceList[]> {
+    return apiClient.get<PagedPriceListResult | PriceList[]>('/api/v1/pricing/price-lists', { params });
   },
 
   async getPriceListById(id: string): Promise<PriceList> {
@@ -27,8 +28,16 @@ export const pricingService = {
     return apiClient.put<PriceList>(`/api/v1/pricing/price-lists/${id}`, payload);
   },
 
-  async archivePriceList(id: string): Promise<void> {
-    return apiClient.post<void>(`/api/v1/pricing/price-lists/${id}/archive`);
+  async publishPriceList(id: string, concurrencyToken: string): Promise<PriceList> {
+    return apiClient.post<PriceList>(`/api/v1/pricing/price-lists/${id}/publish?concurrencyToken=${encodeURIComponent(concurrencyToken)}`);
+  },
+
+  async archivePriceList(id: string, concurrencyToken: string): Promise<PriceList> {
+    return apiClient.post<PriceList>(`/api/v1/pricing/price-lists/${id}/archive?concurrencyToken=${encodeURIComponent(concurrencyToken)}`);
+  },
+
+  async deletePriceList(id: string): Promise<void> {
+    return apiClient.delete<void>(`/api/v1/pricing/price-lists/${id}`);
   },
 
   // Customer Pricing

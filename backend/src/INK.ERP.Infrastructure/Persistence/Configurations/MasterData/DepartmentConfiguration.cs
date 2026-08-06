@@ -30,6 +30,6 @@ public class DepartmentConfiguration : IEntityTypeConfiguration<Department>
 
         builder.HasIndex(d => new { d.BranchId, d.Code })
             .IsUnique()
-            .HasFilter("is_deleted = false");
+            ;
     }
 }

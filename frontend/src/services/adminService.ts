@@ -111,17 +111,101 @@ export const adminService = {
     return apiClient.get<SecurityDashboardMetrics>('/api/v1/admin/security/dashboard-metrics');
   },
 
-  // Users CRUD
-  async getUsers(): Promise<UserAccount[]> {
-    return apiClient.get<UserAccount[]>('/api/v1/admin/users');
+  // ── Production Users API (GET/POST/PUT/DELETE/PATCH /api/v1/users) ───────────────────
+  async fetchUsers(params?: {
+    searchTerm?: string;
+    isActive?: boolean;
+    isLocked?: boolean;
+    pageNumber?: number;
+    pageSize?: number;
+    sortBy?: string;
+    sortDescending?: boolean;
+  }): Promise<{
+    items: any[];
+    pageNumber: number;
+    pageSize: number;
+    totalCount: number;
+    totalPages: number;
+    hasPreviousPage: boolean;
+    hasNextPage: boolean;
+  }> {
+    return apiClient.get('/api/v1/users', { params });
   },
 
-  async createUser(payload: Partial<UserAccount>): Promise<UserAccount> {
-    return apiClient.post<UserAccount>('/api/v1/admin/users', payload);
+  async getUserById(id: string): Promise<any> {
+    return apiClient.get(`/api/v1/users/${id}`);
+  },
+
+  async createUser(payload: {
+    username: string;
+    email: string;
+    phoneNumber?: string;
+    firstName: string;
+    lastName: string;
+    displayName: string;
+    password: string;
+    employeeId?: string;
+    preferredLanguage?: string;
+    timeZone?: string;
+  }): Promise<string> {
+    return apiClient.post<string>('/api/v1/users', payload);
+  },
+
+  async updateUser(
+    id: string,
+    payload: {
+      firstName: string;
+      lastName: string;
+      displayName: string;
+      phoneNumber?: string;
+      preferredLanguage: string;
+      timeZone: string;
+      profileImageUrl?: string;
+    }
+  ): Promise<void> {
+    return apiClient.put<void>(`/api/v1/users/${id}`, payload);
+  },
+
+  async deleteUser(id: string): Promise<void> {
+    return apiClient.delete<void>(`/api/v1/users/${id}`);
+  },
+
+  async activateUser(id: string): Promise<void> {
+    return apiClient.patch<void>(`/api/v1/users/${id}/activate`, {});
+  },
+
+  async deactivateUser(id: string): Promise<void> {
+    return apiClient.patch<void>(`/api/v1/users/${id}/deactivate`, {});
+  },
+
+  async lockUser(id: string, lockoutEndUtc?: string): Promise<void> {
+    return apiClient.patch<void>(`/api/v1/users/${id}/lock`, { lockoutEndUtc });
+  },
+
+  async unlockUser(id: string): Promise<void> {
+    return apiClient.patch<void>(`/api/v1/users/${id}/unlock`, {});
+  },
+
+  async assignRole(userId: string, roleId: string): Promise<void> {
+    return apiClient.patch<void>(`/api/v1/users/${userId}/assign-role`, { roleId });
+  },
+
+  async removeRole(userId: string, roleId: string): Promise<void> {
+    return apiClient.patch<void>(`/api/v1/users/${userId}/remove-role`, { roleId });
+  },
+
+  // Legacy fallback alias for compatibility
+  async getUsers(): Promise<UserAccount[]> {
+    const res = await this.fetchUsers({ pageSize: 100 });
+    return res.items || [];
   },
 
   async toggleLockUser(userId: string, lock: boolean): Promise<void> {
-    return apiClient.post<void>(`/api/v1/admin/users/${userId}/lock`, { lock });
+    if (lock) {
+      return this.lockUser(userId);
+    } else {
+      return this.unlockUser(userId);
+    }
   },
 
   // Sessions
@@ -130,16 +214,31 @@ export const adminService = {
   },
 
   // Roles & Permissions
+  async fetchRoles(params?: {
+    searchTerm?: string;
+    isActive?: boolean;
+    isSystem?: boolean;
+    pageNumber?: number;
+    pageSize?: number;
+  }): Promise<{ items: RoleDefinition[]; totalCount: number }> {
+    try {
+      return await apiClient.get('/api/v1/roles', { params });
+    } catch {
+      return { items: [], totalCount: 0 };
+    }
+  },
+
   async getRoles(): Promise<RoleDefinition[]> {
-    return apiClient.get<RoleDefinition[]>('/api/v1/admin/roles');
+    const res = await this.fetchRoles({ pageSize: 100 });
+    return res.items || [];
   },
 
   async createRole(payload: Partial<RoleDefinition>): Promise<RoleDefinition> {
-    return apiClient.post<RoleDefinition>('/api/v1/admin/roles', payload);
+    return apiClient.post<RoleDefinition>('/api/v1/roles', payload);
   },
 
   async getPermissionMatrix(): Promise<PermissionItem[]> {
-    return apiClient.get<PermissionItem[]>('/api/v1/admin/permissions');
+    return apiClient.get<PermissionItem[]>('/api/v1/permissions');
   },
 
   // Company & Branch Settings

@@ -52,6 +52,7 @@ public sealed class GetUserByIdQueryHandler : IRequestHandler<GetUserByIdQuery, 
             user.EmployeeId,
             user.IsActive,
             user.IsLocked,
+            user.IsDeleted,
             user.LastLoginUtc,
             user.TwoFactorEnabled,
             user.EmailConfirmed,
@@ -81,15 +82,16 @@ public sealed class GetUsersQueryHandler : IRequestHandler<GetUsersQuery, Result
 
     public async Task<Result<PagedResult<UserDto>>> Handle(GetUsersQuery request, CancellationToken cancellationToken)
     {
-        var userRepo = _unitOfWork.Repository<ApplicationUser>();
+        var userRepo = (IUserRepository)_unitOfWork.Repository<ApplicationUser>();
         var userRoleRepo = _unitOfWork.Repository<UserRole>();
         var roleRepo = _unitOfWork.Repository<ApplicationRole>();
 
         var spec = new UserFilterSpecification(request.Filter);
-        var users = await userRepo.ListAsync(spec, cancellationToken);
-        var totalCount = await userRepo.CountAsync(spec, cancellationToken);
+        var users = await userRepo.ListWithDeletedAsync(spec, cancellationToken);
+        var totalCount = await userRepo.CountWithDeletedAsync(spec, cancellationToken);
 
-        var userRoles = await userRoleRepo.GetAllAsync(cancellationToken);
+        var userIds = users.Select(u => u.Id).ToList();
+        var userRoles = await userRoleRepo.FindAsync(ur => userIds.Contains(ur.UserId) && !ur.IsDeleted, cancellationToken);
         var roles = await roleRepo.GetAllAsync(cancellationToken);
 
         var roleMap = roles.ToDictionary(r => r.Id, r => r.Name ?? r.Code);
@@ -109,6 +111,7 @@ public sealed class GetUsersQueryHandler : IRequestHandler<GetUsersQuery, Result
             user.EmployeeId,
             user.IsActive,
             user.IsLocked,
+            user.IsDeleted,
             user.LastLoginUtc,
             user.TwoFactorEnabled,
             user.EmailConfirmed,

@@ -141,14 +141,12 @@ public sealed class RiskEngine : IRiskEngine
         _logger.LogInformation("RiskEngine evaluated score {Score}/100 [{Level}] for User {UserId} across {Count} strategies.", totalScore, level, context.UserId, _strategies.Count());
 
         var dto = new RiskAssessmentDto(
-            UserId: context.UserId,
-            Score: totalScore,
-            Level: level,
-            Reasons: reasons,
-            TriggeredPolicies: triggeredPolicies,
-            RecommendedActions: recommendedActions,
-            Confidence: 0.95f,
-            CalculatedAtUtc: DateTime.UtcNow);
+            context.UserId,
+            totalScore,
+            level,
+            totalScore >= 75,
+            reasons,
+            DateTime.UtcNow);
 
         return Task.FromResult(Result.Success(dto));
     }

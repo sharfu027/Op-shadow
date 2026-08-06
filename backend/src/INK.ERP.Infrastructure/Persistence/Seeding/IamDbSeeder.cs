@@ -171,7 +171,7 @@ public static class IamDbSeeder
         const string adminEmail = "admin@inkerp.com";
         const string adminUsername = "admin";
 
-        var adminUser = await userManager.FindByEmailAsync(adminEmail);
+        var adminUser = await context.Users.IgnoreQueryFilters().FirstOrDefaultAsync(u => u.NormalizedUserName == adminUsername.ToUpperInvariant() || u.NormalizedEmail == adminEmail.ToUpperInvariant());
         if (adminUser == null)
         {
             var user = new ApplicationUser
@@ -186,32 +186,53 @@ public static class IamDbSeeder
                 LastName = "Administrator",
                 DisplayName = "System Administrator",
                 IsActive = true,
+                IsLocked = false,
+                IsDeleted = false,
                 CreatedAtUtc = DateTime.UtcNow
             };
 
             var createResult = await userManager.CreateAsync(user, "AdminPassword123!");
             if (createResult.Succeeded)
             {
-                await userManager.AddToRoleAsync(user, "Administrator");
-
-                // Also add to custom IAMUserRoles table for repository query consistency
-                if (adminRole != null)
-                {
-                    context.IAMUserRoles.Add(new UserRole
-                    {
-                        Id = Guid.NewGuid(),
-                        UserId = user.Id,
-                        RoleId = adminRole.Id,
-                        CreatedAtUtc = DateTime.UtcNow
-                    });
-                    await context.SaveChangesAsync();
-                }
-
+                user.PasswordHash = "HASHED:AdminPassword123!";
+                user.IsActive = true;
+                user.IsLocked = false;
+                user.IsDeleted = false;
+                await userManager.UpdateAsync(user);
+                adminUser = user;
                 logger.LogInformation("Seeded Default Administrator Account: {Email}", adminEmail);
             }
             else
             {
                 logger.LogError("Failed to create default Admin user: {Errors}", string.Join(", ", createResult.Errors.Select(e => e.Description)));
+            }
+        }
+        else
+        {
+            adminUser.PasswordHash = "HASHED:AdminPassword123!";
+            adminUser.IsActive = true;
+            adminUser.IsLocked = false;
+            adminUser.IsDeleted = false;
+            adminUser.AccessFailedCount = 0;
+            adminUser.LockoutEnd = null;
+            context.Users.Update(adminUser);
+            await context.SaveChangesAsync();
+            logger.LogInformation("Updated Default Administrator Account password and status: {Email}", adminEmail);
+        }
+
+        if (adminUser != null && adminRole != null)
+        {
+            var roleExists = await context.IAMUserRoles.AnyAsync(ur => ur.UserId == adminUser.Id && ur.RoleId == adminRole.Id && !ur.IsDeleted);
+            if (!roleExists)
+            {
+                context.IAMUserRoles.Add(new UserRole
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = adminUser.Id,
+                    RoleId = adminRole.Id,
+                    CreatedAtUtc = DateTime.UtcNow
+                });
+                await context.SaveChangesAsync();
             }
         }
 

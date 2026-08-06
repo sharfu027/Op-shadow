@@ -68,6 +68,6 @@ public class CustomerConfiguration : IEntityTypeConfiguration<Customer>
 
         builder.HasIndex(c => new { c.CompanyId, c.Code })
             .IsUnique()
-            .HasFilter("is_deleted = false");
+            ;
     }
 }

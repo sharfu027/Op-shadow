@@ -82,7 +82,7 @@ public class GetDepartmentsPagedQueryHandler : IRequestHandler<GetDepartmentsPag
             .Select(department => new DepartmentDto(
                 department.Id,
                 department.BranchId,
-                department.Branch?.Name,
+                department.Branch != null ? department.Branch.Name : null,
                 department.Code,
                 department.Name,
                 department.Description,
@@ -90,6 +90,6 @@ public class GetDepartmentsPagedQueryHandler : IRequestHandler<GetDepartmentsPag
                 department.CreatedAtUtc))
             .ToList();
 
-        return Result<IReadOnlyList<DepartmentDto>>.Success(list);
+        return Result.Success<IReadOnlyList<DepartmentDto>>(list);
     }
 }

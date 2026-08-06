@@ -34,6 +34,6 @@ public class DesignationConfiguration : IEntityTypeConfiguration<Designation>
 
         builder.HasIndex(d => new { d.CompanyId, d.Code })
             .IsUnique()
-            .HasFilter("is_deleted = false");
+            ;
     }
 }

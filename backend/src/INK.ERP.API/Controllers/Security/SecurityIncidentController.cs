@@ -1,10 +1,15 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using INK.ERP.API.Models;
 using INK.ERP.Application.Features.Security.Incidents;
 using INK.ERP.Application.Features.Security.Incidents.DTOs;
+using INK.ERP.Domain.Enums.Security;
 
 namespace INK.ERP.API.Controllers.Security;
 
@@ -20,11 +25,16 @@ public class SecurityIncidentController : BaseApiController
     [ProducesResponseType(typeof(IReadOnlyList<SecurityIncidentDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetIncidents([FromQuery] Guid? userId, [FromQuery] SecurityFilterParameters filter, CancellationToken cancellationToken)
     {
-        var query = new GetOpenIncidentsQuery(userId);
+        var query = new GetOpenIncidentsQuery();
         var result = await Mediator.Send(query, cancellationToken);
         if (result.IsSuccess && result.Value != null)
         {
             var incidents = result.Value.AsQueryable();
+
+            if (userId.HasValue)
+            {
+                incidents = incidents.Where(i => i.UserId == userId.Value);
+            }
 
             if (!string.IsNullOrWhiteSpace(filter.Severity))
             {
@@ -33,12 +43,12 @@ public class SecurityIncidentController : BaseApiController
 
             if (filter.StartDate.HasValue)
             {
-                incidents = incidents.Where(i => i.ReportedAtUtc >= filter.StartDate.Value);
+                incidents = incidents.Where(i => i.CreatedAtUtc >= filter.StartDate.Value);
             }
 
             if (filter.EndDate.HasValue)
             {
-                incidents = incidents.Where(i => i.ReportedAtUtc <= filter.EndDate.Value);
+                incidents = incidents.Where(i => i.CreatedAtUtc <= filter.EndDate.Value);
             }
 
             if (!string.IsNullOrWhiteSpace(filter.Search))
@@ -64,10 +74,10 @@ public class SecurityIncidentController : BaseApiController
     /// </summary>
     [HttpGet("{id:guid}")]
     [Authorize(Policy = "Security.Risk.View")]
-    [ProducesResponseType(typeof(IReadOnlyList<SecurityIncidentDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(SecurityIncidentDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetIncidentById(Guid id, CancellationToken cancellationToken)
     {
-        var query = new GetUserSecurityIncidentsQuery(id);
+        var query = new GetIncidentQuery(id);
         var result = await Mediator.Send(query, cancellationToken);
         return HandleResult(result);
     }
@@ -107,7 +117,7 @@ public class SecurityIncidentController : BaseApiController
     [ProducesResponseType(typeof(IReadOnlyList<SecurityIncidentDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetCriticalIncidents(CancellationToken cancellationToken)
     {
-        var query = new GetCriticalIncidentsQuery();
+        var query = new GetOpenIncidentsQuery(IncidentSeverity.Critical);
         var result = await Mediator.Send(query, cancellationToken);
         return HandleResult(result);
     }

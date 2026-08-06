@@ -13,6 +13,7 @@
     <PackageReference Include="StackExchange.Redis" />
     <PackageReference Include="Hangfire.AspNetCore" />
     <PackageReference Include="Hangfire.PostgreSql" />
+    <PackageReference Include="Hangfire.InMemory" />
     <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" />
     <PackageReference Include="AspNetCore.HealthChecks.NpgSql" />
     <PackageReference Include="AspNetCore.HealthChecks.Redis" />
@@ -21,5 +22,8 @@
     <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" />
     <PackageReference Include="OpenTelemetry.Instrumentation.EntityFrameworkCore" />
     <PackageReference Include="OpenTelemetry.Instrumentation.Http" />
+    <PackageReference Include="OpenCvSharp4" />
+    <PackageReference Include="OpenCvSharp4.runtime.win" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" />
   </ItemGroup>
 </Project>

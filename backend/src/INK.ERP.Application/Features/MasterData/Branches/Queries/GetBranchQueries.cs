@@ -92,7 +92,7 @@ public class GetBranchesPagedQueryHandler : IRequestHandler<GetBranchesPagedQuer
             .Select(branch => new BranchDto(
                 branch.Id,
                 branch.CompanyId,
-                branch.Company?.LegalName,
+                branch.Company != null ? branch.Company.LegalName : null,
                 branch.Code,
                 branch.Name,
                 branch.Gstin,
@@ -109,6 +109,6 @@ public class GetBranchesPagedQueryHandler : IRequestHandler<GetBranchesPagedQuer
                 branch.CreatedAtUtc))
             .ToList();
 
-        return Result<IReadOnlyList<BranchDto>>.Success(list);
+        return Result.Success<IReadOnlyList<BranchDto>>(list);
     }
 }

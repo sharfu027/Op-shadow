@@ -8,13 +8,13 @@ namespace INK.ERP.Application.Features.IAM.Specifications;
 public class UserFilterSpecification : BaseSpecification<ApplicationUser>
 {
     public UserFilterSpecification(UserFilter filter)
-        : base(u => !u.IsDeleted &&
+        : base(u => 
             (!filter.IsActive.HasValue || u.IsActive == filter.IsActive.Value) &&
             (!filter.IsLocked.HasValue || u.IsLocked == filter.IsLocked.Value) &&
             (string.IsNullOrWhiteSpace(filter.SearchTerm) ||
-             u.UserName.Contains(filter.SearchTerm) ||
-             u.Email.Contains(filter.SearchTerm) ||
-             u.DisplayName.Contains(filter.SearchTerm)))
+             (u.UserName != null && u.UserName.Contains(filter.SearchTerm)) ||
+             (u.Email != null && u.Email.Contains(filter.SearchTerm)) ||
+             (u.DisplayName != null && u.DisplayName.Contains(filter.SearchTerm))))
     {
         if (filter.SortDescending)
         {
@@ -36,8 +36,8 @@ public class RoleFilterSpecification : BaseSpecification<ApplicationRole>
             (!filter.IsActive.HasValue || r.IsActive == filter.IsActive.Value) &&
             (!filter.IsSystem.HasValue || r.IsSystem == filter.IsSystem.Value) &&
             (string.IsNullOrWhiteSpace(filter.SearchTerm) ||
-             r.Name.Contains(filter.SearchTerm) ||
-             r.Code.Contains(filter.SearchTerm)))
+             (r.Name != null && r.Name.Contains(filter.SearchTerm)) ||
+             (r.Code != null && r.Code.Contains(filter.SearchTerm))))
     {
         if (filter.SortDescending)
         {
@@ -59,8 +59,8 @@ public class PermissionFilterSpecification : BaseSpecification<Permission>
             (!filter.IsActive.HasValue || p.IsActive == filter.IsActive.Value) &&
             (!filter.PermissionGroupId.HasValue || p.PermissionGroupId == filter.PermissionGroupId.Value) &&
             (string.IsNullOrWhiteSpace(filter.SearchTerm) ||
-             p.Name.Contains(filter.SearchTerm) ||
-             p.Code.Contains(filter.SearchTerm)))
+             (p.Name != null && p.Name.Contains(filter.SearchTerm)) ||
+             (p.Code != null && p.Code.Contains(filter.SearchTerm))))
     {
         ApplyOrderBy(p => p.DisplayOrder);
         ApplyPaging((filter.PageNumber - 1) * filter.PageSize, filter.PageSize);

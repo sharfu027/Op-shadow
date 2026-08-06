@@ -7,7 +7,6 @@ export const DEFAULT_GLOBAL_POLICY: AuthenticationPolicy = {
   policyName: 'Global Company Standard Security Policy',
   loginFaceRequirement: 'Disabled',
   loginGpsRequirement: 'Disabled',
-  otpRequirement: 'Required',
   sessionTimeoutMinutes: 30,
   allowedGeofenceRadiusMeters: 500,
   officeHoursOnly: false,
@@ -58,7 +57,7 @@ export const securityPolicyResolver = {
   ): string[] {
     if (!user) return [];
     if (user.permissions && user.permissions.length > 0) {
-      return user.permissions;
+      return user.permissions.map(p => typeof p === 'string' ? p : p.code);
     }
 
     const profile = apiSecurityProfile || user.assignedSecurityProfile;

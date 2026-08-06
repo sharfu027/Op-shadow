@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using INK.ERP.Application.Common.Interfaces;
+using INK.ERP.Application.Common.Specifications;
 using INK.ERP.Domain.Common;
 using INK.ERP.Domain.Entities.IAM;
 using INK.ERP.Persistence;
@@ -10,6 +11,21 @@ public class UserRepository : GenericRepository<ApplicationUser>, IUserRepositor
 {
     public UserRepository(AppDbContext context) : base(context)
     {
+    }
+
+    public async Task<IReadOnlyList<ApplicationUser>> ListWithDeletedAsync(ISpecification<ApplicationUser> spec, CancellationToken cancellationToken = default)
+    {
+        return await Specifications.SpecificationEvaluator<ApplicationUser>.GetQuery(_dbSet.IgnoreQueryFilters().AsQueryable(), spec).ToListAsync(cancellationToken);
+    }
+
+    public async Task<int> CountWithDeletedAsync(ISpecification<ApplicationUser> spec, CancellationToken cancellationToken = default)
+    {
+        var query = _dbSet.IgnoreQueryFilters().AsQueryable();
+        if (spec.Criteria != null)
+        {
+            query = query.Where(spec.Criteria);
+        }
+        return await query.CountAsync(cancellationToken);
     }
 }
 

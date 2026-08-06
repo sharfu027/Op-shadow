@@ -267,12 +267,12 @@ public sealed class UpdateUserPreferenceCommandHandler : IRequestHandler<UpdateU
         if (existing.Any())
         {
             var pref = existing.First();
-            pref.Theme = request.Theme;
-            pref.Language = request.Language;
-            pref.TimeZone = request.TimeZone;
-            pref.DateFormat = request.DateFormat;
-            pref.NumberFormat = request.NumberFormat;
-            pref.NotificationPreferences = request.NotificationPreferences;
+            pref.Theme = request.Theme ?? "light";
+            pref.Language = request.Language ?? "en";
+            pref.TimeZone = request.TimeZone ?? "UTC";
+            pref.DateFormat = request.DateFormat ?? "yyyy-MM-dd";
+            pref.NumberFormat = request.NumberFormat ?? "standard";
+            pref.NotificationPreferences = request.NotificationPreferences ?? "{}";
             pref.LastModifiedAtUtc = _dateTime.UtcNow;
             prefRepo.Update(pref);
         }
@@ -282,12 +282,12 @@ public sealed class UpdateUserPreferenceCommandHandler : IRequestHandler<UpdateU
             {
                 Id = Guid.NewGuid(),
                 UserId = request.UserId,
-                Theme = request.Theme,
-                Language = request.Language,
-                TimeZone = request.TimeZone,
-                DateFormat = request.DateFormat,
-                NumberFormat = request.NumberFormat,
-                NotificationPreferences = request.NotificationPreferences,
+                Theme = request.Theme ?? "light",
+                Language = request.Language ?? "en",
+                TimeZone = request.TimeZone ?? "UTC",
+                DateFormat = request.DateFormat ?? "yyyy-MM-dd",
+                NumberFormat = request.NumberFormat ?? "standard",
+                NotificationPreferences = request.NotificationPreferences ?? "{}",
                 CreatedAtUtc = _dateTime.UtcNow
             };
             await prefRepo.AddAsync(pref, cancellationToken);

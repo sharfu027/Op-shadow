@@ -15,7 +15,7 @@ public sealed class LoginHistoryConfiguration : IEntityTypeConfiguration<LoginHi
 
         builder.Property(lh => lh.Username).HasMaxLength(100).IsRequired();
         builder.Property(lh => lh.Reason).HasMaxLength(250).IsRequired();
-        builder.Property(lh => lh.Browser).HasMaxLength(100).IsRequired();
+        builder.Property(lh => lh.Browser).HasMaxLength(500).IsRequired();
         builder.Property(lh => lh.Device).HasMaxLength(100).IsRequired();
         builder.Property(lh => lh.OS).HasMaxLength(100).IsRequired();
         builder.Property(lh => lh.IP).HasMaxLength(50).IsRequired();

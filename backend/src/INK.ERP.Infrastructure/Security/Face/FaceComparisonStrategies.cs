@@ -1,9 +1,16 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using INK.ERP.Application.Common.Interfaces;
+
 namespace INK.ERP.Infrastructure.Security.Face;
 
 public interface IFaceComparisonStrategy
 {
     string StrategyName { get; }
     FaceComparisonResult Compare(float[] vectorA, float[] vectorB, float threshold);
+    FaceComparisonResult CompareMulti(float[] liveVector, IEnumerable<float[]> storedVectors, float threshold);
 }
 
 public sealed class CosineStrategy : IFaceComparisonStrategy
@@ -40,6 +47,29 @@ public sealed class CosineStrategy : IFaceComparisonStrategy
 
         return new FaceComparisonResult(similarity, isMatch, confidence, euclideanDistance);
     }
+
+    public FaceComparisonResult CompareMulti(float[] liveVector, IEnumerable<float[]> storedVectors, float threshold)
+    {
+        var list = storedVectors.ToList();
+        if (list.Count == 0) return new FaceComparisonResult(0.0f, false, 0.0f, double.MaxValue);
+
+        FaceComparisonResult best = new FaceComparisonResult(0.0f, false, 0.0f, double.MaxValue);
+        object lockObj = new object();
+
+        Parallel.ForEach(list, vec =>
+        {
+            var res = Compare(liveVector, vec, threshold);
+            lock (lockObj)
+            {
+                if (res.SimilarityScore > best.SimilarityScore)
+                {
+                    best = res;
+                }
+            }
+        });
+
+        return best;
+    }
 }
 
 public sealed class EuclideanStrategy : IFaceComparisonStrategy
@@ -60,11 +90,40 @@ public sealed class EuclideanStrategy : IFaceComparisonStrategy
             sumSquareDiff += diff * diff;
         }
 
-        double dist = Math.Sqrt(sumSquareDiff);
-        float similarity = (float)Math.Max(0.0, 1.0 - (dist / 2.0));
-        bool isMatch = similarity >= threshold;
+        double distance = Math.Sqrt(sumSquareDiff);
+        
+        // InkCRM Formula: Similarity Score = max(0.0, 1.0 - distance)
+        float similarityScore = (float)Math.Max(0.0, 1.0 - distance);
+        
+        // Distance <= 0.65 (or similarityScore >= 0.35) -> MATCH
+        float effThreshold = threshold > 0 ? threshold : 0.35f;
+        bool isMatch = distance <= 0.65 || similarityScore >= effThreshold;
 
-        return new FaceComparisonResult(similarity, isMatch, similarity, dist);
+        return new FaceComparisonResult(similarityScore, isMatch, similarityScore, distance);
+    }
+
+    // Production Addition #7: Parallel Multi-Template Comparison Engine
+    public FaceComparisonResult CompareMulti(float[] liveVector, IEnumerable<float[]> storedVectors, float threshold)
+    {
+        var list = storedVectors.ToList();
+        if (list.Count == 0) return new FaceComparisonResult(0.0f, false, 0.0f, double.MaxValue);
+
+        FaceComparisonResult best = new FaceComparisonResult(0.0f, false, 0.0f, double.MaxValue);
+        object lockObj = new object();
+
+        Parallel.ForEach(list, vec =>
+        {
+            var res = Compare(liveVector, vec, threshold);
+            lock (lockObj)
+            {
+                if (res.SimilarityScore > best.SimilarityScore || (res.IsMatch && !best.IsMatch))
+                {
+                    best = res;
+                }
+            }
+        });
+
+        return best;
     }
 }
 
@@ -84,5 +143,10 @@ public sealed class HybridStrategy : IFaceComparisonStrategy
         bool isMatch = hybridScore >= threshold;
 
         return new FaceComparisonResult(hybridScore, isMatch, hybridScore, cosineResult.EuclideanDistance);
+    }
+
+    public FaceComparisonResult CompareMulti(float[] liveVector, IEnumerable<float[]> storedVectors, float threshold)
+    {
+        return _euclidean.CompareMulti(liveVector, storedVectors, threshold);
     }
 }

@@ -85,7 +85,7 @@ public class GetUnitsOfMeasurePagedQueryHandler : IRequestHandler<GetUnitsOfMeas
             .Select(uom => new UnitOfMeasureDto(
                 uom.Id,
                 uom.CompanyId,
-                uom.Company?.LegalName,
+                uom.Company != null ? uom.Company.LegalName : null,
                 uom.Code,
                 uom.Name,
                 uom.BaseUnitCode,
@@ -95,6 +95,6 @@ public class GetUnitsOfMeasurePagedQueryHandler : IRequestHandler<GetUnitsOfMeas
                 uom.CreatedAtUtc))
             .ToList();
 
-        return Result<IReadOnlyList<UnitOfMeasureDto>>.Success(list);
+        return Result.Success<IReadOnlyList<UnitOfMeasureDto>>(list);
     }
 }

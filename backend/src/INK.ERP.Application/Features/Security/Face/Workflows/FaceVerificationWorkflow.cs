@@ -17,24 +17,25 @@ public interface IFaceVerificationWorkflow
 public class FaceVerificationWorkflow : IFaceVerificationWorkflow
 {
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IFaceProfileRepository _faceProfileRepository;
     private readonly IPublisher _publisher;
     private readonly ILogger<FaceVerificationWorkflow> _logger;
 
     public FaceVerificationWorkflow(
         IUnitOfWork unitOfWork,
+        IFaceProfileRepository faceProfileRepository,
         IPublisher publisher,
         ILogger<FaceVerificationWorkflow> logger)
     {
         _unitOfWork = unitOfWork;
+        _faceProfileRepository = faceProfileRepository;
         _publisher = publisher;
         _logger = logger;
     }
 
     public async Task<Result<FaceVerificationDto>> ExecuteAsync(RecordFaceVerificationCommand command, CancellationToken cancellationToken = default)
     {
-        var faceProfileRepo = _unitOfWork.Repository<FaceProfile>();
-        var profiles = await faceProfileRepo.FindAsync(p => p.UserId == command.UserId && !p.IsDeleted, cancellationToken);
-        var profile = profiles.FirstOrDefault();
+        var profile = await _faceProfileRepository.GetByUserIdAsync(command.UserId, cancellationToken);
 
         if (profile == null)
         {
@@ -44,7 +45,6 @@ public class FaceVerificationWorkflow : IFaceVerificationWorkflow
         try
         {
             profile.RecordVerification(command.MatchScore, command.IsSuccess, command.DeviceId, command.FailureReason);
-            faceProfileRepo.Update(profile);
 
             if (!command.IsSuccess)
             {

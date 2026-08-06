@@ -62,6 +62,23 @@ export default function AuthenticationPoliciesPage({
               </select>
             </div>
           ))}
+          <div className="pt-2 border-t mt-3 flex justify-between items-center text-xs">
+            <span className="font-bold text-brand-text-primary">Biometric Similarity Threshold</span>
+            <select
+              value={globalPolicy.facePolicy.minConfidenceScore || 0.85}
+              onChange={(e) => setGlobalPolicy({
+                ...globalPolicy,
+                facePolicy: { ...globalPolicy.facePolicy, minConfidenceScore: parseFloat(e.target.value) }
+              })}
+              className="p-1.5 border rounded border-brand-border bg-white font-mono font-bold text-brand-primary"
+            >
+              <option value="0.75">0.75 (Relaxed)</option>
+              <option value="0.82">0.82 (Balanced)</option>
+              <option value="0.85">0.85 (Strict Enterprise)</option>
+              <option value="0.90">0.90 (High Security)</option>
+              <option value="0.95">0.95 (Maximum)</option>
+            </select>
+          </div>
         </div>
 
         <div className="space-y-3 border p-4 rounded-lg bg-brand-bg-secondary/20">

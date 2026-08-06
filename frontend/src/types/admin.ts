@@ -10,39 +10,53 @@ export type UserAccountStatus =
 export type NotificationChannel = 'Email' | 'SMS' | 'WhatsApp' | 'Push';
 export type LogSeverity = 'Info' | 'Warning' | 'SecurityAlert' | 'Error';
 
-export type AuthenticationMode = 'Required' | 'Optional' | 'Disabled';
+import type { AuthenticationMode } from './auth';
+
+export type SecurityRequirementMode = 'Required' | 'Optional' | 'Disabled';
+export type { AuthenticationMode };
 
 export interface FacePolicy {
-  loginFace: AuthenticationMode;
-  attendanceFace: AuthenticationMode;
-  visitFace: AuthenticationMode;
-  warehouseFace: AuthenticationMode;
-  transactionFace: AuthenticationMode;
-  managerApprovalFace: AuthenticationMode;
-  inventoryAuditFace: AuthenticationMode;
+  loginFace: SecurityRequirementMode;
+  attendanceFace: SecurityRequirementMode;
+  visitFace: SecurityRequirementMode;
+  warehouseFace: SecurityRequirementMode;
+  transactionFace: SecurityRequirementMode;
+  managerApprovalFace: SecurityRequirementMode;
+  inventoryAuditFace: SecurityRequirementMode;
+  minConfidenceScore?: number;
 }
 
 export interface LocationPolicy {
-  loginGps: AuthenticationMode;
-  attendanceGps: AuthenticationMode;
-  visitGps: AuthenticationMode;
-  warehouseGps: AuthenticationMode;
-  deliveryGps: AuthenticationMode;
-  collectionsGps: AuthenticationMode;
+  loginGps: SecurityRequirementMode;
+  attendanceGps: SecurityRequirementMode;
+  visitGps: SecurityRequirementMode;
+  warehouseGps: SecurityRequirementMode;
+  deliveryGps: SecurityRequirementMode;
+  collectionsGps: SecurityRequirementMode;
   allowedRadiusMeters: number;
   gpsAccuracyMeters: number;
-  mockLocationDetection: AuthenticationMode;
-  backgroundTracking: AuthenticationMode;
+  mockLocationDetection: SecurityRequirementMode;
+  backgroundTracking: SecurityRequirementMode;
+}
+
+export interface GpsPolicy {
+  loginGps: SecurityRequirementMode;
+  attendanceGps: SecurityRequirementMode;
+  visitGps: SecurityRequirementMode;
+  warehouseGps: SecurityRequirementMode;
+  deliveryGps: SecurityRequirementMode;
+  collectionsGps: SecurityRequirementMode;
 }
 
 export interface DevicePolicy {
-  maxDevices: number;
-  trustedDevicesOnly: AuthenticationMode;
-  rootDetection: AuthenticationMode;
-  jailbreakDetection: AuthenticationMode;
-  emulatorDetection: AuthenticationMode;
-  offlineLoginAllowed: AuthenticationMode;
-  deviceRegistrationRequired: AuthenticationMode;
+  mockLocationDetection: SecurityRequirementMode;
+  backgroundTracking: SecurityRequirementMode;
+  trustedDevicesOnly: SecurityRequirementMode;
+  rootDetection: SecurityRequirementMode;
+  jailbreakDetection: SecurityRequirementMode;
+  emulatorDetection: SecurityRequirementMode;
+  offlineLoginAllowed: SecurityRequirementMode;
+  deviceRegistrationRequired: SecurityRequirementMode;
 }
 
 export interface SessionPolicy {
@@ -66,11 +80,6 @@ export interface PasswordPolicy {
   accountLockDurationMinutes: number;
 }
 
-export interface MFAPolicy {
-  mfaMode: AuthenticationMode;
-  supportedMethods: Array<'Face' | 'OTP' | 'Password' | 'Passkey' | 'AuthenticatorApp' | 'EmailOTP' | 'SMSOTP'>;
-}
-
 export interface GlobalAuthenticationPolicy {
   id: string;
   name: string;
@@ -80,7 +89,6 @@ export interface GlobalAuthenticationPolicy {
   devicePolicy: DevicePolicy;
   sessionPolicy: SessionPolicy;
   passwordPolicy: PasswordPolicy;
-  mfaPolicy: MFAPolicy;
 }
 
 export interface EmployeeSecurityProfile {
@@ -100,16 +108,14 @@ export interface EmployeeAuthenticationOverride {
   employeeCode: string;
   employeeName: string;
   useGlobalPolicy: boolean;
-  loginFace?: AuthenticationMode;
-  attendanceFace?: AuthenticationMode;
-  visitFace?: AuthenticationMode;
-  warehouseFace?: AuthenticationMode;
-  loginGps?: AuthenticationMode;
-  attendanceGps?: AuthenticationMode;
-  visitGps?: AuthenticationMode;
-  warehouseGps?: AuthenticationMode;
-  otp?: AuthenticationMode;
-  mfa?: AuthenticationMode;
+  loginFace?: SecurityRequirementMode;
+  attendanceFace?: SecurityRequirementMode;
+  visitFace?: SecurityRequirementMode;
+  warehouseFace?: SecurityRequirementMode;
+  loginGps?: SecurityRequirementMode;
+  attendanceGps?: SecurityRequirementMode;
+  visitGps?: SecurityRequirementMode;
+  warehouseGps?: SecurityRequirementMode;
   passwordExpiryDays?: number;
   sessionTimeoutMinutes?: number;
   maxDevices?: number;
@@ -119,7 +125,7 @@ export interface TemporarySecurityException {
   id: string;
   employeeId: string;
   employeeName: string;
-  exceptionType: 'SkipFaceAuth' | 'SkipGPS' | 'SkipOTP' | 'SkipMFA';
+  exceptionType: 'SkipFaceAuth' | 'SkipGPS';
   reason: string;
   approvedBy: string;
   approvedDate: string;
@@ -165,12 +171,22 @@ export interface UserAccount {
   mobile: string;
   role: string;
   mappedEmployeeCode?: string;
+  department?: string;
+  designation?: string;
   branch: string;
   status: UserAccountStatus;
   securityProfileName?: string;
   lastLoginTimestamp?: string;
   isMfaEnabled: boolean;
   registeredDevicesCount?: number;
+  // Face biometric fields
+  faceStatus?: 'Registered' | 'Not Registered' | 'Disabled';
+  activeTemplateVersion?: number;
+  registeredBy?: string;
+  registeredDate?: string;
+  lastVerificationTimestamp?: string;
+  similarityThreshold?: number;
+  qualityScore?: number;
 }
 
 export interface UserSession {

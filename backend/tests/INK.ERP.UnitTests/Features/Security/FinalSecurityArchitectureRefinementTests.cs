@@ -21,7 +21,7 @@ public sealed class FinalSecurityArchitectureRefinementTests
     private readonly Mock<ILivenessDetectionService> _livenessServiceMock;
     private readonly Mock<IFaceEmbeddingService> _embeddingServiceMock;
     private readonly Mock<IUnitOfWork> _unitOfWorkMock;
-    private readonly Mock<IGenericRepository<FaceProfile>> _faceProfileRepoMock;
+    private readonly Mock<IFaceProfileRepository> _faceProfileRepoMock;
     private readonly Mock<IPublisher> _publisherMock;
 
     public FinalSecurityArchitectureRefinementTests()
@@ -30,7 +30,7 @@ public sealed class FinalSecurityArchitectureRefinementTests
         _livenessServiceMock = new Mock<ILivenessDetectionService>();
         _embeddingServiceMock = new Mock<IFaceEmbeddingService>();
         _unitOfWorkMock = new Mock<IUnitOfWork>();
-        _faceProfileRepoMock = new Mock<IGenericRepository<FaceProfile>>();
+        _faceProfileRepoMock = new Mock<IFaceProfileRepository>();
         _publisherMock = new Mock<IPublisher>();
 
         _unitOfWorkMock.Setup(u => u.Repository<FaceProfile>()).Returns(_faceProfileRepoMock.Object);
@@ -128,6 +128,7 @@ public sealed class FinalSecurityArchitectureRefinementTests
         var workflow = new FaceEnrollmentWorkflow(
             validationWorkflowMock.Object,
             _embeddingServiceMock.Object,
+            _faceProfileRepoMock.Object,
             _unitOfWorkMock.Object,
             _publisherMock.Object,
             loggerMock.Object);

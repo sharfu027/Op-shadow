@@ -39,5 +39,6 @@ public class Result<TValue> : Result
         ? _value
         : throw new InvalidOperationException("The value of a failure result cannot be accessed.");
 
+    public static new Result<TValue> Failure(Error error) => new(default!, false, error);
     public static implicit operator Result<TValue>(TValue value) => Create(value);
 }

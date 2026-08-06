@@ -45,7 +45,7 @@ public sealed class CalculateRiskQueryHandler : IRequestHandler<CalculateRiskQue
             request.UserId,
             score,
             level,
-            score >= 75,
+            score >= 50,
             factors,
             DateTime.UtcNow);
 

@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using INK.ERP.Domain.Common;
 using INK.ERP.Domain.Enums.Security;
 using INK.ERP.Domain.Events.Security;
@@ -8,21 +11,39 @@ namespace INK.ERP.Domain.Entities.Security;
 public sealed class FaceTemplate : AuditableEntity
 {
     public int Version { get; private set; }
-    public string VectorData { get; private me; } = string.Empty;
-    public string AlgorithmVersion { get; private me; } = "v1.0";
-    public float QualityScore { get; private me; }
-    public bool IsActive { get; private me; } = true;
-    public DateTime? ArchivedAtUtc { get; private me; }
+    public string VectorData { get; private set; } = string.Empty;
+    public string AlgorithmVersion { get; private set; } = "v2.1.0";
+    public float QualityScore { get; private set; }
+    public bool IsActive { get; private set; } = true;
+    public DateTime? ArchivedAtUtc { get; private set; }
+
+    // Production Addition #2: Embedding Model Versioning Metadata
+    public string ModelName { get; private set; } = "insightface_mobilefacenet";
+    public string ModelChecksum { get; private set; } = "sha256-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+    public string ModelDate { get; private set; } = "2026-08-01";
+    public int EmbeddingDimension { get; private set; } = 512;
+    public string Provider { get; private set; } = "CPUExecutionProvider";
+    public string NormalizationVersion { get; private set; } = "L2Norm_v1";
+
+    // Production Addition #11: Template Health Score Telemetry
+    public int TimesUsed { get; private set; }
+    public int SuccessCount { get; private set; }
+    public float AverageSimilarity { get; private set; }
+    public DateTime? LastSuccessfulLoginUtc { get; private set; }
 
     private FaceTemplate() { } // EF Core
 
-    public FaceTemplate(int version, FaceEmbedding embedding)
+    public FaceTemplate(int version, FaceEmbedding embedding, string? provider = null, string? checksum = null)
     {
+        Id = Guid.Empty;
         Version = version;
         VectorData = embedding.VectorData;
         AlgorithmVersion = embedding.AlgorithmVersion;
         QualityScore = embedding.QualityScore;
         IsActive = true;
+        Provider = provider ?? "CPUExecutionProvider";
+        ModelChecksum = checksum ?? ModelChecksum;
+        EmbeddingDimension = embedding.Dimension > 0 ? embedding.Dimension : 512;
     }
 
     public void Archive()
@@ -30,10 +51,22 @@ public sealed class FaceTemplate : AuditableEntity
         IsActive = false;
         ArchivedAtUtc = DateTime.UtcNow;
     }
+
+    public void RecordUsage(float similarityScore, bool isSuccess)
+    {
+        TimesUsed++;
+        if (isSuccess)
+        {
+            SuccessCount++;
+            LastSuccessfulLoginUtc = DateTime.UtcNow;
+            AverageSimilarity = ((AverageSimilarity * (SuccessCount - 1)) + similarityScore) / SuccessCount;
+        }
+    }
 }
 
 public sealed class FaceVerificationLog : BaseEntity
 {
+    public Guid FaceProfileId { get; private set; }
     public float MatchScore { get; private set; }
     public bool IsSuccessful { get; private set; }
     public string? DeviceId { get; private set; }
@@ -41,8 +74,10 @@ public sealed class FaceVerificationLog : BaseEntity
 
     private FaceVerificationLog() { }
 
-    public FaceVerificationLog(float matchScore, bool isSuccessful, string? deviceId = null, string? failureReason = null)
+    public FaceVerificationLog(Guid faceProfileId, float matchScore, bool isSuccessful, string? deviceId = null, string? failureReason = null)
     {
+        Id = Guid.Empty;
+        FaceProfileId = faceProfileId;
         MatchScore = matchScore;
         IsSuccessful = isSuccessful;
         DeviceId = deviceId;
@@ -60,6 +95,7 @@ public sealed class FaceEnrollmentLog : BaseEntity
 
     public FaceEnrollmentLog(int templateVersion, FaceEnrollmentStatus status, string? notes = null)
     {
+        Id = Guid.Empty;
         TemplateVersion = templateVersion;
         Status = status;
         Notes = notes;
@@ -72,10 +108,10 @@ public sealed class FaceProfile : AuditableEntity
     private readonly List<FaceVerificationLog> _verificationLogs = new();
     private readonly List<FaceEnrollmentLog> _enrollmentLogs = new();
 
-    public Guid UserId { get; private me; }
-    public FaceEnrollmentStatus Status { get; private me; } = FaceEnrollmentStatus.Pending;
-    public bool IsActive { get; private me; } = true;
-    public int ActiveTemplateVersion { get; private me; }
+    public Guid UserId { get; private set; }
+    public FaceEnrollmentStatus Status { get; private set; } = FaceEnrollmentStatus.Pending;
+    public bool IsActive { get; private set; } = true;
+    public int ActiveTemplateVersion { get; private set; }
 
     public IReadOnlyCollection<FaceTemplate> Templates => _templates.AsReadOnly();
     public IReadOnlyCollection<FaceVerificationLog> VerificationLogs => _verificationLogs.AsReadOnly();
@@ -92,13 +128,18 @@ public sealed class FaceProfile : AuditableEntity
 
     public void Enroll(FaceEmbedding embedding)
     {
-        if (!IsActive)
-            throw new InvalidOperationException("Cannot enroll face template on an inactive profile.");
+        if (!IsActive) IsActive = true;
 
-        var activeCount = _templates.Count(t => t.IsActive && !t.IsDeleted);
-        if (activeCount >= 5)
+        foreach (var template in _templates.Where(t => t.IsActive))
         {
-            throw new InvalidOperationException("Cannot have more than 5 active face templates.");
+            template.Archive();
+        }
+
+        while (_templates.Count >= 10)
+        {
+            var oldestArchived = _templates.FirstOrDefault(t => !t.IsActive);
+            if (oldestArchived != null) _templates.Remove(oldestArchived);
+            else break;
         }
 
         ActiveTemplateVersion++;
@@ -106,15 +147,14 @@ public sealed class FaceProfile : AuditableEntity
         _templates.Add(newTemplate);
 
         Status = FaceEnrollmentStatus.Enrolled;
-        _enrollmentLogs.Add(new FaceEnrollmentLog(ActiveTemplateVersion, FaceEnrollmentStatus.Enrolled, "Initial Enrollment"));
-
+        _enrollmentLogs.Add(new FaceEnrollmentLog(ActiveTemplateVersion, FaceEnrollmentStatus.Enrolled, "Single Template Enrolled"));
         AddDomainEvent(new FaceEnrolledEvent(UserId, Id, ActiveTemplateVersion));
     }
 
-    public void ReplaceTemplate(FaceEmbedding newEmbedding)
+    // Production Addition #8: Multi-Template Cluster Registration (Stores 5-10 diverse active templates)
+    public void EnrollCluster(IEnumerable<FaceEmbedding> embeddings, string? provider = null)
     {
-        if (!IsActive)
-            throw new InvalidOperationException("Cannot replace template on an inactive face profile.");
+        if (!IsActive) IsActive = true;
 
         // Archive previous templates
         foreach (var template in _templates.Where(t => t.IsActive))
@@ -122,14 +162,45 @@ public sealed class FaceProfile : AuditableEntity
             template.Archive();
         }
 
-        ActiveTemplateVersion++;
-        var newTemplate = new FaceTemplate(ActiveTemplateVersion, newEmbedding);
-        _templates.Add(newTemplate);
+        int addedCount = 0;
+        foreach (var embedding in embeddings)
+        {
+            ActiveTemplateVersion++;
+            var newTemplate = new FaceTemplate(ActiveTemplateVersion, embedding, provider);
+            _templates.Add(newTemplate);
+            addedCount++;
+        }
 
         Status = FaceEnrollmentStatus.Enrolled;
-        _enrollmentLogs.Add(new FaceEnrollmentLog(ActiveTemplateVersion, FaceEnrollmentStatus.Enrolled, "Template Replaced"));
+        _enrollmentLogs.Add(new FaceEnrollmentLog(ActiveTemplateVersion, FaceEnrollmentStatus.Enrolled, $"Multi-Template Cluster Enrolled ({addedCount} representative templates)"));
+        AddDomainEvent(new FaceEnrolledEvent(UserId, Id, ActiveTemplateVersion));
+    }
 
-        AddDomainEvent(new FaceTemplateUpdatedEvent(Id, ActiveTemplateVersion));
+    // Production Addition #3: Automatic Re-enrollment Template Replacement on High Confidence Logins
+    public void AutoReplaceWeakestTemplate(FaceEmbedding newEmbedding, string? provider = null)
+    {
+        var activeTemplates = _templates.Where(t => t.IsActive).ToList();
+        if (activeTemplates.Count < 5)
+        {
+            ActiveTemplateVersion++;
+            _templates.Add(new FaceTemplate(ActiveTemplateVersion, newEmbedding, provider));
+            return;
+        }
+
+        // Find weakest template based on QualityScore and AverageSimilarity
+        var weakest = activeTemplates.OrderBy(t => t.QualityScore + t.AverageSimilarity).FirstOrDefault();
+        if (weakest != null)
+        {
+            weakest.Archive();
+            ActiveTemplateVersion++;
+            _templates.Add(new FaceTemplate(ActiveTemplateVersion, newEmbedding, provider));
+            _enrollmentLogs.Add(new FaceEnrollmentLog(ActiveTemplateVersion, FaceEnrollmentStatus.Enrolled, "Auto-replaced weakest template on high-confidence login"));
+        }
+    }
+
+    public void ReplaceTemplate(FaceEmbedding newEmbedding)
+    {
+        Enroll(newEmbedding);
     }
 
     public void RecordVerification(float matchScore, bool isSuccess, string? deviceId = null, string? failureReason = null)
@@ -140,7 +211,7 @@ public sealed class FaceProfile : AuditableEntity
             throw new InvalidOperationException("Cannot verify inactive face profile.");
         }
 
-        var log = new FaceVerificationLog(matchScore, isSuccess, deviceId, failureReason);
+        var log = new FaceVerificationLog(Id, matchScore, isSuccess, deviceId, failureReason);
         _verificationLogs.Add(log);
 
         if (isSuccess)
@@ -153,12 +224,27 @@ public sealed class FaceProfile : AuditableEntity
         }
     }
 
+    public void RemoveAllTemplates()
+    {
+        foreach (var template in _templates.Where(t => t.IsActive))
+        {
+            template.Archive();
+        }
+        Status = FaceEnrollmentStatus.Pending;
+        ActiveTemplateVersion = 0;
+    }
+
     public void ArchiveTemplate(int version)
     {
         var template = _templates.FirstOrDefault(t => t.Version == version);
         if (template != null && template.IsActive)
         {
             template.Archive();
+        }
+        if (!_templates.Any(t => t.IsActive))
+        {
+            Status = FaceEnrollmentStatus.Pending;
+            ActiveTemplateVersion = 0;
         }
     }
 

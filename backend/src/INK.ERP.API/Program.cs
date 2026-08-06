@@ -232,7 +232,14 @@ app.UseRateLimiter();
 app.UseResponseCaching();
 
 // Hangfire Dashboard Middleware
-app.UseHangfireDashboard("/hangfire", new DashboardOptions());
+try
+{
+    app.UseHangfireDashboard("/hangfire", new DashboardOptions());
+}
+catch (Exception ex)
+{
+    Log.Warning(ex, "Hangfire Dashboard initialization bypassed (database connection unavailable at startup)");
+}
 
 // 10. Health Check Endpoints
 app.MapHealthChecks("/health");
@@ -247,6 +254,27 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions
 
 // 11. Map Endpoints
 app.MapControllers();
+
+// 10.5. Seed Database
+using (var scope = app.Services.CreateScope())
+{
+    var services = scope.ServiceProvider;
+    try
+    {
+        var context = services.GetRequiredService<INK.ERP.Persistence.AppDbContext>();
+        var userManager = services.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<INK.ERP.Domain.Common.ApplicationUser>>();
+        var roleManager = services.GetRequiredService<Microsoft.AspNetCore.Identity.RoleManager<INK.ERP.Domain.Common.ApplicationRole>>();
+        var logger = services.GetRequiredService<Microsoft.Extensions.Logging.ILogger<Program>>();
+        
+        // Seed IAM data
+        INK.ERP.Infrastructure.Persistence.Seeding.IamDbSeeder.SeedAsync(context, userManager, roleManager, logger).GetAwaiter().GetResult();
+    }
+    catch (Exception ex)
+    {
+        var logger = services.GetRequiredService<Microsoft.Extensions.Logging.ILogger<Program>>();
+        logger.LogError(ex, "An error occurred during database migration or seeding.");
+    }
+}
 
 app.Run();
 

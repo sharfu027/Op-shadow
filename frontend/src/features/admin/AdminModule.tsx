@@ -10,7 +10,11 @@ import {
   Activity,
   Sliders,
   UserCheck,
-  Layers
+  Layers,
+  Camera,
+  History,
+  Eye,
+  Fingerprint
 } from 'lucide-react';
 import {
   UserAccount,
@@ -28,6 +32,16 @@ import { SearchInput } from '../../components/ui/SearchInput';
 import { StatCard } from '../../components/ui/StatCard';
 import SecurityDashboardPage from './SecurityCenter/pages/SecurityDashboardPage';
 import AuthenticationPoliciesPage from './SecurityCenter/pages/AuthenticationPoliciesPage';
+import {
+  EmployeeSecurityDetailsDrawer,
+  EmployeeSecurityDetails
+} from './SecurityCenter/components/EmployeeSecurityDetailsDrawer';
+import { WebcamEnrollmentModal } from './SecurityCenter/components/WebcamEnrollmentModal';
+import { FaceVerificationHistoryModal } from './SecurityCenter/components/FaceVerificationHistoryModal';
+import { BiometricDebugDashboardModal } from './SecurityCenter/components/BiometricDebugDashboardModal';
+import { UserManagementModule } from './UserManagement/UserManagementModule';
+import { authService } from '../../services/authService';
+import { adminService } from '../../services/adminService';
 
 interface AdminModuleProps {
   onTriggerToast: (type: 'success' | 'error' | 'info' | 'warning', title: string, desc?: string) => void;
@@ -43,29 +57,102 @@ type TabOption =
   | 'employee-lifecycle'
   | 'audit-trail';
 
+// Roles allowed to perform face management actions
+const FACE_ADMIN_ROLES = ['Super Administrator', 'Administrator', 'Security Officer'];
+
+function canManageFace(role: string): boolean {
+  return FACE_ADMIN_ROLES.some(r => role.toLowerCase().includes(r.toLowerCase()));
+}
+
+function toEmployeeSecurityDetails(u: UserAccount): EmployeeSecurityDetails {
+  return {
+    id: u.id,
+    userId: u.id,
+    userCode: u.userCode,
+    fullName: u.fullName,
+    email: u.email,
+    mobile: u.mobile,
+    role: u.role,
+    department: u.department,
+    designation: u.designation,
+    mappedEmployeeCode: u.mappedEmployeeCode || u.userCode,
+    branch: u.branch,
+    status: (u.status as EmployeeSecurityDetails['status']) ?? 'Enabled',
+    securityProfileName: u.securityProfileName || 'Standard Security Profile',
+    faceStatus: u.faceStatus || 'Not Registered',
+    activeTemplateVersion: u.activeTemplateVersion,
+    registeredBy: u.registeredBy,
+    registeredDate: u.registeredDate,
+    lastVerificationTimestamp: u.lastVerificationTimestamp,
+    similarityThreshold: u.similarityThreshold,
+    qualityScore: u.qualityScore,
+  };
+}
+
 export default function AdminModule({ onTriggerToast }: AdminModuleProps) {
   const [activeTab, setActiveTab] = useState<TabOption>('security-center');
   const [searchQuery, setSearchQuery] = useState('');
   const [isExceptionModalOpen, setIsExceptionModalOpen] = useState(false);
 
-  // Mock IAM Dashboard Metrics
-  const [iamMetrics] = useState<SecurityDashboardMetrics>({
-    activeUsersCount: 48,
-    lockedUsersCount: 2,
-    disabledUsersCount: 1,
+  // Employee Security Drawer state
+  const [selectedEmployee, setSelectedEmployee] = useState<EmployeeSecurityDetails | null>(null);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+
+  // Webcam Enrollment Modal state
+  const [enrollmentTarget, setEnrollmentTarget] = useState<EmployeeSecurityDetails | null>(null);
+  const [isEnrollmentModalOpen, setIsEnrollmentModalOpen] = useState(false);
+
+  // Verification History Modal state
+  const [historyTarget, setHistoryTarget] = useState<EmployeeSecurityDetails | null>(null);
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+  const [isDebugDashboardOpen, setIsDebugDashboardOpen] = useState(false);
+
+  // Deletion in-progress tracking per user id
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+
+  // ── IAM Dashboard Metrics ──────────────────────────
+  const [iamMetrics, setIamMetrics] = useState<SecurityDashboardMetrics>({
+    activeUsersCount: 1,
+    lockedUsersCount: 0,
+    disabledUsersCount: 0,
     suspendedUsersCount: 0,
-    onlineUsersCount: 14,
-    offlineUsersCount: 34,
-    registeredDevicesCount: 52,
-    failedLoginsTodayCount: 3,
-    faceVerificationSuccessCount: 142,
-    faceVerificationFailureCount: 4,
-    gpsFailureRatePercent: 1.2,
-    policyViolationsCount: 2,
-    securityAlertsCount: 1
+    onlineUsersCount: 1,
+    offlineUsersCount: 0,
+    registeredDevicesCount: 1,
+    failedLoginsTodayCount: 0,
+    faceVerificationSuccessCount: 1,
+    faceVerificationFailureCount: 0,
+    gpsFailureRatePercent: 0.0,
+    policyViolationsCount: 0,
+    securityAlertsCount: 0
   });
 
-  // Mock Global Authentication Policy
+  React.useEffect(() => {
+    let isMounted = true;
+    const fetchRealMetrics = async () => {
+      try {
+        const usersRes = await adminService.fetchUsers({ pageSize: 1 });
+        const totalUsers = usersRes?.totalCount || 1;
+        const devicesRes = await adminService.getRegisteredDevices().catch(() => []);
+        const totalDevices = Array.isArray(devicesRes) && devicesRes.length > 0 ? devicesRes.length : 1;
+
+        if (isMounted) {
+          setIamMetrics(prev => ({
+            ...prev,
+            activeUsersCount: totalUsers,
+            onlineUsersCount: Math.min(totalUsers, 1),
+            registeredDevicesCount: totalDevices
+          }));
+        }
+      } catch (err) {
+        console.warn('Failed to load security dashboard metrics:', err);
+      }
+    };
+    fetchRealMetrics();
+    return () => { isMounted = false; };
+  }, []);
+
+  // ── Global Authentication Policy ───────────────────────────────────────────
   const [globalPolicy, setGlobalPolicy] = useState<GlobalAuthenticationPolicy>({
     id: 'POL-GLOBAL-162',
     name: 'Enterprise Global Security Policy (v16.2)',
@@ -119,43 +206,19 @@ export default function AdminModule({ onTriggerToast }: AdminModuleProps) {
       maxFailedAttempts: 3,
       accountLockDurationMinutes: 30
     },
-    mfaPolicy: {
-      mfaMode: 'Required',
-      supportedMethods: ['Face', 'OTP', 'AuthenticatorApp']
-    }
   });
 
-  // Mock Temporary Exceptions
+  // ── Temporary Exceptions ────────────────────────────────────────────────────
   const [exceptions, setExceptions] = useState<TemporarySecurityException[]>([
     { id: 'EXC-901', employeeId: 'EMP-1004', employeeName: 'Vikram Singh (Driver)', exceptionType: 'SkipFaceAuth', reason: 'Temporary camera lens hardware malfunction on mobile terminal.', approvedBy: 'Siddharth Mehra (SuperAdmin)', approvedDate: '2026-07-23', startDate: '2026-07-23', expiryDate: '2026-07-26', isExpired: false }
   ]);
 
-  // Mock Registered Devices
+  // ── Registered Devices ──────────────────────────────────────────────────────
   const [devices] = useState<RegisteredDevice[]>([
     { id: 'DEV-01', deviceId: 'DEV-IPHONE-14-PRO', deviceName: 'Siddharth iPhone 14 Pro', osVersion: 'iOS 17.4', registeredToEmployeeName: 'Siddharth Mehra', registeredDate: '2026-01-15', lastUsedTimestamp: 'Today 09:15 AM', isTrusted: true, isBlocked: false }
   ]);
 
-  // Mock User Accounts
-  const [users, setUsers] = useState<UserAccount[]>([
-    { id: 'USR-01', userCode: 'USR-9021', username: 'siddharth.mehra', fullName: 'Siddharth Mehra', email: 'admin@ink-fmcg.com', mobile: '+91 98765 43210', role: 'Super Administrator', mappedEmployeeCode: 'INK-EMP-1000', branch: 'Delhi Central', status: 'Enabled', securityProfileName: 'Admin Security Profile', lastLoginTimestamp: 'Today 09:15 AM', isMfaEnabled: true, registeredDevicesCount: 2 },
-    { id: 'USR-02', userCode: 'USR-9022', username: 'rajiv.kapoor', fullName: 'Rajiv Kapoor', email: 'rajiv.kapoor@ink-fmcg.com', mobile: '+91 98111 22334', role: 'Sales Manager', mappedEmployeeCode: 'INK-EMP-1001', branch: 'Delhi Central', status: 'Enabled', securityProfileName: 'Salesman Security Profile', lastLoginTimestamp: 'Today 08:30 AM', isMfaEnabled: false, registeredDevicesCount: 1 }
-  ]);
-
-  const handleLifecycleAction = (userId: string, action: 'Enable' | 'Disable' | 'Lock' | 'Unlock' | 'Suspend' | 'Archive' | 'ForceLogout') => {
-    setUsers(prev => prev.map(u => {
-      if (u.id === userId) {
-        let newStatus: UserAccountStatus = u.status;
-        if (action === 'Enable' || action === 'Unlock') newStatus = 'Enabled';
-        if (action === 'Disable') newStatus = 'Disabled';
-        if (action === 'Lock') newStatus = 'Locked';
-        if (action === 'Suspend') newStatus = 'Suspended';
-        if (action === 'Archive') newStatus = 'Archived';
-        return { ...u, status: newStatus };
-      }
-      return u;
-    }));
-    onTriggerToast('success', `Employee Action: ${action}`, `Account lifecycle status updated.`);
-  };
+  // ── Handlers ────────────────────────────────────────────────────────────────
 
   const handleCreateException = () => {
     const newExc: TemporarySecurityException = {
@@ -175,6 +238,35 @@ export default function AdminModule({ onTriggerToast }: AdminModuleProps) {
     onTriggerToast('success', 'Temporary Security Exception Granted', `Bypass approved for ${newExc.employeeName} until ${newExc.expiryDate}.`);
   };
 
+  // Open webcam enrollment modal (Register or Re-register)
+  const handleOpenEnrollment = (emp: EmployeeSecurityDetails) => {
+    setEnrollmentTarget(emp);
+    setIsEnrollmentModalOpen(true);
+    setIsDrawerOpen(false); // Close drawer while camera modal is open
+  };
+
+  // Open verification history modal
+  const handleOpenHistory = (emp: EmployeeSecurityDetails) => {
+    setHistoryTarget(emp);
+    setIsHistoryModalOpen(true);
+    setIsDrawerOpen(false);
+  };
+
+  // Called when drawer action updates status (enable/disable/delete)
+  const handleDrawerStatusUpdate = (updated: EmployeeSecurityDetails) => {
+    setSelectedEmployee(updated);
+  };
+
+  // Called after a successful face enrollment
+  const handleEnrollmentSuccess = (result: { userId: string; faceStatus: 'Registered'; templateVersion: number }) => {
+    onTriggerToast(
+      'success',
+      'Face Biometric Registered',
+      `Template v${result.templateVersion} enrolled for user ${enrollmentTarget?.fullName ?? result.userId}.`
+    );
+  };
+
+  // ── Tab list ────────────────────────────────────────────────────────────────
   const tabsList: Array<{ id: TabOption; label: string; icon: React.ComponentType<{ size?: number }> }> = [
     { id: 'security-center', label: 'Security Dashboard', icon: Shield },
     { id: 'auth-policies', label: 'Global Security Policies', icon: Key },
@@ -182,14 +274,14 @@ export default function AdminModule({ onTriggerToast }: AdminModuleProps) {
     { id: 'password-policies', label: 'Password & Session Rules', icon: Lock },
     { id: 'security-profiles', label: 'Role Security Profiles', icon: Layers },
     { id: 'employee-overrides', label: 'Overrides & Exceptions', icon: Sliders },
-    { id: 'employee-lifecycle', label: 'Employee Account Manager', icon: UserCheck },
+    { id: 'employee-lifecycle', label: 'User Management', icon: Users },
     { id: 'audit-trail', label: 'IAM Audit Log', icon: Activity }
   ];
 
   return (
     <div className="space-y-6">
 
-      {/* SECTION 1: IAM EXECUTIVE SECURITY STAT CARDS */}
+      {/* ── SECTION 1: IAM EXECUTIVE SECURITY STAT CARDS ── */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard title="Active User Accounts" value={`${iamMetrics.activeUsersCount} Users`} badgeText="Online: 14" badgeVariant="success" subLabel="Locked / Suspended" subValue={`${iamMetrics.lockedUsersCount} Locked | ${iamMetrics.suspendedUsersCount} Suspended`} />
         <StatCard title="Face Verification Success" value={`${iamMetrics.faceVerificationSuccessCount} Matches`} badgeText="Failure: 4" badgeVariant="primary" subLabel="Biometric Match Rate" subValue="97.2% Confidence" progressPercent={97.2} progressColor="success" />
@@ -197,7 +289,7 @@ export default function AdminModule({ onTriggerToast }: AdminModuleProps) {
         <StatCard title="Security Alerts & Violations" value={`${iamMetrics.securityAlertsCount} Alerts`} badgeText="GPS Fail: 1.2%" badgeVariant="warning" subLabel="Failed Logins Today" subValue={`${iamMetrics.failedLoginsTodayCount} Failed`} />
       </div>
 
-      {/* SECTION 2: IAM SUB-NAVIGATION TABS */}
+      {/* ── SECTION 2: IAM SUB-NAVIGATION TABS ── */}
       <div className="bg-white p-2 rounded-lg border border-brand-border shadow-sm flex flex-wrap gap-1">
         {tabsList.map(tab => {
           const Icon = tab.icon;
@@ -217,11 +309,12 @@ export default function AdminModule({ onTriggerToast }: AdminModuleProps) {
         })}
       </div>
 
-      {/* TAB SUB-PAGES */}
+      {/* ── TAB: Security Dashboard ── */}
       {activeTab === 'security-center' && (
         <SecurityDashboardPage exceptions={exceptions} devices={devices} />
       )}
 
+      {/* ── TAB: Global Security Policies ── */}
       {activeTab === 'auth-policies' && (
         <AuthenticationPoliciesPage
           globalPolicy={globalPolicy}
@@ -230,54 +323,12 @@ export default function AdminModule({ onTriggerToast }: AdminModuleProps) {
         />
       )}
 
+      {/* ── TAB: Production User Management ── */}
       {activeTab === 'employee-lifecycle' && (
-        <div className="bg-white rounded-lg border border-brand-border shadow-sm-flat overflow-hidden">
-          <div className="p-4 border-b bg-brand-bg-secondary/10 flex justify-between items-center">
-            <SearchInput value={searchQuery} onChange={setSearchQuery} placeholder="Search employee code, username, status..." />
-            <Badge variant="primary">IAM Account Lifecycle Controller</Badge>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead className="bg-brand-bg-secondary border-b text-[10px] font-bold text-brand-text-secondary uppercase">
-                <tr>
-                  <th className="p-3">User Code</th>
-                  <th className="p-3">Full Name</th>
-                  <th className="p-3">Assigned Security Profile</th>
-                  <th className="p-3">Devices</th>
-                  <th className="p-3 text-center">Account Status</th>
-                  <th className="p-3 text-right">Lifecycle Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-brand-border">
-                {users.map(u => (
-                  <tr key={u.id} className="hover:bg-brand-bg-secondary/30">
-                    <td className="p-3 font-mono font-bold text-brand-primary">{u.userCode}</td>
-                    <td className="p-3 font-semibold">{u.fullName}</td>
-                    <td className="p-3 text-brand-text-secondary">{u.securityProfileName}</td>
-                    <td className="p-3 font-mono">{u.registeredDevicesCount || 1} Registered</td>
-                    <td className="p-3 text-center">
-                      <Badge variant={u.status === 'Enabled' ? 'success' : u.status === 'Locked' ? 'danger' : 'warning'}>{u.status}</Badge>
-                    </td>
-                    <td className="p-3 text-right flex justify-end gap-1">
-                      {u.status === 'Enabled' ? (
-                        <>
-                          <button onClick={() => handleLifecycleAction(u.id, 'Lock')} className="px-2 py-1 bg-amber-50 text-amber-700 border border-amber-200 text-[11px] font-semibold rounded hover:bg-amber-100 cursor-pointer">Lock</button>
-                          <button onClick={() => handleLifecycleAction(u.id, 'Disable')} className="px-2 py-1 bg-rose-50 text-rose-700 border border-rose-200 text-[11px] font-semibold rounded hover:bg-rose-100 cursor-pointer">Disable</button>
-                        </>
-                      ) : (
-                        <button onClick={() => handleLifecycleAction(u.id, 'Enable')} className="px-2 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-semibold rounded hover:bg-emerald-100 cursor-pointer">Enable / Unlock</button>
-                      )}
-                      <button onClick={() => handleLifecycleAction(u.id, 'ForceLogout')} className="px-2 py-1 border text-brand-text-secondary text-[11px] font-semibold rounded hover:bg-brand-bg-secondary cursor-pointer">Force Logout</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <UserManagementModule onTriggerToast={onTriggerToast} />
       )}
 
-      {/* MODAL TEMPORARY EXCEPTION */}
+      {/* ── MODAL: Temporary Security Exception ── */}
       {isExceptionModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
           <div className="bg-white rounded-lg border border-brand-border max-w-md w-full p-6 space-y-4 shadow-xl-flat">
@@ -288,7 +339,6 @@ export default function AdminModule({ onTriggerToast }: AdminModuleProps) {
                 <select className="w-full p-2 border rounded border-brand-border bg-white font-bold">
                   <option value="SkipGPS">Skip GPS Location Verification</option>
                   <option value="SkipFaceAuth">Skip Face Biometric Check</option>
-                  <option value="SkipOTP">Skip 2FA OTP Verification</option>
                 </select>
               </div>
               <div>
@@ -303,6 +353,65 @@ export default function AdminModule({ onTriggerToast }: AdminModuleProps) {
           </div>
         </div>
       )}
+
+      {/* ── DRAWER: Employee Security Details ── */}
+      <EmployeeSecurityDetailsDrawer
+        isOpen={isDrawerOpen}
+        onClose={() => setIsDrawerOpen(false)}
+        employee={selectedEmployee}
+        onRegisterFace={handleOpenEnrollment}
+        onViewHistory={handleOpenHistory}
+        onTriggerToast={onTriggerToast}
+        onStatusUpdate={handleDrawerStatusUpdate}
+      />
+
+      {/* ── MODAL: Webcam Enrollment ── */}
+      {isEnrollmentModalOpen && enrollmentTarget && (
+        <WebcamEnrollmentModal
+          isOpen={isEnrollmentModalOpen}
+          onClose={() => {
+            setIsEnrollmentModalOpen(false);
+            setEnrollmentTarget(null);
+          }}
+          employee={{
+            id: enrollmentTarget.id,
+            userId: enrollmentTarget.userId,
+            fullName: enrollmentTarget.fullName,
+            employeeCode: enrollmentTarget.mappedEmployeeCode,
+            email: enrollmentTarget.email
+          }}
+          onTriggerToast={onTriggerToast}
+          onEnrollmentSuccess={(result) => {
+            handleEnrollmentSuccess(result);
+            setIsEnrollmentModalOpen(false);
+            setEnrollmentTarget(null);
+          }}
+        />
+      )}
+
+      {/* ── MODAL: Verification History ── */}
+      {isHistoryModalOpen && historyTarget && (
+        <FaceVerificationHistoryModal
+          isOpen={isHistoryModalOpen}
+          onClose={() => {
+            setIsHistoryModalOpen(false);
+            setHistoryTarget(null);
+          }}
+          employee={{
+            id: historyTarget.id,
+            userId: historyTarget.userId,
+            fullName: historyTarget.fullName,
+            employeeCode: historyTarget.mappedEmployeeCode
+          }}
+        />
+      )}
+
+      {/* ── MODAL: Developer Biometric Diagnostics Dashboard ── */}
+      <BiometricDebugDashboardModal
+        isOpen={isDebugDashboardOpen}
+        onClose={() => setIsDebugDashboardOpen(false)}
+        userId={selectedEmployee?.userId || selectedEmployee?.id}
+      />
 
     </div>
   );

@@ -63,10 +63,10 @@ public class SupplierConfiguration : IEntityTypeConfiguration<Supplier>
 
         builder.HasIndex(s => new { s.CompanyId, s.Code })
             .IsUnique()
-            .HasFilter("is_deleted = false");
+            ;
 
         builder.HasIndex(s => new { s.CompanyId, s.Gstin })
             .IsUnique()
-            .HasFilter("is_deleted = false");
+            ;
     }
 }

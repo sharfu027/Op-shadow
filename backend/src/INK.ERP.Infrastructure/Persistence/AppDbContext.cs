@@ -5,6 +5,7 @@ using INK.ERP.Domain.Common;
 using INK.ERP.Domain.Entities.IAM;
 using INK.ERP.Domain.Entities.Security;
 using INK.ERP.Domain.Entities.MasterData;
+using INK.ERP.Domain.Entities.Pricing;
 
 namespace INK.ERP.Persistence;
 
@@ -20,7 +21,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, ApplicationRole, 
 
         // Identity Table Renaming for enterprise schema alignment
         builder.Entity<IdentityUserClaim<Guid>>().ToTable("user_claims", "iam");
-        builder.Entity<IdentityUserRole<Guid>>().ToTable("user_roles", "iam");
+        builder.Ignore<IdentityUserRole<Guid>>();
         builder.Entity<IdentityUserLogin<Guid>>().ToTable("user_logins", "iam");
         builder.Entity<IdentityRoleClaim<Guid>>().ToTable("role_claims", "iam");
         builder.Entity<IdentityUserToken<Guid>>().ToTable("user_tokens", "iam");
@@ -44,6 +45,10 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, ApplicationRole, 
     public DbSet<INK.ERP.Infrastructure.Persistence.Outbox.OutboxMessage> OutboxMessages => Set<INK.ERP.Infrastructure.Persistence.Outbox.OutboxMessage>();
     public DbSet<INK.ERP.Domain.Entities.Warehouse> Warehouses => Set<INK.ERP.Domain.Entities.Warehouse>();
     public DbSet<INK.ERP.Domain.Entities.SalesOrder> SalesOrders => Set<INK.ERP.Domain.Entities.SalesOrder>();
+
+    // Pricing DB Sets
+    public DbSet<PriceList> PriceLists => Set<PriceList>();
+    public DbSet<PriceListItem> PriceListItems => Set<PriceListItem>();
 
     // Master Data DB Sets
     public DbSet<Company> Companies => Set<Company>();
@@ -89,7 +94,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, ApplicationRole, 
 
     private void UpdateAuditFields()
     {
-        var entries = ChangeTracker.Entries<BaseEntity>();
+        var entries = ChangeTracker.Entries<AuditableEntity>();
 
         foreach (var entry in entries)
         {

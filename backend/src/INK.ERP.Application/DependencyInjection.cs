@@ -3,10 +3,13 @@ namespace INK.ERP.Application;
 using System.Reflection;
 using FluentValidation;
 using MediatR;
+using Mapster;
 using Microsoft.Extensions.DependencyInjection;
 using INK.ERP.Application.Common.Behaviors;
 using INK.ERP.Domain.Services.Security;
 using INK.ERP.Application.Features.Security.Face.Workflows;
+
+using INK.ERP.Application.Features.IAM.Services;
 
 public static class DependencyInjection
 {
@@ -27,6 +30,15 @@ public static class DependencyInjection
 
         // Register FluentValidation
         services.AddValidatorsFromAssembly(assembly);
+
+        // Register Mapster Mapping Configurations
+        TypeAdapterConfig.GlobalSettings.Scan(assembly);
+
+        // Register IAM Domain Services
+        services.AddScoped<IUserDomainService, UserDomainService>();
+        services.AddScoped<IRoleDomainService, RoleDomainService>();
+        services.AddScoped<IPermissionDomainService, PermissionDomainService>();
+        services.AddScoped<IPasswordPolicyService, PasswordPolicyService>();
 
         // Register Security Domain Services
         services.AddScoped<PolicyResolutionDomainService>();

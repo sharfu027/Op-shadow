@@ -36,6 +36,6 @@ public class UnitOfMeasureConfiguration : IEntityTypeConfiguration<UnitOfMeasure
 
         builder.HasIndex(u => new { u.CompanyId, u.Code })
             .IsUnique()
-            .HasFilter("is_deleted = false");
+            ;
     }
 }

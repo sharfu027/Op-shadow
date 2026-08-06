@@ -44,7 +44,7 @@ public class SecurityPolicyController : BaseApiController
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status412PreconditionFailed)]
     public async Task<IActionResult> UpdateGlobalPolicy([FromBody] UpdateGlobalSecurityPolicyCommand command, CancellationToken cancellationToken)
     {
-        var currentQuery = new GetActiveGlobalSecurityPolicyQuery();
+        var currentQuery = new GetGlobalSecurityPolicyQuery();
         var currentResult = await Mediator.Send(currentQuery, cancellationToken);
         if (currentResult.IsSuccess && currentResult.Value != null)
         {
@@ -106,7 +106,7 @@ public class SecurityPolicyController : BaseApiController
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetPolicyHistory(CancellationToken cancellationToken)
     {
-        var query = new GetActiveGlobalSecurityPolicyQuery();
+        var query = new GetGlobalSecurityPolicyQuery();
         var result = await Mediator.Send(query, cancellationToken);
         if (result.IsSuccess && result.Value != null)
         {

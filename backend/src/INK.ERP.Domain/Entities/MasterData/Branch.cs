@@ -1,9 +1,10 @@
+using System;
 using INK.ERP.Domain.Common;
 using INK.ERP.Domain.ValueObjects;
 
 namespace INK.ERP.Domain.Entities.MasterData;
 
-public sealed class Branch : BaseEntity
+public sealed class Branch : AuditableEntity
 {
     public Guid CompanyId { get; set; }
     public string Code { get; set; } = string.Empty;

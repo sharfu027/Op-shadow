@@ -15,10 +15,10 @@ public sealed class FaceRecognitionOptions
     public string ModelChecksum { get; set; } = "sha256-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
     [Range(0.0, 1.0)]
-    public float MinQualityScoreThreshold { get; set; } = 0.70f;
+    public float MinQualityScoreThreshold { get; set; } = 0.40f;
 
     [Range(0.0, 1.0)]
-    public float MatchThreshold { get; set; } = 0.85f;
+    public float MatchThreshold { get; set; } = 0.40f;
 }
 
 public sealed class OnnxOptions

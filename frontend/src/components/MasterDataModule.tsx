@@ -85,11 +85,8 @@ export default function MasterDataModule({ module, onTriggerToast }: MasterDataM
 
   const config = getModuleConfig();
 
-  // Master Repositories
-  const [dbCompanies, setDbCompanies] = useState([
-    { id: '1', code: 'CMP-001', legalName: 'INK FMCG India Private Limited', tradeName: 'INK Foods & Goods', gstin: '07AAAAA0000A1Z5', pan: 'AAAAA0000A', email: 'hq@ink-fmcg.com', phone: '+91 11 4500 8800', currency: 'INR', status: 'Active', addressLine1: 'Plot 101, Okhla Industrial Estate', city: 'New Delhi', state: 'Delhi', postalCode: '110020', country: 'India' },
-    { id: '2', code: 'CMP-002', legalName: 'INK Global Exports LLC', tradeName: 'INK Overseas', gstin: '27BBBBB1111B1Z2', pan: 'BBBBB1111B', email: 'exports@ink-global.com', phone: '+91 22 6700 9900', currency: 'USD', status: 'Active', addressLine1: 'BKC Center, Bandra East', city: 'Mumbai', state: 'Maharashtra', postalCode: '400051', country: 'India' }
-  ]);
+  // Master Repositories (Production Architecture: Companies live data)
+  const [dbCompanies, setDbCompanies] = useState<any[]>([]);
 
   const [dbBranches, setDbBranches] = useState([
     { id: '1', companyId: '1', companyName: 'INK FMCG India Pvt Ltd', code: 'BR-DEL-HQ', name: 'Delhi Main Branch', gstin: '07AAAAA0000A1Z5', phone: '+91 11 4500 8801', email: 'delhi.branch@ink-fmcg.com', addressLine1: 'Okhla Phase III', city: 'New Delhi', state: 'Delhi', postalCode: '110020', country: 'India', isHeadquarters: true, status: 'Active' },
@@ -278,19 +275,39 @@ export default function MasterDataModule({ module, onTriggerToast }: MasterDataM
     setFormErrors({});
 
     async function loadLiveData() {
-      try {
-        if (module === 'companies' || module === 'masters/companies') {
-          const apiData = await masterDataService.fetchCompanies();
-          if (apiData && apiData.length > 0) {
-            setDbCompanies(apiData.map(c => ({
-              id: c.id, code: c.code, legalName: c.legalName, tradeName: c.tradeName || c.legalName,
-              gstin: c.taxRegistrationNumber || '', pan: c.panNumber || '', email: c.email, phone: c.phone, currency: c.currencyCode || 'INR', status: c.isActive ? 'Active' : 'Inactive',
-              addressLine1: c.addressLine1 || '', city: c.city || '', state: c.state || '', postalCode: c.postalCode || '', country: c.country || 'India'
-            })));
-          }
+      if (module === 'companies' || module === 'masters/companies') {
+        setSimulatedState('loading');
+        try {
+          const apiData = await masterDataService.fetchCompanies({
+            search: searchQuery || undefined,
+            status: statusFilter !== 'All' ? statusFilter : undefined
+          });
+
+          const items = Array.isArray(apiData) ? apiData : (apiData && Array.isArray(apiData.items) ? apiData.items : []);
+          setDbCompanies(items.map((c: any) => ({
+            id: c.id,
+            code: c.code,
+            legalName: c.legalName,
+            tradeName: c.tradeName || c.legalName,
+            gstin: c.taxRegistrationNumber || '',
+            pan: c.panNumber || '',
+            email: c.email,
+            phone: c.phone,
+            currency: c.currencyCode || 'INR',
+            status: typeof c.status === 'number' ? (c.status === 1 ? 'Active' : c.status === 2 ? 'Archived' : 'Draft') : (c.status || 'Active'),
+            addressLine1: c.addressLine1 || '',
+            city: c.city || '',
+            state: c.state || '',
+            postalCode: c.postalCode || '',
+            country: c.country || 'India',
+            rowVersion: c.rowVersion
+          })));
+          setSimulatedState(items.length === 0 ? 'empty' : 'normal');
+        } catch (err: any) {
+          setSimulatedState('error');
+          const msg = err?.data?.detail || err?.data?.title || err?.message || 'Failed to fetch company records from API.';
+          onTriggerToast('error', 'Company API Error', msg);
         }
-      } catch (err) {
-        console.error('[Master Data Dev Log] Live fetch error:', err);
       }
     }
     loadLiveData();
@@ -469,13 +486,32 @@ export default function MasterDataModule({ module, onTriggerToast }: MasterDataM
 
   const confirmDelete = async () => {
     if (!deleteId) return;
-    try {
-      await masterDataService.deleteMasterEntity(config.endpoint, deleteId);
-    } catch (err) {
-      console.error('[Soft Delete Error]', err);
-    }
 
-    if (module === 'companies' || module === 'masters/companies') setDbCompanies(dbCompanies.filter(x => x.id !== deleteId));
+    if (module === 'companies' || module === 'masters/companies') {
+      try {
+        await masterDataService.deleteCompany(deleteId);
+        onTriggerToast('success', 'Company Soft-Deleted', 'Company record deactivated.');
+        setDeleteId(null);
+        if (module === 'companies' || module === 'masters/companies') {
+          const apiData = await masterDataService.fetchCompanies({
+            search: searchQuery || undefined,
+            status: statusFilter !== 'All' ? statusFilter : undefined
+          });
+          const items = Array.isArray(apiData) ? apiData : (apiData && Array.isArray(apiData.items) ? apiData.items : []);
+          setDbCompanies(items.map((c: any) => ({
+            id: c.id, code: c.code, legalName: c.legalName, tradeName: c.tradeName || c.legalName,
+            gstin: c.taxRegistrationNumber || '', pan: c.panNumber || '', email: c.email, phone: c.phone,
+            currency: c.currencyCode || 'INR', status: typeof c.status === 'number' ? (c.status === 1 ? 'Active' : c.status === 2 ? 'Archived' : 'Draft') : (c.status || 'Active'),
+            addressLine1: c.addressLine1 || '', city: c.city || '', state: c.state || '', postalCode: c.postalCode || '', country: c.country || 'India', rowVersion: c.rowVersion
+          })));
+        }
+        return;
+      } catch (err: any) {
+        onTriggerToast('error', 'Delete Failed', err?.data?.detail || err?.message || 'Failed to soft-delete company record.');
+        setDeleteId(null);
+        return;
+      }
+    }
     else if (module === 'branches' || module === 'masters/branches') setDbBranches(dbBranches.filter(x => x.id !== deleteId));
     else if (module === 'departments' || module === 'masters/departments') setDbDepartments(dbDepartments.filter(x => x.id !== deleteId));
     else if (module === 'designations' || module === 'masters/designations') setDbDesignations(dbDesignations.filter(x => x.id !== deleteId));
@@ -542,27 +578,62 @@ export default function MasterDataModule({ module, onTriggerToast }: MasterDataM
           </div>
         </div>
 
-        <div className="flex items-center gap-2 bg-brand-bg-secondary p-1 rounded border border-brand-border self-start md:self-auto">
-          <span className="text-[10px] text-brand-text-secondary font-bold px-2 uppercase tracking-wider">Simulate State:</span>
-          {(['normal', 'loading', 'empty', 'error', 'denied'] as const).map((st) => (
-            <button
-              key={st}
-              onClick={() => setSimulatedState(st)}
-              className={`px-2 py-1 text-[9px] font-bold rounded capitalize cursor-pointer transition ${
-                simulatedState === st ? 'bg-brand-primary text-white' : 'text-brand-text-secondary hover:text-brand-text-primary'
-              }`}
-            >
-              {st}
-            </button>
-          ))}
-        </div>
+        {/* Developer Debug State Simulator - Hidden in Production */}
+        {(typeof window !== 'undefined' && (window.location.search.includes('debug=true') || localStorage.getItem('debug_mode') === 'true')) && (
+          <div className="flex items-center gap-2 bg-brand-bg-secondary p-1 rounded border border-brand-border self-start md:self-auto">
+            <span className="text-[10px] text-brand-text-secondary font-bold px-2 uppercase tracking-wider">Debug State:</span>
+            {(['normal', 'loading', 'empty', 'error', 'denied'] as const).map((st) => (
+              <button
+                key={st}
+                onClick={() => setSimulatedState(st)}
+                className={`px-2 py-1 text-[9px] font-bold rounded capitalize cursor-pointer transition ${
+                  simulatedState === st ? 'bg-brand-primary text-white' : 'text-brand-text-secondary hover:text-brand-text-primary'
+                }`}
+              >
+                {st}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* DISPLAY WINDOW */}
+      {/* DISPLAY WINDOW WITH REAL & DEBUG STATE HANDLING */}
       {simulatedState === 'loading' ? (
         <div className="bg-white p-24 border border-brand-border rounded-lg text-center space-y-3 shadow-sm">
           <Loader2 className="w-8 h-8 text-brand-primary animate-spin mx-auto" />
-          <p className="text-xs text-brand-text-secondary font-medium">Fetching real-time organizational masters from PostgreSQL...</p>
+          <p className="text-xs text-brand-text-secondary font-medium">Loading real-time {config.name.toLowerCase()} master data from PostgreSQL...</p>
+        </div>
+      ) : simulatedState === 'error' ? (
+        <div className="bg-white p-12 border border-brand-border rounded-lg text-center space-y-4 shadow-sm max-w-lg mx-auto">
+          <div className="w-12 h-12 bg-red-50 text-brand-danger rounded-full flex items-center justify-center mx-auto">
+            <AlertCircle size={24} />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-brand-text-primary">Master Data Connection Exception</h3>
+            <p className="text-xs text-brand-text-secondary mt-1">Unable to communicate with the master data REST controller service or database connection pool.</p>
+          </div>
+          <button
+            onClick={() => setSimulatedState('normal')}
+            className="px-4 py-2 bg-brand-primary text-white font-bold text-xs rounded hover:bg-blue-700 transition cursor-pointer shadow-xs"
+          >
+            Retry Loading Data
+          </button>
+        </div>
+      ) : simulatedState === 'denied' ? (
+        <div className="bg-white p-12 border border-brand-border rounded-lg text-center space-y-4 shadow-sm max-w-lg mx-auto">
+          <div className="w-12 h-12 bg-amber-50 text-brand-warning rounded-full flex items-center justify-center mx-auto">
+            <ShieldCheck size={24} />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-brand-text-primary">Access Permission Restricted</h3>
+            <p className="text-xs text-brand-text-secondary mt-1">Your current user account role lacks permissions to access or configure {config.name.toLowerCase()} master data records.</p>
+          </div>
+          <button
+            onClick={() => setSimulatedState('normal')}
+            className="px-4 py-2 border border-brand-border text-brand-text-primary font-bold text-xs rounded hover:bg-brand-bg-secondary transition cursor-pointer"
+          >
+            Return to Default State
+          </button>
         </div>
       ) : (
         <div className="space-y-6">
@@ -628,27 +699,35 @@ export default function MasterDataModule({ module, onTriggerToast }: MasterDataM
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-brand-border">
-                    {paginatedRows.map((row) => (
-                      <tr key={row.id} className="hover:bg-brand-bg-secondary/40 transition text-xs">
-                        <td className="p-3 font-mono font-bold text-brand-text-primary">{row.code}</td>
-                        <td className="p-3 font-semibold text-brand-text-primary truncate">{row.name}</td>
-                        <td className="p-3 text-brand-text-secondary truncate">{row.detail1}</td>
-                        <td className="p-3 text-brand-text-secondary truncate">{row.detail2}</td>
-                        <td className="p-3 text-right font-mono font-semibold">{row.numericText}</td>
-                        <td className="p-3 text-center">
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${row.status === 'Active' ? 'bg-green-50 text-brand-success border border-green-200' : 'bg-gray-50 text-brand-text-secondary border'}`}>
-                            {row.status}
-                          </span>
-                        </td>
-                        <td className="p-3 text-center">
-                          <div className="flex items-center justify-center gap-1">
-                            <button onClick={() => { setSelectedId(row.id); populateForm(row.id); setMode('view'); }} title="View Details (Read-Only)" className="p-1 text-brand-text-secondary hover:text-brand-primary hover:bg-blue-50 rounded cursor-pointer transition"><Eye size={13} /></button>
-                            <button onClick={() => { setSelectedId(row.id); populateForm(row.id); setMode('edit'); }} title="Edit Record" className="p-1 text-brand-text-secondary hover:text-brand-primary hover:bg-blue-50 rounded cursor-pointer transition"><Edit2 size={13} /></button>
-                            <button onClick={() => setDeleteId(row.id)} title="Delete (Soft-Delete)" className="p-1 text-brand-text-secondary hover:text-brand-danger hover:bg-red-50 rounded cursor-pointer transition"><Trash2 size={13} /></button>
-                          </div>
+                    {simulatedState === 'empty' || paginatedRows.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="p-12 text-center text-brand-text-secondary text-xs font-medium">
+                          No {config.name.toLowerCase()} master data records found matching your query.
                         </td>
                       </tr>
-                    ))}
+                    ) : (
+                      paginatedRows.map((row) => (
+                        <tr key={row.id} className="hover:bg-brand-bg-secondary/40 transition text-xs">
+                          <td className="p-3 font-mono font-bold text-brand-text-primary">{row.code}</td>
+                          <td className="p-3 font-semibold text-brand-text-primary truncate">{row.name}</td>
+                          <td className="p-3 text-brand-text-secondary truncate">{row.detail1}</td>
+                          <td className="p-3 text-brand-text-secondary truncate">{row.detail2}</td>
+                          <td className="p-3 text-right font-mono font-semibold">{row.numericText}</td>
+                          <td className="p-3 text-center">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${row.status === 'Active' ? 'bg-green-50 text-brand-success border border-green-200' : 'bg-gray-50 text-brand-text-secondary border'}`}>
+                              {row.status}
+                            </span>
+                          </td>
+                          <td className="p-3 text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              <button onClick={() => { setSelectedId(row.id); populateForm(row.id); setMode('view'); }} title="View Details (Read-Only)" className="p-1 text-brand-text-secondary hover:text-brand-primary hover:bg-blue-50 rounded cursor-pointer transition"><Eye size={13} /></button>
+                              <button onClick={() => { setSelectedId(row.id); populateForm(row.id); setMode('edit'); }} title="Edit Record" className="p-1 text-brand-text-secondary hover:text-brand-primary hover:bg-blue-50 rounded cursor-pointer transition"><Edit2 size={13} /></button>
+                              <button onClick={() => setDeleteId(row.id)} title="Delete (Soft-Delete)" className="p-1 text-brand-text-secondary hover:text-brand-danger hover:bg-red-50 rounded cursor-pointer transition"><Trash2 size={13} /></button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>

@@ -87,7 +87,7 @@ public class DeviceController : BaseApiController
     [ProducesResponseType(typeof(IReadOnlyList<RegisteredDeviceDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetDevices([FromQuery] Guid userId, [FromQuery] SecurityFilterParameters filter, CancellationToken cancellationToken)
     {
-        var query = new GetUserDevicesQuery(userId);
+        var query = new GetTrustedDevicesQuery(userId);
         var result = await Mediator.Send(query, cancellationToken);
         if (result.IsSuccess && result.Value != null)
         {

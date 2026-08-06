@@ -60,10 +60,10 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
 
         builder.HasIndex(e => new { e.CompanyId, e.EmployeeCode })
             .IsUnique()
-            .HasFilter("is_deleted = false");
+            ;
 
         builder.HasIndex(e => e.Email)
             .IsUnique()
-            .HasFilter("is_deleted = false");
+            ;
     }
 }

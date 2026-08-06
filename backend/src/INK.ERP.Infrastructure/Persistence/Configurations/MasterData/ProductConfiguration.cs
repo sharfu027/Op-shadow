@@ -72,10 +72,10 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
 
         builder.HasIndex(p => new { p.CompanyId, p.Code })
             .IsUnique()
-            .HasFilter("is_deleted = false");
+            ;
 
         builder.HasIndex(p => new { p.CompanyId, p.Sku })
             .IsUnique()
-            .HasFilter("is_deleted = false");
+            ;
     }
 }
