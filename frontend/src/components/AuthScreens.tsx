@@ -202,6 +202,15 @@ export default function AuthScreens({ onLoginSuccess, onTriggerToast }: AuthScre
   const [gpsProgress, setGpsProgress] = useState(0);
   const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number; accuracy: number | null } | null>(null);
 
+  // Active user profile state for dynamic identity display
+  const [activeUser, setActiveUser] = useState<any>(() => {
+    try {
+      const raw = localStorage.getItem('ink_user_profile');
+      if (raw) return JSON.parse(raw);
+    } catch (e) {}
+    return null;
+  });
+
   // Admin bypass override code
   const [overrideCode, setOverrideCode] = useState('');
   const [overrideError, setOverrideError] = useState('');
@@ -588,6 +597,10 @@ export default function AuthScreens({ onLoginSuccess, onTriggerToast }: AuthScre
     setIsSubmitting(true);
     try {
       const loginRes = await authService.login({ email, password });
+      if (loginRes?.user) {
+        setActiveUser(loginRes.user);
+        localStorage.setItem('ink_user_profile', JSON.stringify(loginRes.user));
+      }
       const userId = loginRes.user.id;
       const policy = getUserSecurityPolicy(userId);
 
@@ -1201,26 +1214,38 @@ export default function AuthScreens({ onLoginSuccess, onTriggerToast }: AuthScre
               </div>
 
               {/* MATCH DATA BLOCK */}
-              <div className="bg-slate-50 rounded-lg p-3.5 border border-brand-border text-xs flex gap-3.5 items-center">
-                <div className="w-12 h-12 rounded-full bg-slate-200 border border-brand-border overflow-hidden shrink-0 flex items-center justify-center relative">
-                  {/* Simulated Profile snapshot */}
-                  <User size={24} className="text-slate-500" />
-                  <div className="absolute inset-0 bg-brand-primary/5 border border-brand-primary/20 rounded-full" />
-                </div>
-                <div className="flex-1 space-y-1 min-w-0">
-                  <div className="flex justify-between items-baseline">
-                    <span className="font-bold text-brand-text-primary truncate block text-[13px]">Siddharth Mehra</span>
-                    <span className="text-[9px] font-mono font-bold text-emerald-600 bg-emerald-50 px-1 py-0.2 rounded border border-emerald-100">
-                      99.8% CONF
-                    </span>
+              {(() => {
+                const userName = activeUser?.displayName || `${activeUser?.firstName || ''} ${activeUser?.lastName || ''}`.trim() || (email ? email.split('@')[0] : 'Mohammed Sharfuddin');
+                const userId = activeUser?.id ? `EMP-${String(activeUser.id).substring(0, 8).toUpperCase()}` : 'EMP-2026-90A';
+                const userRole = activeUser?.role || 'Super Admin';
+                const userLocation = activeUser?.location || 'Bhoopasandra Branch / Hub';
+
+                return (
+                  <div className="bg-slate-50 rounded-lg p-3.5 border border-brand-border text-xs flex gap-3.5 items-center">
+                    <div className="w-12 h-12 rounded-full bg-slate-200 border border-brand-border overflow-hidden shrink-0 flex items-center justify-center relative">
+                      {activeUser?.profileImageUrl ? (
+                        <img src={activeUser.profileImageUrl} alt={userName} className="w-full h-full object-cover rounded-full" />
+                      ) : (
+                        <User size={24} className="text-slate-500" />
+                      )}
+                      <div className="absolute inset-0 bg-brand-primary/5 border border-brand-primary/20 rounded-full" />
+                    </div>
+                    <div className="flex-1 space-y-1 min-w-0">
+                      <div className="flex justify-between items-baseline">
+                        <span className="font-bold text-brand-text-primary truncate block text-[13px]">{userName}</span>
+                        <span className="text-[9px] font-mono font-bold text-emerald-600 bg-emerald-50 px-1 py-0.2 rounded border border-emerald-100">
+                          99.8% CONF
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[10px] text-brand-text-secondary">
+                        <p>ID: <span className="font-mono text-brand-text-primary">{userId}</span></p>
+                        <p>ROLE: <span className="font-semibold text-brand-text-primary">{userRole}</span></p>
+                        <p className="col-span-2">LEDGER NODE: <span className="font-mono text-brand-text-primary">{userLocation}</span></p>
+                      </div>
+                    </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[10px] text-brand-text-secondary">
-                    <p>ID: <span className="font-mono text-brand-text-primary">EMP-2026-90A</span></p>
-                    <p>ROLE: <span className="font-semibold text-brand-text-primary">Super Admin</span></p>
-                    <p className="col-span-2">LEDGER NODE: <span className="font-mono text-brand-text-primary">HQ Delhi Central Depot</span></p>
-                  </div>
-                </div>
-              </div>
+                );
+              })()}
 
               <button
                 onClick={() => {
