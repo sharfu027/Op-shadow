@@ -1,6 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MapPin, Compass, Check, AlertCircle, RefreshCw, X, ShieldCheck, Navigation } from 'lucide-react';
-import { EmployeeDetails } from '../types';
+export interface EmployeeDetails {
+  id: string;
+  name: string;
+  employeeId?: string;
+  department?: string;
+  [key: string]: any;
+}
 
 interface LocationEnrollmentModalProps {
   isOpen: boolean;

@@ -128,4 +128,39 @@ public class DeviceController : BaseApiController
         var result = await Mediator.Send(query, cancellationToken);
         return HandleResult(result);
     }
+
+    /// <summary>
+    /// Retrieves registered security devices for administration dashboard.
+    /// </summary>
+    [HttpGet("/api/v1/admin/security/devices")]
+    [Authorize]
+    [ProducesResponseType(typeof(object[]), StatusCodes.Status200OK)]
+    public IActionResult GetAdminRegisteredDevices()
+    {
+        var mockDevices = new[]
+        {
+            new
+            {
+                id = "dev-101",
+                deviceName = "Delhi HQ Terminal #DEV-908",
+                registeredToEmployeeName = "Siddharth Mehra",
+                deviceFingerprint = "FP-90812-DEL",
+                isTrusted = true,
+                registeredTimestamp = "2026-08-01T10:00:00Z",
+                lastUsedTimestamp = "2026-08-07T14:30:00Z"
+            },
+            new
+            {
+                id = "dev-102",
+                deviceName = "Warehouse Scanner Unit #WH-402",
+                registeredToEmployeeName = "Vikram Singh",
+                deviceFingerprint = "FP-40211-WH",
+                isTrusted = true,
+                registeredTimestamp = "2026-08-02T11:30:00Z",
+                lastUsedTimestamp = "2026-08-07T14:15:00Z"
+            }
+        };
+
+        return Ok(mockDevices);
+    }
 }

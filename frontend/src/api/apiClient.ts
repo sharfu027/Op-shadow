@@ -192,6 +192,25 @@ class ApiClient {
     });
   }
 
+  public async postBlob(endpoint: string, body?: unknown, options?: ApiRequestOptions): Promise<Blob> {
+    const { params, headers, skipAuth, ...customConfig } = options || {};
+    const config: RequestInit = {
+      ...customConfig,
+      method: 'POST',
+      body: body ? JSON.stringify(body) : undefined,
+      headers: {
+        ...this.getAuthHeaders(skipAuth),
+        ...headers
+      }
+    };
+    const fullUrl = this.buildUrl(endpoint, params);
+    const response = await fetch(fullUrl, config);
+    if (!response.ok) {
+      throw new ApiError(`HTTP Error ${response.status}: ${response.statusText}`, response.status);
+    }
+    return await response.blob();
+  }
+
   public async put<T>(endpoint: string, body?: unknown, options?: ApiRequestOptions): Promise<T> {
     return this.request<T>(endpoint, {
       ...options,

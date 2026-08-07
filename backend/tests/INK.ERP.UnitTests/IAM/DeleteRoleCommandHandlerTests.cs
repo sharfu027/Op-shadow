@@ -6,6 +6,7 @@ using INK.ERP.Application.Common.Interfaces;
 using INK.ERP.Application.Features.IAM.Commands.Roles;
 using INK.ERP.Application.Features.IAM.Services;
 using INK.ERP.Domain.Common;
+using INK.ERP.Domain.Entities.IAM;
 
 namespace INK.ERP.UnitTests.IAM;
 
@@ -28,6 +29,7 @@ public sealed class DeleteRoleCommandHandlerTests
 
         _dateTimeMock.Setup(d => d.UtcNow).Returns(new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
         _unitOfWorkMock.Setup(u => u.Repository<ApplicationRole>()).Returns(_roleRepoMock.Object);
+        _unitOfWorkMock.Setup(u => u.Repository<SecurityAuditLog>()).Returns(new Mock<IGenericRepository<SecurityAuditLog>>().Object);
 
         _handler = new DeleteRoleCommandHandler(
             _unitOfWorkMock.Object,

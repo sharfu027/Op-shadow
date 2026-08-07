@@ -29,8 +29,6 @@ import {
 } from 'lucide-react';
 import { UserRole, NavItem, UserProfile } from '../types';
 import { NAVIGATION_MENU, ROLES } from '../constants';
-import DevOnly from './dev/DevOnly';
-import HeaderRoleSelector from './dev/HeaderRoleSelector';
 import { useAuth } from '../context/AuthContext';
 
 const IconMap: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
@@ -98,7 +96,7 @@ export default function EnterpriseLayout({
 
   // Sub-menu toggle states
   const [openSubMenus, setOpenSubMenus] = useState<Record<string, boolean>>({
-    'Master Data': true,
+    'Master Data': false,
     'Inventory': false,
     'Finance': false
   });
@@ -436,16 +434,6 @@ export default function EnterpriseLayout({
 
           {/* Quick Actions & Profiles */}
           <div className="flex items-center gap-3">
-            
-            {/* ROLE SIMULATION INDICATOR SELECTOR */}
-            <DevOnly>
-              <HeaderRoleSelector
-                activeRole={activeRole}
-                roles={roles}
-                onRoleChange={onRoleChange}
-                onTriggerToast={onTriggerToast}
-              />
-            </DevOnly>
 
             {/* Quick Actions Triggers */}
             <div className="relative">

@@ -67,6 +67,9 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("IAM.Permissions.Manage", policy => 
         policy.RequireAssertion(ctx => ctx.User.HasClaim("permission", "permissions:manage") || ctx.User.IsInRole("Administrator") || ctx.User.IsInRole("ADMIN")));
 
+    options.AddPolicy("IAM.Audit.Read", policy => 
+        policy.RequireAuthenticatedUser());
+
     // Enterprise Security Policies
     options.AddPolicy("Security.Face.Enroll", policy =>
         policy.RequireAssertion(ctx => ctx.User.HasClaim("permission", "security.face:enroll") || ctx.User.IsInRole("Administrator") || ctx.User.IsInRole("ADMIN") || ctx.User.IsInRole("SecurityAdmin")));

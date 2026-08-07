@@ -53,7 +53,7 @@ export const BiometricDebugDashboardModal: React.FC<BiometricDebugDashboardModal
             <h3 className="text-sm font-mono font-bold tracking-wide text-emerald-400 uppercase">
               Biometric Diagnostics & ONNX Neural Telemetry Dashboard
             </h3>
-            <Badge variant="outline" className="text-[10px] bg-slate-800 text-slate-300 border-slate-700">
+            <Badge variant="neutral" className="text-[10px] bg-slate-800 text-slate-300 border-slate-700">
               Dev Mode Only
             </Badge>
           </div>

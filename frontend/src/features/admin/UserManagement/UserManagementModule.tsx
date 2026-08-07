@@ -299,7 +299,7 @@ export const UserManagementModule: React.FC<UserManagementModuleProps> = ({ onTr
         <StatCard
           title="Total User Accounts"
           value={`${totalCount} Registered`}
-          badgeText="PostgreSQL DB"
+          badgeText="Active Directory"
           badgeVariant="primary"
           subLabel="Current Query Result"
           subValue={`Page ${pageNumber} of ${totalPages}`}
@@ -323,7 +323,7 @@ export const UserManagementModule: React.FC<UserManagementModuleProps> = ({ onTr
         <StatCard
           title="Face Biometrics Registry"
           value={`${Object.keys(faceStatusMap).length} Checked`}
-          badgeText="InsightFace ONNX"
+          badgeText="Biometric Security"
           badgeVariant="info"
           subLabel="Registered Profiles"
           subValue={`${(Object.values(faceStatusMap) as { status: string; version?: number }[]).filter((f) => f.status === 'Registered').length} Biometric Templates`}

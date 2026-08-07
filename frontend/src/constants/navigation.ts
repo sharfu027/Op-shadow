@@ -183,12 +183,10 @@ export const NAVIGATION_MENU: NavItem[] = [
     icon: 'Settings',
     requiredPermissions: ['manage:security'],
     children: [
-      { title: 'Security Center (IAM)', href: 'admin/security-center', icon: 'Layers', requiredPermissions: ['manage:security'] },
-      { title: 'Auth & Biometric Policies', href: 'admin/security-center/authentication', icon: 'Layers', requiredPermissions: ['manage:security'] },
-      { title: 'Device Security Policies', href: 'admin/security-center/device-policy', icon: 'Layers', requiredPermissions: ['manage:security'] },
-      { title: 'Password & Session Rules', href: 'admin/security-center/password-policy', icon: 'Layers', requiredPermissions: ['manage:security'] },
-      { title: 'Role Security Profiles', href: 'admin/security-center/security-profiles', icon: 'Layers', requiredPermissions: ['manage:security'] },
-      { title: 'Employee Overrides', href: 'admin/security-center/employee-overrides', icon: 'Layers', requiredPermissions: ['manage:security'] }
+      { title: 'Security Dashboard', href: 'admin/security-center', icon: 'Layers', requiredPermissions: ['manage:security'] },
+      { title: 'User Management', href: 'admin/security-center/user-management', icon: 'Users2', requiredPermissions: ['manage:users'] },
+      { title: 'Roles & Permissions', href: 'admin/security-center/security-profiles', icon: 'Layers', requiredPermissions: ['manage:security'] },
+      { title: 'Audit Logs', href: 'admin/security-center/audit-logs', icon: 'Layers', requiredPermissions: ['manage:security'] }
     ]
   }
 ];

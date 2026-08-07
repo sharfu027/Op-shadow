@@ -98,6 +98,10 @@ export const adminService = {
     return apiClient.get<RegisteredDevice[]>('/api/v1/admin/security/devices');
   },
 
+  async fetchDevices(): Promise<RegisteredDevice[]> {
+    return this.getRegisteredDevices();
+  },
+
   async registerDevice(payload: Partial<RegisteredDevice>): Promise<RegisteredDevice> {
     return apiClient.post<RegisteredDevice>('/api/v1/admin/security/devices', payload);
   },
@@ -213,30 +217,6 @@ export const adminService = {
     return apiClient.get<UserSession[]>('/api/v1/admin/sessions');
   },
 
-  // Roles & Permissions
-  async fetchRoles(params?: {
-    searchTerm?: string;
-    isActive?: boolean;
-    isSystem?: boolean;
-    pageNumber?: number;
-    pageSize?: number;
-  }): Promise<{ items: RoleDefinition[]; totalCount: number }> {
-    try {
-      return await apiClient.get('/api/v1/roles', { params });
-    } catch {
-      return { items: [], totalCount: 0 };
-    }
-  },
-
-  async getRoles(): Promise<RoleDefinition[]> {
-    const res = await this.fetchRoles({ pageSize: 100 });
-    return res.items || [];
-  },
-
-  async createRole(payload: Partial<RoleDefinition>): Promise<RoleDefinition> {
-    return apiClient.post<RoleDefinition>('/api/v1/roles', payload);
-  },
-
   async getPermissionMatrix(): Promise<PermissionItem[]> {
     return apiClient.get<PermissionItem[]>('/api/v1/permissions');
   },
@@ -277,5 +257,128 @@ export const adminService = {
   // Admin Metrics
   async getAdminMetrics(): Promise<AdminMetrics> {
     return apiClient.get<AdminMetrics>('/api/v1/admin/metrics');
+  },
+
+  // Role Security Profiles (RBAC Module)
+  async fetchRoles(params?: { searchTerm?: string; isActive?: boolean; isSystem?: boolean; pageNumber?: number; pageSize?: number; sortBy?: string; sortDescending?: boolean }) {
+    const query = new URLSearchParams();
+    if (params?.searchTerm) query.append('SearchTerm', params.searchTerm);
+    if (params?.isActive !== undefined) query.append('IsActive', String(params.isActive));
+    if (params?.isSystem !== undefined) query.append('IsSystem', String(params.isSystem));
+    if (params?.pageNumber) query.append('PageNumber', String(params.pageNumber));
+    if (params?.pageSize) query.append('PageSize', String(params.pageSize));
+    if (params?.sortBy) query.append('SortBy', params.sortBy);
+    if (params?.sortDescending !== undefined) query.append('SortDescending', String(params.sortDescending));
+
+    const queryString = query.toString();
+    return apiClient.get<any>(`/api/v1/roles${queryString ? `?${queryString}` : ''}`);
+  },
+
+  async getRoles(params?: any) {
+    return this.fetchRoles(params);
+  },
+
+  async getRoleStats(): Promise<any> {
+    return apiClient.get<any>('/api/v1/roles/stats');
+  },
+
+  async getAvailablePermissions(): Promise<any[]> {
+    return apiClient.get<any[]>('/api/v1/roles/permissions/available');
+  },
+
+  async getRoleById(roleId: string): Promise<any> {
+    return apiClient.get<any>(`/api/v1/roles/${roleId}`);
+  },
+
+  async createRole(payload: { name: string; code: string; description: string; isSystem?: boolean; priority?: number }): Promise<string> {
+    return apiClient.post<string>('/api/v1/roles', payload);
+  },
+
+  async updateRole(roleId: string, payload: { name: string; description: string; priority: number; isActive: boolean }): Promise<void> {
+    return apiClient.put<void>(`/api/v1/roles/${roleId}`, payload);
+  },
+
+  async deleteRole(roleId: string): Promise<void> {
+    return apiClient.delete<void>(`/api/v1/roles/${roleId}`);
+  },
+
+  async activateRole(roleId: string): Promise<void> {
+    return apiClient.patch<void>(`/api/v1/roles/${roleId}/activate`, {});
+  },
+
+  async deactivateRole(roleId: string): Promise<void> {
+    return apiClient.patch<void>(`/api/v1/roles/${roleId}/deactivate`, {});
+  },
+
+  async cloneRole(roleId: string, payload: { newName: string; newCode: string; description: string }): Promise<string> {
+    return apiClient.post<string>(`/api/v1/roles/${roleId}/clone`, payload);
+  },
+
+  async getRolePermissions(roleId: string): Promise<string[]> {
+    return apiClient.get<string[]>(`/api/v1/roles/${roleId}/permissions`);
+  },
+
+  async updateRolePermissions(roleId: string, permissionIds: string[]): Promise<void> {
+    return apiClient.put<void>(`/api/v1/roles/${roleId}/permissions`, { permissionIds });
+  },
+
+  async getRoleUsers(roleId: string): Promise<any[]> {
+    return apiClient.get<any[]>(`/api/v1/roles/${roleId}/users`);
+  },
+
+  async removeUserFromRole(roleId: string, userId: string): Promise<void> {
+    return apiClient.delete<void>(`/api/v1/roles/${roleId}/users/${userId}`);
+  },
+
+  // Audit Logs Module
+  async fetchAuditLogs(params?: {
+    searchTerm?: string;
+    category?: string;
+    eventType?: string;
+    module?: string;
+    result?: string;
+    startDate?: string;
+    endDate?: string;
+    pageNumber?: number;
+    pageSize?: number;
+    sortBy?: string;
+    sortDescending?: boolean;
+  }) {
+    const query = new URLSearchParams();
+    if (params?.searchTerm) query.append('SearchTerm', params.searchTerm);
+    if (params?.category) query.append('Category', params.category);
+    if (params?.eventType) query.append('EventType', params.eventType);
+    if (params?.module) query.append('Module', params.module);
+    if (params?.result) query.append('Result', params.result);
+    if (params?.startDate) query.append('StartDate', params.startDate);
+    if (params?.endDate) query.append('EndDate', params.endDate);
+    if (params?.pageNumber) query.append('PageNumber', String(params.pageNumber));
+    if (params?.pageSize) query.append('PageSize', String(params.pageSize));
+    if (params?.sortBy) query.append('SortBy', params.sortBy);
+    if (params?.sortDescending !== undefined) query.append('SortDescending', String(params.sortDescending));
+
+    const queryString = query.toString();
+    return apiClient.get<any>(`/api/v1/audit-logs${queryString ? `?${queryString}` : ''}`);
+  },
+
+  async getAuditLogStats(): Promise<any> {
+    return apiClient.get<any>('/api/v1/audit-logs/statistics');
+  },
+
+  async getAuditLogById(id: string): Promise<any> {
+    return apiClient.get<any>(`/api/v1/audit-logs/${id}`);
+  },
+
+  async exportAuditLogs(payload: {
+    format?: string;
+    searchTerm?: string;
+    category?: string;
+    eventType?: string;
+    module?: string;
+    result?: string;
+    startDate?: string;
+    endDate?: string;
+  }): Promise<Blob> {
+    return apiClient.postBlob('/api/v1/audit-logs/export', payload);
   }
 };

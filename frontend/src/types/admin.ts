@@ -15,6 +15,99 @@ import type { AuthenticationMode } from './auth';
 export type SecurityRequirementMode = 'Required' | 'Optional' | 'Disabled';
 export type { AuthenticationMode };
 
+export interface RoleDto {
+  id: string;
+  name: string;
+  code: string;
+  description: string;
+  isSystem: boolean;
+  priority: number;
+  isActive: boolean;
+  usersCount: number;
+  permissionCount: number;
+  permissionCodes?: string[];
+  createdAtUtc: string;
+  lastModifiedAtUtc?: string;
+  createdBy?: string;
+  modifiedBy?: string;
+}
+
+export interface RoleStatsDto {
+  totalRoles: number;
+  activeRoles: number;
+  inactiveRoles: number;
+  systemRoles: number;
+  customRoles: number;
+  totalUsersAssigned: number;
+  totalPermissionsCount: number;
+}
+
+export interface PermissionItemDto {
+  id: string;
+  code: string;
+  name: string;
+  description: string;
+  action: string;
+  displayOrder: number;
+}
+
+export interface PermissionCategoryDto {
+  id: string;
+  code: string;
+  name: string;
+  description: string;
+  displayOrder: number;
+  permissions: PermissionItemDto[];
+}
+
+export interface AuditLogDto {
+  id: string;
+  timestamp: string;
+  userId?: string;
+  username: string;
+  employeeId: string;
+  userDisplayName: string;
+  eventType: string;
+  category: string;
+  module: string;
+  description: string;
+  success: boolean;
+  failureReason?: string;
+  ipAddress: string;
+  device: string;
+  browser: string;
+  operatingSystem: string;
+  location: string;
+  endpoint?: string;
+  httpMethod?: string;
+  processingTimeMs?: number;
+  previousValue?: string;
+  newValue?: string;
+  createdAtUtc: string;
+}
+
+export interface AuditLogStatsDto {
+  totalEvents: number;
+  successfulLogins: number;
+  failedLogins: number;
+  faceVerifications: number;
+  userManagementEvents: number;
+  roleChanges: number;
+  securityExceptions: number;
+  criticalSecurityEvents: number;
+}
+
+export interface RoleUserDto {
+  userId: string;
+  userName: string;
+  displayName: string;
+  email: string;
+  department?: string;
+  branch?: string;
+  isActive: boolean;
+  lastLoginUtc?: string;
+}
+
 export interface FacePolicy {
   loginFace: SecurityRequirementMode;
   attendanceFace: SecurityRequirementMode;

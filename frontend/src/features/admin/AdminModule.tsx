@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Users,
   Shield,
@@ -40,6 +41,8 @@ import { WebcamEnrollmentModal } from './SecurityCenter/components/WebcamEnrollm
 import { FaceVerificationHistoryModal } from './SecurityCenter/components/FaceVerificationHistoryModal';
 import { BiometricDebugDashboardModal } from './SecurityCenter/components/BiometricDebugDashboardModal';
 import { UserManagementModule } from './UserManagement/UserManagementModule';
+import RoleSecurityProfilesModule from './RoleManagement/RoleSecurityProfilesModule';
+import AuditLogsModule from './AuditLogs/AuditLogsModule';
 import { authService } from '../../services/authService';
 import { adminService } from '../../services/adminService';
 
@@ -90,7 +93,21 @@ function toEmployeeSecurityDetails(u: UserAccount): EmployeeSecurityDetails {
 }
 
 export default function AdminModule({ onTriggerToast }: AdminModuleProps) {
-  const [activeTab, setActiveTab] = useState<TabOption>('security-center');
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const getTabFromPath = (pathname: string): TabOption => {
+    if (pathname.includes('user-management')) return 'employee-lifecycle';
+    if (pathname.includes('security-profiles')) return 'security-profiles';
+    if (pathname.includes('authentication')) return 'auth-policies';
+    if (pathname.includes('device-policy')) return 'device-policies';
+    if (pathname.includes('password-policy')) return 'password-policies';
+    if (pathname.includes('employee-overrides')) return 'employee-overrides';
+    if (pathname.includes('audit-logs')) return 'audit-trail';
+    return 'security-center';
+  };
+
+  const activeTab = getTabFromPath(location.pathname);
   const [searchQuery, setSearchQuery] = useState('');
   const [isExceptionModalOpen, setIsExceptionModalOpen] = useState(false);
 
@@ -272,10 +289,10 @@ export default function AdminModule({ onTriggerToast }: AdminModuleProps) {
     { id: 'auth-policies', label: 'Global Security Policies', icon: Key },
     { id: 'device-policies', label: 'Device Security', icon: Smartphone },
     { id: 'password-policies', label: 'Password & Session Rules', icon: Lock },
-    { id: 'security-profiles', label: 'Role Security Profiles', icon: Layers },
+    { id: 'security-profiles', label: 'Roles & Permissions', icon: Layers },
     { id: 'employee-overrides', label: 'Overrides & Exceptions', icon: Sliders },
     { id: 'employee-lifecycle', label: 'User Management', icon: Users },
-    { id: 'audit-trail', label: 'IAM Audit Log', icon: Activity }
+    { id: 'audit-trail', label: 'Audit Logs', icon: Activity }
   ];
 
   return (
@@ -289,29 +306,19 @@ export default function AdminModule({ onTriggerToast }: AdminModuleProps) {
         <StatCard title="Security Alerts & Violations" value={`${iamMetrics.securityAlertsCount} Alerts`} badgeText="GPS Fail: 1.2%" badgeVariant="warning" subLabel="Failed Logins Today" subValue={`${iamMetrics.failedLoginsTodayCount} Failed`} />
       </div>
 
-      {/* ── SECTION 2: IAM SUB-NAVIGATION TABS ── */}
-      <div className="bg-white p-2 rounded-lg border border-brand-border shadow-sm flex flex-wrap gap-1">
-        {tabsList.map(tab => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`px-3 py-2 rounded-md text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
-                isActive ? 'bg-brand-primary text-white shadow-xs' : 'text-brand-text-secondary hover:text-brand-text-primary hover:bg-brand-bg-secondary'
-              }`}
-            >
-              <Icon size={14} />
-              <span>{tab.label}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* ── TAB: Security Dashboard ── */}
+      {/* ── VIEW: True Security Control Dashboard ── */}
       {activeTab === 'security-center' && (
-        <SecurityDashboardPage exceptions={exceptions} devices={devices} />
+        <SecurityDashboardPage
+          exceptions={exceptions}
+          devices={devices}
+          onTriggerToast={onTriggerToast}
+          onNavigateToTab={(tab) => {
+            if (tab === 'employee-lifecycle') navigate('/admin/security-center/user-management');
+            else if (tab === 'security-profiles') navigate('/admin/security-center/security-profiles');
+            else if (tab === 'auth-policies') navigate('/admin/security-center/authentication');
+            else navigate('/admin/security-center');
+          }}
+        />
       )}
 
       {/* ── TAB: Global Security Policies ── */}
@@ -326,6 +333,16 @@ export default function AdminModule({ onTriggerToast }: AdminModuleProps) {
       {/* ── TAB: Production User Management ── */}
       {activeTab === 'employee-lifecycle' && (
         <UserManagementModule onTriggerToast={onTriggerToast} />
+      )}
+
+      {/* ── TAB: Role Security Profiles (RBAC Module) ── */}
+      {activeTab === 'security-profiles' && (
+        <RoleSecurityProfilesModule onTriggerToast={onTriggerToast} />
+      )}
+
+      {/* ── TAB: Production Audit Logs Module ── */}
+      {activeTab === 'audit-trail' && (
+        <AuditLogsModule onTriggerToast={onTriggerToast} />
       )}
 
       {/* ── MODAL: Temporary Security Exception ── */}
