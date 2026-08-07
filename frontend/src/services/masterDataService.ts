@@ -3,509 +3,180 @@ import { CompanyDto, BranchDto, DepartmentDto, DesignationDto, UnitOfMeasureDto,
 
 const API_BASE_URL = '/api/v1/masters';
 
-const getAuthToken = () => {
-  return typeof window !== 'undefined' ? localStorage.getItem('ink_erp_auth_token') || '' : '';
-};
-
-export async function fetchCompanies(params?: Record<string, string | number | boolean | undefined>): Promise<any> {
+// 1. Companies
+export async function fetchCompanies(params?: Record<string, any>): Promise<any> {
   return apiClient.get<any>(`${API_BASE_URL}/company`, { params });
 }
-
 export async function fetchCompanyById(id: string): Promise<CompanyDto> {
   return apiClient.get<CompanyDto>(`${API_BASE_URL}/company/${id}`);
 }
-
 export async function fetchCompanyLookup(): Promise<any[]> {
   return apiClient.get<any[]>(`${API_BASE_URL}/company/lookup`);
 }
-
 export async function createCompany(data: Partial<CompanyDto>): Promise<CompanyDto> {
   return apiClient.post<CompanyDto>(`${API_BASE_URL}/company`, data);
 }
-
 export async function updateCompany(id: string, data: Partial<CompanyDto>): Promise<CompanyDto> {
   return apiClient.put<CompanyDto>(`${API_BASE_URL}/company/${id}`, data);
 }
-
-export async function archiveCompany(id: string): Promise<CompanyDto> {
-  return apiClient.post<CompanyDto>(`${API_BASE_URL}/company/${id}/archive`);
-}
-
-export async function restoreCompany(id: string): Promise<CompanyDto> {
-  return apiClient.post<CompanyDto>(`${API_BASE_URL}/company/${id}/restore`);
-}
-
 export async function deleteCompany(id: string): Promise<void> {
   return apiClient.delete<void>(`${API_BASE_URL}/company/${id}`);
 }
 
-export async function fetchBranches(companyId?: string, search?: string, status?: string): Promise<BranchDto[]> {
-  try {
-    const params = new URLSearchParams();
-    if (companyId) params.append('companyId', companyId);
-    if (search) params.append('search', search);
-    if (status) params.append('status', status);
-
-    const response = await fetch(`${API_BASE_URL}/branch?${params.toString()}`, {
-      headers: {
-        'Accept': 'application/json',
-        'Authorization': `Bearer ${getAuthToken()}`
-      }
-    });
-
-    if (!response.ok) return [];
-    return await response.json();
-  } catch (err) {
-    console.error('Failed to fetch branches:', err);
-    return [];
-  }
+// 2. Branches
+export async function fetchBranches(params?: Record<string, any>): Promise<any> {
+  return apiClient.get<any>(`${API_BASE_URL}/branch`, { params });
+}
+export async function createBranch(data: any): Promise<any> {
+  return apiClient.post<any>(`${API_BASE_URL}/branch`, data);
+}
+export async function updateBranch(id: string, data: any): Promise<any> {
+  return apiClient.put<any>(`${API_BASE_URL}/branch/${id}`, data);
+}
+export async function deleteBranch(id: string): Promise<void> {
+  return apiClient.delete<void>(`${API_BASE_URL}/branch/${id}`);
 }
 
-export async function createBranch(data: Omit<BranchDto, 'id' | 'createdAtUtc' | 'companyName'>): Promise<BranchDto | null> {
-  try {
-    const response = await fetch(`${API_BASE_URL}/branch`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${getAuthToken()}`
-      },
-      body: JSON.stringify(data)
-    });
-
-    if (!response.ok) return null;
-    return await response.json();
-  } catch (err) {
-    console.error('Failed to create branch:', err);
-    return null;
-  }
+// 3. Departments
+export async function fetchDepartments(params?: Record<string, any>): Promise<any> {
+  return apiClient.get<any>(`${API_BASE_URL}/department`, { params });
+}
+export async function createDepartment(data: any): Promise<any> {
+  return apiClient.post<any>(`${API_BASE_URL}/department`, data);
+}
+export async function updateDepartment(id: string, data: any): Promise<any> {
+  return apiClient.put<any>(`${API_BASE_URL}/department/${id}`, data);
+}
+export async function deleteDepartment(id: string): Promise<void> {
+  return apiClient.delete<void>(`${API_BASE_URL}/department/${id}`);
 }
 
-export async function fetchDepartments(branchId?: string, search?: string, status?: string): Promise<DepartmentDto[]> {
-  try {
-    const params = new URLSearchParams();
-    if (branchId) params.append('branchId', branchId);
-    if (search) params.append('search', search);
-    if (status) params.append('status', status);
-
-    const response = await fetch(`${API_BASE_URL}/department?${params.toString()}`, {
-      headers: {
-        'Accept': 'application/json',
-        'Authorization': `Bearer ${getAuthToken()}`
-      }
-    });
-
-    if (!response.ok) return [];
-    return await response.json();
-  } catch (err) {
-    console.error('Failed to fetch departments:', err);
-    return [];
-  }
+// 4. Designations
+export async function fetchDesignations(params?: Record<string, any>): Promise<any> {
+  return apiClient.get<any>(`${API_BASE_URL}/designation`, { params });
+}
+export async function createDesignation(data: any): Promise<any> {
+  return apiClient.post<any>(`${API_BASE_URL}/designation`, data);
+}
+export async function updateDesignation(id: string, data: any): Promise<any> {
+  return apiClient.put<any>(`${API_BASE_URL}/designation/${id}`, data);
+}
+export async function deleteDesignation(id: string): Promise<void> {
+  return apiClient.delete<void>(`${API_BASE_URL}/designation/${id}`);
 }
 
-export async function createDepartment(data: Omit<DepartmentDto, 'id' | 'createdAtUtc' | 'branchName'>): Promise<DepartmentDto | null> {
-  try {
-    const response = await fetch(`${API_BASE_URL}/department`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${getAuthToken()}`
-      },
-      body: JSON.stringify(data)
-    });
-
-    if (!response.ok) return null;
-    return await response.json();
-  } catch (err) {
-    console.error('Failed to create department:', err);
-    return null;
-  }
+// 5. Units of Measure
+export async function fetchUnitsOfMeasure(params?: Record<string, any>): Promise<any> {
+  return apiClient.get<any>(`${API_BASE_URL}/uom`, { params });
+}
+export async function createUnitOfMeasure(data: any): Promise<any> {
+  return apiClient.post<any>(`${API_BASE_URL}/uom`, data);
+}
+export async function updateUnitOfMeasure(id: string, data: any): Promise<any> {
+  return apiClient.put<any>(`${API_BASE_URL}/uom/${id}`, data);
+}
+export async function deleteUnitOfMeasure(id: string): Promise<void> {
+  return apiClient.delete<void>(`${API_BASE_URL}/uom/${id}`);
 }
 
-export async function fetchDesignations(companyId?: string, search?: string, status?: string): Promise<DesignationDto[]> {
-  try {
-    const params = new URLSearchParams();
-    if (companyId) params.append('companyId', companyId);
-    if (search) params.append('search', search);
-    if (status) params.append('status', status);
-
-    const response = await fetch(`${API_BASE_URL}/designation?${params.toString()}`, {
-      headers: {
-        'Accept': 'application/json',
-        'Authorization': `Bearer ${getAuthToken()}`
-      }
-    });
-
-    if (!response.ok) return [];
-    return await response.json();
-  } catch (err) {
-    console.error('Failed to fetch designations:', err);
-    return [];
-  }
+// 6. Brands
+export async function fetchBrands(params?: Record<string, any>): Promise<any> {
+  return apiClient.get<any>(`${API_BASE_URL}/brand`, { params });
+}
+export async function createBrand(data: any): Promise<any> {
+  return apiClient.post<any>(`${API_BASE_URL}/brand`, data);
+}
+export async function updateBrand(id: string, data: any): Promise<any> {
+  return apiClient.put<any>(`${API_BASE_URL}/brand/${id}`, data);
+}
+export async function deleteBrand(id: string): Promise<void> {
+  return apiClient.delete<void>(`${API_BASE_URL}/brand/${id}`);
 }
 
-export async function createDesignation(data: Omit<DesignationDto, 'id' | 'createdAtUtc' | 'companyName'>): Promise<DesignationDto | null> {
-  try {
-    const response = await fetch(`${API_BASE_URL}/designation`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${getAuthToken()}`
-      },
-      body: JSON.stringify(data)
-    });
-
-    if (!response.ok) return null;
-    return await response.json();
-  } catch (err) {
-    console.error('Failed to create designation:', err);
-    return null;
-  }
+// 7. Categories
+export async function fetchCategories(params?: Record<string, any>): Promise<any> {
+  return apiClient.get<any>(`${API_BASE_URL}/category`, { params });
+}
+export async function createCategory(data: any): Promise<any> {
+  return apiClient.post<any>(`${API_BASE_URL}/category`, data);
+}
+export async function updateCategory(id: string, data: any): Promise<any> {
+  return apiClient.put<any>(`${API_BASE_URL}/category/${id}`, data);
+}
+export async function deleteCategory(id: string): Promise<void> {
+  return apiClient.delete<void>(`${API_BASE_URL}/category/${id}`);
 }
 
-export async function fetchUnitsOfMeasure(companyId?: string, search?: string, status?: string): Promise<UnitOfMeasureDto[]> {
-  try {
-    const params = new URLSearchParams();
-    if (companyId) params.append('companyId', companyId);
-    if (search) params.append('search', search);
-    if (status) params.append('status', status);
-
-    const response = await fetch(`${API_BASE_URL}/uom?${params.toString()}`, {
-      headers: {
-        'Accept': 'application/json',
-        'Authorization': `Bearer ${getAuthToken()}`
-      }
-    });
-
-    if (!response.ok) return [];
-    return await response.json();
-  } catch (err) {
-    console.error('Failed to fetch UOMs:', err);
-    return [];
-  }
+// 8. Warehouses
+export async function fetchWarehouses(params?: Record<string, any>): Promise<any> {
+  return apiClient.get<any>(`${API_BASE_URL}/warehouse`, { params });
+}
+export async function createWarehouse(data: any): Promise<any> {
+  return apiClient.post<any>(`${API_BASE_URL}/warehouse`, data);
+}
+export async function updateWarehouse(id: string, data: any): Promise<any> {
+  return apiClient.put<any>(`${API_BASE_URL}/warehouse/${id}`, data);
+}
+export async function deleteWarehouse(id: string): Promise<void> {
+  return apiClient.delete<void>(`${API_BASE_URL}/warehouse/${id}`);
 }
 
-export async function createUnitOfMeasure(data: Omit<UnitOfMeasureDto, 'id' | 'createdAtUtc' | 'companyName'>): Promise<UnitOfMeasureDto | null> {
-  try {
-    const response = await fetch(`${API_BASE_URL}/uom`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${getAuthToken()}`
-      },
-      body: JSON.stringify(data)
-    });
-
-    if (!response.ok) return null;
-    return await response.json();
-  } catch (err) {
-    console.error('Failed to create UOM:', err);
-    return null;
-  }
+// 9. Products
+export async function fetchProducts(params?: Record<string, any>): Promise<any> {
+  return apiClient.get<any>(`${API_BASE_URL}/product`, { params });
+}
+export async function createProduct(data: any): Promise<any> {
+  return apiClient.post<any>(`${API_BASE_URL}/product`, data);
+}
+export async function updateProduct(id: string, data: any): Promise<any> {
+  return apiClient.put<any>(`${API_BASE_URL}/product/${id}`, data);
+}
+export async function deleteProduct(id: string): Promise<void> {
+  return apiClient.delete<void>(`${API_BASE_URL}/product/${id}`);
 }
 
-export async function fetchBrands(companyId?: string, search?: string, status?: string): Promise<BrandDto[]> {
-  try {
-    const params = new URLSearchParams();
-    if (companyId) params.append('companyId', companyId);
-    if (search) params.append('search', search);
-    if (status) params.append('status', status);
-
-    const response = await fetch(`${API_BASE_URL}/brand?${params.toString()}`, {
-      headers: {
-        'Accept': 'application/json',
-        'Authorization': `Bearer ${getAuthToken()}`
-      }
-    });
-
-    if (!response.ok) return [];
-    return await response.json();
-  } catch (err) {
-    console.error('Failed to fetch brands:', err);
-    return [];
-  }
+// 10. Suppliers
+export async function fetchSuppliers(params?: Record<string, any>): Promise<any> {
+  return apiClient.get<any>(`${API_BASE_URL}/supplier`, { params });
+}
+export async function createSupplier(data: any): Promise<any> {
+  return apiClient.post<any>(`${API_BASE_URL}/supplier`, data);
+}
+export async function updateSupplier(id: string, data: any): Promise<any> {
+  return apiClient.put<any>(`${API_BASE_URL}/supplier/${id}`, data);
+}
+export async function deleteSupplier(id: string): Promise<void> {
+  return apiClient.delete<void>(`${API_BASE_URL}/supplier/${id}`);
 }
 
-export async function createBrand(data: Omit<BrandDto, 'id' | 'createdAtUtc' | 'companyName'>): Promise<BrandDto | null> {
-  try {
-    const response = await fetch(`${API_BASE_URL}/brand`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${getAuthToken()}`
-      },
-      body: JSON.stringify(data)
-    });
-
-    if (!response.ok) return null;
-    return await response.json();
-  } catch (err) {
-    console.error('Failed to create brand:', err);
-    return null;
-  }
+// 11. Customers
+export async function fetchCustomers(params?: Record<string, any>): Promise<any> {
+  return apiClient.get<any>(`${API_BASE_URL}/customer`, { params });
+}
+export async function createCustomer(data: any): Promise<any> {
+  return apiClient.post<any>(`${API_BASE_URL}/customer`, data);
+}
+export async function updateCustomer(id: string, data: any): Promise<any> {
+  return apiClient.put<any>(`${API_BASE_URL}/customer/${id}`, data);
+}
+export async function deleteCustomer(id: string): Promise<void> {
+  return apiClient.delete<void>(`${API_BASE_URL}/customer/${id}`);
 }
 
-export async function fetchCategories(companyId?: string, search?: string, status?: string): Promise<CategoryDto[]> {
-  try {
-    const params = new URLSearchParams();
-    if (companyId) params.append('companyId', companyId);
-    if (search) params.append('search', search);
-    if (status) params.append('status', status);
-
-    const response = await fetch(`${API_BASE_URL}/category?${params.toString()}`, {
-      headers: {
-        'Accept': 'application/json',
-        'Authorization': `Bearer ${getAuthToken()}`
-      }
-    });
-
-    if (!response.ok) return [];
-    return await response.json();
-  } catch (err) {
-    console.error('Failed to fetch categories:', err);
-    return [];
-  }
+// 12. Employees
+export async function fetchEmployees(params?: Record<string, any>): Promise<any> {
+  return apiClient.get<any>(`${API_BASE_URL}/employee`, { params });
+}
+export async function createEmployee(data: any): Promise<any> {
+  return apiClient.post<any>(`${API_BASE_URL}/employee`, data);
+}
+export async function updateEmployee(id: string, data: any): Promise<any> {
+  return apiClient.put<any>(`${API_BASE_URL}/employee/${id}`, data);
+}
+export async function deleteEmployee(id: string): Promise<void> {
+  return apiClient.delete<void>(`${API_BASE_URL}/employee/${id}`);
 }
 
-export async function createCategory(data: Omit<CategoryDto, 'id' | 'createdAtUtc' | 'companyName' | 'parentCategoryName'>): Promise<CategoryDto | null> {
-  try {
-    const response = await fetch(`${API_BASE_URL}/category`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${getAuthToken()}`
-      },
-      body: JSON.stringify(data)
-    });
-
-    if (!response.ok) return null;
-    return await response.json();
-  } catch (err) {
-    console.error('Failed to create category:', err);
-    return null;
-  }
-}
-
-export async function fetchWarehouses(companyId?: string, branchId?: string, search?: string, status?: string): Promise<WarehouseDto[]> {
-  try {
-    const params = new URLSearchParams();
-    if (companyId) params.append('companyId', companyId);
-    if (branchId) params.append('branchId', branchId);
-    if (search) params.append('search', search);
-    if (status) params.append('status', status);
-
-    const response = await fetch(`${API_BASE_URL}/warehouse?${params.toString()}`, {
-      headers: {
-        'Accept': 'application/json',
-        'Authorization': `Bearer ${getAuthToken()}`
-      }
-    });
-
-    if (!response.ok) return [];
-    return await response.json();
-  } catch (err) {
-    console.error('Failed to fetch warehouses:', err);
-    return [];
-  }
-}
-
-export async function createWarehouse(data: Omit<WarehouseDto, 'id' | 'createdAtUtc'>): Promise<WarehouseDto | null> {
-  try {
-    const response = await fetch(`${API_BASE_URL}/warehouse`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${getAuthToken()}`
-      },
-      body: JSON.stringify(data)
-    });
-
-    if (!response.ok) return null;
-    return await response.json();
-  } catch (err) {
-    console.error('Failed to create warehouse:', err);
-    return null;
-  }
-}
-
-export async function fetchProducts(companyId?: string, categoryId?: string, brandId?: string, search?: string, status?: string): Promise<ProductDto[]> {
-  try {
-    const params = new URLSearchParams();
-    if (companyId) params.append('companyId', companyId);
-    if (categoryId) params.append('categoryId', categoryId);
-    if (brandId) params.append('brandId', brandId);
-    if (search) params.append('search', search);
-    if (status) params.append('status', status);
-
-    const response = await fetch(`${API_BASE_URL}/product?${params.toString()}`, {
-      headers: {
-        'Accept': 'application/json',
-        'Authorization': `Bearer ${getAuthToken()}`
-      }
-    });
-
-    if (!response.ok) return [];
-    return await response.json();
-  } catch (err) {
-    console.error('Failed to fetch products:', err);
-    return [];
-  }
-}
-
-export async function createProduct(data: Omit<ProductDto, 'id' | 'createdAtUtc' | 'companyName' | 'categoryName' | 'brandName' | 'baseUomCode'>): Promise<ProductDto | null> {
-  try {
-    const response = await fetch(`${API_BASE_URL}/product`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${getAuthToken()}`
-      },
-      body: JSON.stringify(data)
-    });
-
-    if (!response.ok) return null;
-    return await response.json();
-  } catch (err) {
-    console.error('Failed to create product:', err);
-    return null;
-  }
-}
-
-export async function fetchSuppliers(companyId?: string, search?: string, status?: string): Promise<SupplierDto[]> {
-  try {
-    const params = new URLSearchParams();
-    if (companyId) params.append('companyId', companyId);
-    if (search) params.append('search', search);
-    if (status) params.append('status', status);
-
-    const response = await fetch(`${API_BASE_URL}/supplier?${params.toString()}`, {
-      headers: {
-        'Accept': 'application/json',
-        'Authorization': `Bearer ${getAuthToken()}`
-      }
-    });
-
-    if (!response.ok) return [];
-    return await response.json();
-  } catch (err) {
-    console.error('Failed to fetch suppliers:', err);
-    return [];
-  }
-}
-
-export async function createSupplier(data: Omit<SupplierDto, 'id' | 'createdAtUtc' | 'companyName'>): Promise<SupplierDto | null> {
-  try {
-    const response = await fetch(`${API_BASE_URL}/supplier`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${getAuthToken()}`
-      },
-      body: JSON.stringify(data)
-    });
-
-    if (!response.ok) return null;
-    return await response.json();
-  } catch (err) {
-    console.error('Failed to create supplier:', err);
-    return null;
-  }
-}
-
-export async function fetchCustomers(companyId?: string, search?: string, status?: string): Promise<CustomerDto[]> {
-  try {
-    const params = new URLSearchParams();
-    if (companyId) params.append('companyId', companyId);
-    if (search) params.append('search', search);
-    if (status) params.append('status', status);
-
-    const response = await fetch(`${API_BASE_URL}/customer?${params.toString()}`, {
-      headers: {
-        'Accept': 'application/json',
-        'Authorization': `Bearer ${getAuthToken()}`
-      }
-    });
-
-    if (!response.ok) return [];
-    return await response.json();
-  } catch (err) {
-    console.error('Failed to fetch customers:', err);
-    return [];
-  }
-}
-
-export async function createCustomer(data: Omit<CustomerDto, 'id' | 'createdAtUtc' | 'companyName'>): Promise<CustomerDto | null> {
-  try {
-    const response = await fetch(`${API_BASE_URL}/customer`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${getAuthToken()}`
-      },
-      body: JSON.stringify(data)
-    });
-
-    if (!response.ok) return null;
-    return await response.json();
-  } catch (err) {
-    console.error('Failed to create customer:', err);
-    return null;
-  }
-}
-
-export async function fetchEmployees(companyId?: string, branchId?: string, departmentId?: string, search?: string, status?: string): Promise<EmployeeDto[]> {
-  try {
-    const params = new URLSearchParams();
-    if (companyId) params.append('companyId', companyId);
-    if (branchId) params.append('branchId', branchId);
-    if (departmentId) params.append('departmentId', departmentId);
-    if (search) params.append('search', search);
-    if (status) params.append('status', status);
-
-    const response = await fetch(`${API_BASE_URL}/employee?${params.toString()}`, {
-      headers: {
-        'Accept': 'application/json',
-        'Authorization': `Bearer ${getAuthToken()}`
-      }
-    });
-
-    if (!response.ok) return [];
-    return await response.json();
-  } catch (err) {
-    console.error('Failed to fetch employees:', err);
-    return [];
-  }
-}
-
-export async function createEmployee(data: Omit<EmployeeDto, 'id' | 'createdAtUtc' | 'companyName' | 'branchName' | 'departmentName' | 'designationTitle' | 'fullName'>): Promise<EmployeeDto | null> {
-  try {
-    const response = await fetch(`${API_BASE_URL}/employee`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${getAuthToken()}`
-      },
-      body: JSON.stringify(data)
-    });
-
-    if (!response.ok) return null;
-    return await response.json();
-  } catch (err) {
-    console.error('Failed to create employee:', err);
-    return null;
-  }
-}
-
-export async function deleteMasterEntity(entityEndpoint: string, id: string): Promise<boolean> {
-  try {
-    const response = await fetch(`${API_BASE_URL}/${entityEndpoint}/${id}`, {
-      method: 'DELETE',
-      headers: {
-        'Authorization': `Bearer ${getAuthToken()}`
-      }
-    });
-    return response.ok;
-  } catch (err) {
-    console.error(`Failed to delete ${entityEndpoint} record ${id}:`, err);
-    return false;
-  }
+export async function deleteMasterEntity(entityEndpoint: string, id: string): Promise<void> {
+  return apiClient.delete<void>(`${API_BASE_URL}/${entityEndpoint}/${id}`);
 }

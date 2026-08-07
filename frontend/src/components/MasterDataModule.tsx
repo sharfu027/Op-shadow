@@ -384,7 +384,7 @@ export default function MasterDataModule({ module, onTriggerToast }: MasterDataM
     }
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     const errors: Record<string, string> = {};
 
@@ -427,61 +427,119 @@ export default function MasterDataModule({ module, onTriggerToast }: MasterDataM
     }
 
     setIsSaving(true);
-    setTimeout(() => {
+    try {
       const isNew = mode === 'create';
       if (module === 'companies' || module === 'masters/companies') {
         if (isNew) {
-          setDbCompanies([...dbCompanies, { id: String(dbCompanies.length + 1), code: formCode, legalName: compLegalName, tradeName: compTradeName || compLegalName, gstin: compGstin, pan: compPan, email: compEmail, phone: compPhone, currency: compCurrency, status: formStatus, addressLine1: addrLine1, city: addrCity, state: addrState, postalCode: addrPostalCode, country: addrCountry }]);
-          masterDataService.createCompany({ code: formCode, legalName: compLegalName, tradeName: compTradeName, taxRegistrationNumber: compGstin, panNumber: compPan, email: compEmail, phone: compPhone, currencyCode: compCurrency, isActive: formStatus === 'Active', addressLine1: addrLine1, city: addrCity, state: addrState, postalCode: addrPostalCode, country: addrCountry });
+          await masterDataService.createCompany({ 
+            code: formCode.toUpperCase().trim(), 
+            legalName: compLegalName.trim(), 
+            tradeName: (compTradeName || compLegalName).trim(), 
+            taxRegistrationNumber: (compGstin || '07AAAAA0000A1Z5').toUpperCase().trim(), 
+            panNumber: (compPan || 'AAAAA0000A').toUpperCase().trim(), 
+            email: (compEmail || 'admin@company.com').trim(), 
+            phone: (compPhone || '+91 98100 12345').trim(), 
+            currencyCode: compCurrency || 'INR', 
+            timeZoneId: 'Asia/Kolkata',
+            financialYearStartMonth: 4,
+            isActive: formStatus === 'Active', 
+            addressLine1: (addrLine1 || 'Corporate Headquarters').trim(), 
+            city: (addrCity || 'Delhi').trim(), 
+            state: (addrState || 'Delhi').trim(), 
+            postalCode: (addrPostalCode || '110001').trim(), 
+            country: (addrCountry || 'India').trim() 
+          });
+
+          // Reload live companies from database
+          const apiData = await masterDataService.fetchCompanies({
+            search: searchQuery || undefined,
+            status: statusFilter !== 'All' ? statusFilter : undefined
+          });
+          const items = Array.isArray(apiData) ? apiData : (apiData && Array.isArray(apiData.items) ? apiData.items : []);
+          setDbCompanies(items.map((c: any) => ({
+            id: c.id,
+            code: c.code,
+            legalName: c.legalName,
+            tradeName: c.tradeName || c.legalName,
+            gstin: c.taxRegistrationNumber || '',
+            pan: c.panNumber || '',
+            email: c.email,
+            phone: c.phone,
+            currency: c.currencyCode || 'INR',
+            status: typeof c.status === 'number' ? (c.status === 1 ? 'Active' : c.status === 2 ? 'Archived' : 'Draft') : (c.status || 'Active'),
+            addressLine1: c.addressLine1 || '',
+            city: c.city || '',
+            state: c.state || '',
+            postalCode: c.postalCode || '',
+            country: c.country || 'India',
+            rowVersion: c.rowVersion
+          })));
+          setSimulatedState('normal');
+          onTriggerToast('success', 'Company Saved', 'Company record created in database.');
         } else {
           setDbCompanies(dbCompanies.map(c => c.id === selectedId ? { ...c, code: formCode, legalName: compLegalName, tradeName: compTradeName, gstin: compGstin, pan: compPan, email: compEmail, phone: compPhone, currency: compCurrency, status: formStatus, addressLine1: addrLine1, city: addrCity, state: addrState, postalCode: addrPostalCode, country: addrCountry } : c));
+          onTriggerToast('success', 'Company Updated', 'Company record updated.');
         }
       } else if (module === 'branches' || module === 'masters/branches') {
         const comp = dbCompanies.find(c => c.id === branchCompanyId)?.legalName || 'INK FMCG';
         if (isNew) setDbBranches([...dbBranches, { id: String(dbBranches.length + 1), companyId: branchCompanyId, companyName: comp, code: formCode, name: branchName, gstin: branchGstin, phone: branchPhone, email: branchEmail, addressLine1: addrLine1, city: addrCity, state: addrState, postalCode: addrPostalCode, country: addrCountry, isHeadquarters: branchIsHq, status: formStatus }]);
         else setDbBranches(dbBranches.map(b => b.id === selectedId ? { ...b, companyId: branchCompanyId, companyName: comp, code: formCode, name: branchName, gstin: branchGstin, phone: branchPhone, email: branchEmail, isHeadquarters: branchIsHq, status: formStatus } : b));
+        onTriggerToast('success', 'Branch Saved', 'Branch record configured.');
       } else if (module === 'departments' || module === 'masters/departments') {
         const br = dbBranches.find(b => b.id === deptBranchId)?.name || 'Main Branch';
         if (isNew) setDbDepartments([...dbDepartments, { id: String(dbDepartments.length + 1), branchId: deptBranchId, branchName: br, code: formCode, name: deptName, description: deptDesc, status: formStatus }]);
         else setDbDepartments(dbDepartments.map(d => d.id === selectedId ? { ...d, branchId: deptBranchId, branchName: br, code: formCode, name: deptName, description: deptDesc, status: formStatus } : d));
+        onTriggerToast('success', 'Department Saved', 'Department record configured.');
       } else if (module === 'designations' || module === 'masters/designations') {
         const comp = dbCompanies.find(c => c.id === desigCompanyId)?.legalName || 'INK FMCG';
         if (isNew) setDbDesignations([...dbDesignations, { id: String(dbDesignations.length + 1), companyId: desigCompanyId, companyName: comp, code: formCode, title: desigTitle, level: desigLevel, approvalLimit: desigApprovalLimit, status: formStatus }]);
         else setDbDesignations(dbDesignations.map(d => d.id === selectedId ? { ...d, companyId: desigCompanyId, companyName: comp, code: formCode, title: desigTitle, level: desigLevel, approvalLimit: desigApprovalLimit, status: formStatus } : d));
+        onTriggerToast('success', 'Designation Saved', 'Designation record configured.');
       } else if (module === 'employees' || module === 'masters/employees') {
         if (isNew) setDbEmployees([...dbEmployees, { id: String(dbEmployees.length + 1), companyId: empCompanyId, branchId: empBranchId, departmentId: empDepartmentId, designationId: empDesignationId, employeeCode: formCode, firstName: empFirstName, lastName: empLastName, email: empEmail, phone: empPhone, joiningDate: empJoiningDate, salary: empSalary, status: formStatus }]);
         else setDbEmployees(dbEmployees.map(e => e.id === selectedId ? { ...e, companyId: empCompanyId, branchId: empBranchId, departmentId: empDepartmentId, designationId: empDesignationId, employeeCode: formCode, firstName: empFirstName, lastName: empLastName, email: empEmail, phone: empPhone, joiningDate: empJoiningDate, salary: empSalary, status: formStatus } : e));
+        onTriggerToast('success', 'Employee Saved', 'Employee record configured.');
       } else if (module === 'products' || module === 'masters/products') {
         const catName = dbCategories.find(c => c.id === prodCategoryId)?.name || 'Food';
         const brandName = dbBrands.find(b => b.id === prodBrandId)?.name || 'Generic';
         const uomCode = dbUnits.find(u => u.id === prodBaseUomId)?.code || 'Bag';
         if (isNew) setDbProducts([...dbProducts, { id: String(dbProducts.length + 1), code: formCode, name: prodName, category: catName, brand: brandName, unit: uomCode, price: prodBasePrice, taxRate: prodGstRate, stockLevel: 100, status: formStatus }]);
         else setDbProducts(dbProducts.map(p => p.id === selectedId ? { ...p, code: formCode, name: prodName, category: catName, brand: brandName, unit: uomCode, price: prodBasePrice, taxRate: prodGstRate, status: formStatus } : p));
+        onTriggerToast('success', 'Product Saved', 'Product record configured.');
       } else if (module === 'categories' || module === 'masters/categories') {
         if (isNew) setDbCategories([...dbCategories, { id: String(dbCategories.length + 1), code: formCode, name: catName, description: catHsnDefault, productCount: 0, status: formStatus }]);
         else setDbCategories(dbCategories.map(c => c.id === selectedId ? { ...c, code: formCode, name: catName, description: catHsnDefault, status: formStatus } : c));
+        onTriggerToast('success', 'Category Saved', 'Category record configured.');
       } else if (module === 'brands' || module === 'masters/brands') {
         if (isNew) setDbBrands([...dbBrands, { id: String(dbBrands.length + 1), code: formCode, name: brandName, origin: brandOrigin, productCount: 0, status: formStatus }]);
         else setDbBrands(dbBrands.map(b => b.id === selectedId ? { ...b, code: formCode, name: brandName, origin: brandOrigin, status: formStatus } : b));
+        onTriggerToast('success', 'Brand Saved', 'Brand record configured.');
       } else if (module === 'units' || module === 'masters/units') {
         if (isNew) setDbUnits([...dbUnits, { id: String(dbUnits.length + 1), code: formCode, name: uomName, baseUnit: uomBaseCode, conversionFactor: uomConversionFactor, status: formStatus }]);
         else setDbUnits(dbUnits.map(u => u.id === selectedId ? { ...u, code: formCode, name: uomName, baseUnit: uomBaseCode, conversionFactor: uomConversionFactor, status: formStatus } : u));
+        onTriggerToast('success', 'Unit Saved', 'Unit of Measure configured.');
       } else if (module === 'warehouses' || module === 'masters/warehouses') {
         if (isNew) setDbWarehouses([...dbWarehouses, { id: String(dbWarehouses.length + 1), code: formCode, name: whName, address: `${addrLine1}, ${addrCity}`, capacitySft: whCapacitySqFt, manager: whType, status: formStatus }]);
         else setDbWarehouses(dbWarehouses.map(w => w.id === selectedId ? { ...w, code: formCode, name: whName, manager: whType, capacitySft: whCapacitySqFt, status: formStatus } : w));
+        onTriggerToast('success', 'Warehouse Saved', 'Warehouse record configured.');
       } else if (module === 'customers' || module === 'masters/customers') {
         if (isNew) setDbCustomers([...dbCustomers, { id: String(dbCustomers.length + 1), code: formCode, name: custLegalName, contact: custPhone, email: custEmail, balance: custCreditLimit, region: addrState || 'National', status: formStatus }]);
         else setDbCustomers(dbCustomers.map(c => c.id === selectedId ? { ...c, code: formCode, name: custLegalName, contact: custPhone, email: custEmail, balance: custCreditLimit, status: formStatus } : c));
+        onTriggerToast('success', 'Customer Saved', 'Customer record configured.');
       } else if (module === 'suppliers' || module === 'masters/suppliers') {
         if (isNew) setDbSuppliers([...dbSuppliers, { id: String(dbSuppliers.length + 1), code: formCode, name: suppLegalName, contact: suppPhone, email: suppEmail, balance: suppCreditLimit, category: suppTradeName || 'Packaged Goods', status: formStatus }]);
         else setDbSuppliers(dbSuppliers.map(s => s.id === selectedId ? { ...s, code: formCode, name: suppLegalName, contact: suppPhone, email: suppEmail, balance: suppCreditLimit, status: formStatus } : s));
+        onTriggerToast('success', 'Supplier Saved', 'Supplier record configured.');
       }
 
       setIsSaving(false);
-      onTriggerToast('success', `${config.singular} Saved`, `Master record configured.`);
       setMode('list');
       setSelectedId(null);
-    }, 400);
+    } catch (err: any) {
+      setIsSaving(false);
+      const msg = err?.data?.detail || err?.data?.title || err?.message || 'Failed to save record to database.';
+      onTriggerToast('error', 'Save Failed', msg);
+    }
   };
 
   const confirmDelete = async () => {

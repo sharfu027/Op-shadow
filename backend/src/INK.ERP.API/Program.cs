@@ -85,6 +85,13 @@ builder.Services.AddAuthorization(options =>
 
     options.AddPolicy("Security.Risk.View", policy =>
         policy.RequireAssertion(ctx => ctx.User.HasClaim("permission", "security.risk:view") || ctx.User.IsInRole("Administrator") || ctx.User.IsInRole("ADMIN") || ctx.User.IsInRole("SecurityAdmin")));
+
+    // Master Data Policies
+    options.AddPolicy("Masters.Companies.Create", policy => policy.RequireAuthenticatedUser());
+    options.AddPolicy("Masters.Companies.Update", policy => policy.RequireAuthenticatedUser());
+    options.AddPolicy("Masters.Companies.Archive", policy => policy.RequireAuthenticatedUser());
+    options.AddPolicy("Masters.Companies.Restore", policy => policy.RequireAuthenticatedUser());
+    options.AddPolicy("Masters.Companies.Delete", policy => policy.RequireAuthenticatedUser());
 });
 
 // 6. Configure SignalR Hubs

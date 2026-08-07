@@ -27,6 +27,8 @@ export interface CompanyDto {
   postalCode: string;
   country: string;
   isActive: boolean;
+  timeZoneId?: string;
+  financialYearStartMonth?: number;
   createdAtUtc: string;
 }
 
