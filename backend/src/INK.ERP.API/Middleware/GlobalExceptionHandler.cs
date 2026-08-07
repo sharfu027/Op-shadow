@@ -1,5 +1,8 @@
 using Microsoft.AspNetCore.Diagnostics;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using INK.ERP.Application.Common.Exceptions;
 
 namespace INK.ERP.API.Middleware;
@@ -32,11 +35,34 @@ public sealed class GlobalExceptionHandler : IExceptionHandler
             problemDetails.Detail = validationException.Message;
             problemDetails.Extensions.Add("errors", validationException.Errors);
         }
+        else if (exception is DbUpdateException dbUpdateEx && dbUpdateEx.InnerException is PostgresException pgEx && pgEx.SqlState == "23505")
+        {
+            problemDetails.Status = StatusCodes.Status409Conflict;
+            problemDetails.Title = "Duplicate Record Conflict";
+
+            var constraint = pgEx.ConstraintName ?? string.Empty;
+            if (constraint.Contains("TaxRegistrationNumber", StringComparison.OrdinalIgnoreCase))
+            {
+                problemDetails.Detail = "A company with this Tax Registration (GSTIN) already exists.";
+            }
+            else if (constraint.Contains("Code", StringComparison.OrdinalIgnoreCase))
+            {
+                problemDetails.Detail = "A record with this Code identifier already exists.";
+            }
+            else if (constraint.Contains("LegalName", StringComparison.OrdinalIgnoreCase))
+            {
+                problemDetails.Detail = "A record with this Legal Name already exists.";
+            }
+            else
+            {
+                problemDetails.Detail = "A record with these unique details already exists in the system.";
+            }
+        }
         else
         {
             problemDetails.Status = StatusCodes.Status500InternalServerError;
-            problemDetails.Title = exception.GetType().FullName ?? "Internal Server Error";
-            problemDetails.Detail = exception.ToString();
+            problemDetails.Title = "Internal Server Error";
+            problemDetails.Detail = exception.Message;
         }
 
         httpContext.Response.StatusCode = problemDetails.Status.Value;

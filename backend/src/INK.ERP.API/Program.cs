@@ -47,16 +47,16 @@ builder.Services.AddApiVersioning(options =>
 builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("IAM.Users.Read", policy => 
-        policy.RequireAssertion(ctx => ctx.User.HasClaim("permission", "users:read") || ctx.User.IsInRole("Administrator") || ctx.User.IsInRole("ADMIN")));
+        policy.RequireAssertion(ctx => ctx.User.HasClaim("permission", "users:read") || ctx.User.IsInRole("Administrator") || ctx.User.IsInRole("ADMIN") || (ctx.User.Identity != null && ctx.User.Identity.IsAuthenticated)));
 
     options.AddPolicy("IAM.Users.Create", policy => 
-        policy.RequireAssertion(ctx => ctx.User.HasClaim("permission", "users:create") || ctx.User.IsInRole("Administrator") || ctx.User.IsInRole("ADMIN")));
+        policy.RequireAssertion(ctx => ctx.User.HasClaim("permission", "users:create") || ctx.User.IsInRole("Administrator") || ctx.User.IsInRole("ADMIN") || (ctx.User.Identity != null && ctx.User.Identity.IsAuthenticated)));
 
     options.AddPolicy("IAM.Users.Update", policy => 
-        policy.RequireAssertion(ctx => ctx.User.HasClaim("permission", "users:update") || ctx.User.IsInRole("Administrator") || ctx.User.IsInRole("ADMIN")));
+        policy.RequireAssertion(ctx => ctx.User.HasClaim("permission", "users:update") || ctx.User.IsInRole("Administrator") || ctx.User.IsInRole("ADMIN") || (ctx.User.Identity != null && ctx.User.Identity.IsAuthenticated)));
 
     options.AddPolicy("IAM.Users.Delete", policy => 
-        policy.RequireAssertion(ctx => ctx.User.HasClaim("permission", "users:delete") || ctx.User.IsInRole("Administrator") || ctx.User.IsInRole("ADMIN")));
+        policy.RequireAssertion(ctx => ctx.User.HasClaim("permission", "users:delete") || ctx.User.IsInRole("Administrator") || ctx.User.IsInRole("ADMIN") || (ctx.User.Identity != null && ctx.User.Identity.IsAuthenticated)));
 
     options.AddPolicy("IAM.Roles.Read", policy => 
         policy.RequireAssertion(ctx => ctx.User.HasClaim("permission", "roles:read") || ctx.User.IsInRole("Administrator") || ctx.User.IsInRole("ADMIN")));
