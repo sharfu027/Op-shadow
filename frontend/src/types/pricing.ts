@@ -6,6 +6,8 @@ export interface PriceListItem {
   productId: string;
   productCode?: string;
   productName?: string;
+  sku?: string;
+  uom?: string;
   basePrice: number;
   costPrice?: number;
   wholesalePrice?: number;
@@ -15,6 +17,7 @@ export interface PriceListItem {
   currencyCode?: string;
   effectiveDate?: string;
   isActive?: boolean;
+  status?: 'Active' | 'Disabled';
 }
 
 export interface PriceList {
@@ -22,7 +25,7 @@ export interface PriceList {
   companyId?: string;
   code?: string;
   name: string;
-  type?: 'Standard' | 'Distributor' | 'Retail' | 'Special';
+  type?: 'Retail' | 'Wholesale' | 'Distributor' | 'Customer Specific' | 'Promotional' | 'Internal Transfer' | 'Standard' | 'Special';
   currency?: string;
   description?: string;
   effectiveFrom?: string;
@@ -34,7 +37,12 @@ export interface PriceList {
   concurrencyToken?: string;
   isDeleted?: boolean;
   createdAtUtc?: string;
+  createdBy?: string;
+  createdByEmail?: string;
   lastModifiedAtUtc?: string;
+  lastModifiedBy?: string;
+  publishedBy?: string;
+  publishedAtUtc?: string;
   itemsCount?: number;
   items?: PriceListItem[];
 }

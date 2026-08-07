@@ -24,7 +24,13 @@ import {
   FileText,
   Building2,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Copy,
+  Clock,
+  UserCheck,
+  ShieldCheck,
+  Check,
+  Boxes
 } from 'lucide-react';
 import {
   PriceList,
@@ -39,6 +45,7 @@ import {
   CurrencyConfig
 } from '../../types/pricing';
 import { pricingService } from '../../services/pricingService';
+import * as masterDataService from '../../services/masterDataService';
 import { Badge } from '../../components/ui/Badge';
 import { SearchInput } from '../../components/ui/SearchInput';
 import { StatCard } from '../../components/ui/StatCard';
@@ -57,6 +64,8 @@ export default function PricingModule({ onTriggerToast }: PricingModuleProps) {
   // Filter & Pagination States
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
+  const [typeFilter, setTypeFilter] = useState<string>('All');
+  const [currencyFilter, setCurrencyFilter] = useState<string>('All');
   const [pageNumber, setPageNumber] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
@@ -67,31 +76,42 @@ export default function PricingModule({ onTriggerToast }: PricingModuleProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Master Products for Autocomplete
+  const [availableProducts, setAvailableProducts] = useState<any[]>([]);
+  const [availableCompanies, setAvailableCompanies] = useState<any[]>([]);
+
   // Modals & Active Selections
   const [selectedPriceList, setSelectedPriceList] = useState<PriceList | null>(null);
-  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [isViewDrawerOpen, setIsViewDrawerOpen] = useState(false);
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [editingPriceList, setEditingPriceList] = useState<PriceList | null>(null);
   const [isDeletingId, setIsDeletingId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formValidationErrors, setFormValidationErrors] = useState<Record<string, string>>({});
 
   // Form Fields
   const [formData, setFormData] = useState<{
     companyId: string;
+    code: string;
     name: string;
+    type: 'Retail' | 'Wholesale' | 'Distributor' | 'Customer Specific' | 'Promotional' | 'Internal Transfer';
+    currency: string;
+    status: PriceListStatus;
     description: string;
     effectiveFrom: string;
     effectiveTo: string;
-    items: PriceListItem[];
+    items: (PriceListItem & { searchInput?: string; isSearching?: boolean })[];
   }>({
-    companyId: '00000000-0000-0000-0000-000000000001',
+    companyId: '',
+    code: '',
     name: '',
+    type: 'Retail',
+    currency: 'INR',
+    status: 'Draft',
     description: '',
     effectiveFrom: new Date().toISOString().split('T')[0],
     effectiveTo: '',
-    items: [
-      { productId: '00000000-0000-0000-0000-000000000101', basePrice: 100, msrp: 120, minSellingPrice: 90, currencyCode: 'INR' }
-    ]
+    items: []
   });
 
   // Secondary Mock Data for other tabs
@@ -122,13 +142,42 @@ export default function PricingModule({ onTriggerToast }: PricingModuleProps) {
 
   const [currencies] = useState<CurrencyConfig[]>([
     { id: 'CUR-01', code: 'INR', name: 'Indian Rupee', symbol: '₹', exchangeRate: 1.0, isBase: true, status: 'Active' },
-    { id: 'CUR-02', code: 'USD', name: 'US Dollar', symbol: '$', exchangeRate: 83.5, isBase: false, status: 'Active' }
+    { id: 'CUR-02', code: 'USD', name: 'US Dollar', symbol: '$', exchangeRate: 83.5, isBase: false, status: 'Active' },
+    { id: 'CUR-03', code: 'EUR', name: 'Euro', symbol: '€', exchangeRate: 90.2, isBase: false, status: 'Active' },
+    { id: 'CUR-04', code: 'AED', name: 'UAE Dirham', symbol: 'د.إ', exchangeRate: 22.7, isBase: false, status: 'Active' }
   ]);
 
   const toastRef = React.useRef(onTriggerToast);
   useEffect(() => {
     toastRef.current = onTriggerToast;
   }, [onTriggerToast]);
+
+  // Fetch Master Data (Products & Companies)
+  useEffect(() => {
+    async function loadMasterData() {
+      try {
+        const [prodData, compData] = await Promise.all([
+          masterDataService.fetchProducts({}),
+          masterDataService.fetchCompanies({})
+        ]);
+        
+        const prods = Array.isArray(prodData) ? prodData : (prodData && Array.isArray(prodData.items) ? prodData.items : []);
+        setAvailableProducts(prods);
+
+        const comps = Array.isArray(compData) ? compData : (compData && Array.isArray(compData.items) ? compData.items : []);
+        setAvailableCompanies(comps);
+      } catch {
+        // Fallback mock products if server master data fails
+        setAvailableProducts([
+          { id: '76b29511-ea74-422a-928f-f5ef3abd8d80', code: 'SOAP001', name: 'Soap 100g Classic', sku: 'SKU-SOAP-100', baseUom: 'Pcs', basePrice: 35, mrp: 45 },
+          { id: 'a59e6217-3baa-426c-aff5-ba8fa06e48ac', code: 'SOAP002', name: 'Soap 250g Family Pack', sku: 'SKU-SOAP-250', baseUom: 'Pcs', basePrice: 80, mrp: 100 },
+          { id: 'b28f1122-3c44-5566-7788-9900aabbccdd', code: 'DET001', name: 'Surf Washing Powder 1kg', sku: 'SKU-DET-1000', baseUom: 'Kg', basePrice: 180, mrp: 220 },
+          { id: 'c39e2233-4d55-6677-8899-0011bbccddee', code: 'OIL005', name: 'Fortune Refined Sunflower Oil 1L', sku: 'SKU-OIL-1L', baseUom: 'Ltr', basePrice: 130, mrp: 155 }
+        ]);
+      }
+    }
+    loadMasterData();
+  }, []);
 
   // Load Price Lists from API
   const fetchPriceLists = useCallback(async () => {
@@ -138,6 +187,8 @@ export default function PricingModule({ onTriggerToast }: PricingModuleProps) {
       const response = await pricingService.getPriceLists({
         search: searchQuery || undefined,
         status: statusFilter !== 'All' ? statusFilter : undefined,
+        type: typeFilter !== 'All' ? typeFilter : undefined,
+        currency: currencyFilter !== 'All' ? currencyFilter : undefined,
         pageNumber,
         pageSize
       });
@@ -162,7 +213,7 @@ export default function PricingModule({ onTriggerToast }: PricingModuleProps) {
     } finally {
       setLoading(false);
     }
-  }, [searchQuery, statusFilter, pageNumber, pageSize]);
+  }, [searchQuery, statusFilter, typeFilter, currencyFilter, pageNumber, pageSize]);
 
   useEffect(() => {
     if (activeTab === 'lists') {
@@ -170,13 +221,13 @@ export default function PricingModule({ onTriggerToast }: PricingModuleProps) {
     }
   }, [fetchPriceLists, activeTab]);
 
-  // View Details Action
+  // View Details Action (Drawer)
   const handleViewPriceList = async (id: string) => {
     try {
       setLoading(true);
       const data = await pricingService.getPriceListById(id);
       setSelectedPriceList(data);
-      setIsViewModalOpen(true);
+      setIsViewDrawerOpen(true);
     } catch (err: any) {
       const msg = err?.response?.data?.detail || err?.message || 'Failed to load price list details.';
       onTriggerToast('error', 'Error Loading Details', msg);
@@ -188,14 +239,35 @@ export default function PricingModule({ onTriggerToast }: PricingModuleProps) {
   // Open Create Modal
   const handleOpenCreateModal = () => {
     setEditingPriceList(null);
+    setFormValidationErrors({});
+    
+    // Auto-select first real company GUID or fallback
+    const defaultCompanyId = availableCompanies[0]?.id || '76b29511-ea74-422a-928f-f5ef3abd8d80';
+    const firstProd = availableProducts[0];
+
     setFormData({
-      companyId: '00000000-0000-0000-0000-000000000001',
+      companyId: defaultCompanyId,
+      code: '',
       name: '',
+      type: 'Retail',
+      currency: 'INR',
+      status: 'Draft',
       description: '',
       effectiveFrom: new Date().toISOString().split('T')[0],
       effectiveTo: '',
       items: [
-        { productId: '00000000-0000-0000-0000-000000000101', basePrice: 100, msrp: 120, minSellingPrice: 90, currencyCode: 'INR' }
+        {
+          productId: firstProd?.id || '76b29511-ea74-422a-928f-f5ef3abd8d80',
+          productCode: firstProd?.code || 'SOAP001',
+          productName: firstProd?.name || 'Soap 100g Classic',
+          uom: firstProd?.baseUom || firstProd?.uom || 'Pcs',
+          basePrice: firstProd?.basePrice || 100,
+          msrp: firstProd?.mrp || 120,
+          minSellingPrice: 90,
+          currencyCode: 'INR',
+          status: 'Active',
+          searchInput: firstProd ? `${firstProd.code} - ${firstProd.name}` : 'SOAP001 - Soap 100g Classic'
+        }
       ]
     });
     setIsFormModalOpen(true);
@@ -205,16 +277,30 @@ export default function PricingModule({ onTriggerToast }: PricingModuleProps) {
   const handleOpenEditModal = async (id: string) => {
     try {
       setLoading(true);
+      setFormValidationErrors({});
       const data = await pricingService.getPriceListById(id);
       setEditingPriceList(data);
+      
+      const defaultCompanyId = data.companyId || availableCompanies[0]?.id || '76b29511-ea74-422a-928f-f5ef3abd8d80';
+      
       setFormData({
-        companyId: data.companyId || '00000000-0000-0000-0000-000000000001',
+        companyId: defaultCompanyId,
+        code: data.code || '',
         name: data.name || '',
+        type: (data.type as any) || 'Retail',
+        currency: data.currency || 'INR',
+        status: data.status || 'Draft',
         description: data.description || '',
-        effectiveFrom: data.effectiveFrom ? data.effectiveFrom.split('T')[0] : '',
+        effectiveFrom: data.effectiveFrom ? data.effectiveFrom.split('T')[0] : new Date().toISOString().split('T')[0],
         effectiveTo: data.effectiveTo ? data.effectiveTo.split('T')[0] : '',
-        items: data.items && data.items.length > 0 ? data.items : [
-          { productId: '00000000-0000-0000-0000-000000000101', basePrice: 100, msrp: 120, minSellingPrice: 90, currencyCode: 'INR' }
+        items: data.items && data.items.length > 0 ? data.items.map(it => ({
+          ...it,
+          msrp: it.msrp ?? it.basePrice,
+          minSellingPrice: it.minSellingPrice ?? it.basePrice,
+          status: it.status || 'Active',
+          searchInput: it.productCode && it.productName ? `${it.productCode} - ${it.productName}` : (it.productName || it.productId)
+        })) : [
+          { productId: availableProducts[0]?.id || '76b29511-ea74-422a-928f-f5ef3abd8d80', basePrice: 100, msrp: 120, minSellingPrice: 90, currencyCode: 'INR', status: 'Active' }
         ]
       });
       setIsFormModalOpen(true);
@@ -226,51 +312,154 @@ export default function PricingModule({ onTriggerToast }: PricingModuleProps) {
     }
   };
 
+  // Duplicate Action Workflow
+  const handleDuplicatePriceList = async (list: PriceList) => {
+    try {
+      setLoading(true);
+      setFormValidationErrors({});
+      const data = await pricingService.getPriceListById(list.id);
+      setEditingPriceList(null); // Treat as NEW creation
+      
+      const defaultCompanyId = data.companyId || availableCompanies[0]?.id || '76b29511-ea74-422a-928f-f5ef3abd8d80';
+
+      setFormData({
+        companyId: defaultCompanyId,
+        code: '', // Clear code so backend/frontend generates new unique code
+        name: `Copy of ${data.name}`,
+        type: (data.type as any) || 'Retail',
+        currency: data.currency || 'INR',
+        status: 'Draft',
+        description: `Cloned from ${data.name} (${data.code || 'PL'}). ${data.description || ''}`.trim(),
+        effectiveFrom: new Date().toISOString().split('T')[0],
+        effectiveTo: '',
+        items: data.items && data.items.length > 0 ? data.items.map(it => ({
+          productId: it.productId,
+          productCode: it.productCode,
+          productName: it.productName,
+          uom: it.uom || 'Pcs',
+          basePrice: it.basePrice,
+          msrp: it.msrp || it.basePrice,
+          minSellingPrice: it.minSellingPrice || it.basePrice,
+          currencyCode: it.currencyCode || 'INR',
+          status: 'Active',
+          searchInput: it.productCode && it.productName ? `${it.productCode} - ${it.productName}` : (it.productName || it.productId)
+        })) : []
+      });
+
+      setIsFormModalOpen(true);
+      onTriggerToast('info', 'Price List Cloned', `Pre-filled form with items from "${data.name}". Adjust prices and click Save.`);
+    } catch (err: any) {
+      const msg = err?.response?.data?.detail || err?.message || 'Failed to clone price list.';
+      onTriggerToast('error', 'Cloning Error', msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Submit Create or Edit Form
   const handleSubmitForm = async (e: React.FormEvent) => {
     e.preventDefault();
+    const errors: Record<string, string> = {};
+
     if (!formData.name.trim()) {
-      onTriggerToast('warning', 'Validation Error', 'Price List Name is required.');
-      return;
+      errors.name = 'Price List Name is required.';
+    }
+    if (!formData.type) {
+      errors.type = 'Price List Type is required.';
+    }
+    if (!formData.currency) {
+      errors.currency = 'Currency is required.';
+    }
+    if (!formData.status) {
+      errors.status = 'Status is required.';
     }
     if (!formData.effectiveFrom) {
-      onTriggerToast('warning', 'Validation Error', 'Effective From date is required.');
+      errors.effectiveFrom = 'Effective From date is required.';
+    }
+
+    // Row-level product grid validations
+    formData.items.forEach((item, idx) => {
+      if (!item.productId) {
+        errors[`item_${idx}_product`] = 'Product selection is required.';
+      }
+      if (typeof item.basePrice !== 'number' || item.basePrice < 0) {
+        errors[`item_${idx}_basePrice`] = 'Base Price must be ≥ 0.';
+      }
+      const mrpVal = item.msrp ?? item.basePrice;
+      const minVal = item.minSellingPrice ?? item.basePrice;
+
+      if (mrpVal < item.basePrice) {
+        errors[`item_${idx}_mrp`] = 'MRP must be ≥ Base Price.';
+      }
+      if (minVal > item.basePrice) {
+        errors[`item_${idx}_minSelling`] = 'Minimum Allowed Price must be ≤ Base Price.';
+      }
+    });
+
+    if (Object.keys(errors).length > 0) {
+      setFormValidationErrors(errors);
+      const firstErr = Object.values(errors)[0];
+      onTriggerToast('warning', 'Validation Failed', firstErr);
       return;
     }
 
     setIsSubmitting(true);
     try {
+      // Auto-generate code if left blank by user
+      const generatedCode = formData.code.trim() || `PL-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+      const validCompanyId = formData.companyId || availableCompanies[0]?.id || '76b29511-ea74-422a-928f-f5ef3abd8d80';
+
+      const cleanedItems = formData.items.map(it => ({
+        productId: it.productId,
+        productCode: it.productCode,
+        productName: it.productName,
+        uom: it.uom,
+        basePrice: Number(it.basePrice),
+        msrp: Number(it.msrp ?? it.basePrice),
+        minSellingPrice: Number(it.minSellingPrice ?? it.basePrice),
+        currencyCode: formData.currency,
+        status: it.status || 'Active'
+      }));
+
       if (editingPriceList) {
         // Update Price List
         const payload: Partial<PriceList> = {
           id: editingPriceList.id,
-          companyId: formData.companyId,
-          name: formData.name,
-          description: formData.description,
+          companyId: validCompanyId,
+          code: generatedCode,
+          name: formData.name.trim(),
+          type: formData.type,
+          currency: formData.currency,
+          status: formData.status,
+          description: formData.description.trim(),
           effectiveFrom: new Date(formData.effectiveFrom).toISOString(),
           effectiveTo: formData.effectiveTo ? new Date(formData.effectiveTo).toISOString() : undefined,
           concurrencyToken: editingPriceList.concurrencyToken,
-          items: formData.items
+          items: cleanedItems as any
         };
         await pricingService.updatePriceList(editingPriceList.id, payload);
         onTriggerToast('success', 'Price List Updated', `Updated "${formData.name}" successfully.`);
       } else {
         // Create Price List
         const payload: Partial<PriceList> = {
-          companyId: formData.companyId,
-          name: formData.name,
-          description: formData.description,
+          companyId: validCompanyId,
+          code: generatedCode,
+          name: formData.name.trim(),
+          type: formData.type,
+          currency: formData.currency,
+          status: formData.status,
+          description: formData.description.trim(),
           effectiveFrom: new Date(formData.effectiveFrom).toISOString(),
           effectiveTo: formData.effectiveTo ? new Date(formData.effectiveTo).toISOString() : undefined,
-          items: formData.items
+          items: cleanedItems as any
         };
         await pricingService.createPriceList(payload);
-        onTriggerToast('success', 'Price List Created', `Created price list "${formData.name}" in Draft status.`);
+        onTriggerToast('success', 'Price List Created', `Created price list "${formData.name}" (${generatedCode}) successfully.`);
       }
       setIsFormModalOpen(false);
       fetchPriceLists();
     } catch (err: any) {
-      const msg = err?.response?.data?.detail || err?.message || 'Failed to save price list.';
+      const msg = err?.response?.data?.detail || err?.data?.detail || err?.message || 'Failed to save price list.';
       onTriggerToast('error', 'Save Failed', msg);
     } finally {
       setIsSubmitting(false);
@@ -326,27 +515,59 @@ export default function PricingModule({ onTriggerToast }: PricingModuleProps) {
   };
 
   // Line item helpers for form modal
-  const handleAddLineItem = () => {
+  const handleAddProductRow = () => {
+    const firstProd = availableProducts[0];
     setFormData(prev => ({
       ...prev,
       items: [
         ...prev.items,
-        { productId: `00000000-0000-0000-0000-000000000${101 + prev.items.length}`, basePrice: 100, msrp: 120, minSellingPrice: 90, currencyCode: 'INR' }
+        {
+          productId: firstProd?.id || '76b29511-ea74-422a-928f-f5ef3abd8d80',
+          productCode: firstProd?.code || 'PRD-001',
+          productName: firstProd?.name || 'Product SKU',
+          uom: firstProd?.baseUom || firstProd?.uom || 'Pcs',
+          basePrice: firstProd?.basePrice || 100,
+          msrp: firstProd?.mrp || 120,
+          minSellingPrice: 90,
+          currencyCode: prev.currency,
+          status: 'Active',
+          searchInput: firstProd ? `${firstProd.code} - ${firstProd.name}` : ''
+        }
       ]
     }));
   };
 
-  const handleRemoveLineItem = (index: number) => {
+  const handleRemoveProductRow = (index: number) => {
     setFormData(prev => ({
       ...prev,
       items: prev.items.filter((_, i) => i !== index)
     }));
   };
 
-  const handleLineItemChange = (index: number, field: keyof PriceListItem, value: any) => {
+  const handleProductRowChange = (index: number, field: keyof PriceListItem | 'searchInput' | 'isSearching', value: any) => {
     setFormData(prev => {
       const updated = [...prev.items];
       updated[index] = { ...updated[index], [field]: value };
+      return { ...prev, items: updated };
+    });
+  };
+
+  const handleSelectProductForLine = (index: number, prod: any) => {
+    setFormData(prev => {
+      const updated = [...prev.items];
+      updated[index] = {
+        ...updated[index],
+        productId: prod.id,
+        productCode: prod.code,
+        productName: prod.name,
+        sku: prod.sku,
+        uom: prod.baseUom || prod.uom || 'Pcs',
+        basePrice: prod.basePrice || updated[index].basePrice || 100,
+        msrp: prod.mrp || updated[index].msrp || 120,
+        minSellingPrice: prod.basePrice ? Math.round(prod.basePrice * 0.9) : 90,
+        searchInput: `${prod.code} - ${prod.name}`,
+        isSearching: false
+      };
       return { ...prev, items: updated };
     });
   };
@@ -367,18 +588,30 @@ export default function PricingModule({ onTriggerToast }: PricingModuleProps) {
     }
   };
 
+  const getTypeBadgeVariant = (type?: string) => {
+    switch (type) {
+      case 'Retail': return 'primary';
+      case 'Wholesale': return 'info';
+      case 'Distributor': return 'warning';
+      case 'Customer Specific': return 'purple';
+      case 'Promotional': return 'success';
+      case 'Internal Transfer': return 'neutral';
+      default: return 'neutral';
+    }
+  };
+
   return (
     <div className="space-y-6">
 
       {/* SECTION 1: PRICING KPI SUMMARY CARDS */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard 
-          title="Active Price Tariffs" 
+          title="Active Price Lists" 
           value={totalCount} 
-          badgeText="Live Synced" 
+          badgeText="Engine Ready" 
           badgeVariant="success"
-          subLabel="Total Tariffs Configured"
-          subValue={`${totalCount} Lists`}
+          subLabel="Total Configured Price Lists"
+          subValue={`${totalCount} Active Lists`}
         />
         <StatCard 
           title="Customer Overrides" 
@@ -409,7 +642,7 @@ export default function PricingModule({ onTriggerToast }: PricingModuleProps) {
       {/* SECTION 2: SUB-NAVIGATION TAB PILLS */}
       <div className="bg-white p-2 rounded-lg border border-brand-border shadow-sm flex flex-wrap gap-1">
         {[
-          { id: 'lists', label: 'Price Lists (Tariffs)', icon: Tag },
+          { id: 'lists', label: 'Price Lists', icon: Tag },
           { id: 'customer', label: 'Customer Pricing', icon: DollarSign },
           { id: 'distributor', label: 'Distributor Pricing', icon: Sliders },
           { id: 'discounts', label: 'Discount Engine', icon: Percent },
@@ -434,17 +667,35 @@ export default function PricingModule({ onTriggerToast }: PricingModuleProps) {
         })}
       </div>
 
-      {/* TAB 1: PRICE LISTS TARIFFS GRID */}
+      {/* TAB 1: PRICE LISTS GRID */}
       {activeTab === 'lists' && (
         <div className="bg-white rounded-lg border border-brand-border shadow-sm-flat overflow-hidden">
           
           {/* SEARCH & FILTERS HEADER */}
           <div className="p-4 border-b border-brand-border bg-brand-bg-secondary/10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2">
-              <SearchInput value={searchQuery} onChange={setSearchQuery} placeholder="Search price list name, description..." />
+              <SearchInput value={searchQuery} onChange={setSearchQuery} placeholder="Search price list name, code..." />
               
+              {/* FILTER: PRICE LIST TYPE */}
               <div className="flex items-center gap-1 bg-white border border-brand-border rounded px-2 py-1 text-xs">
                 <Filter size={13} className="text-brand-text-secondary" />
+                <select
+                  value={typeFilter}
+                  onChange={(e) => { setTypeFilter(e.target.value); setPageNumber(1); }}
+                  className="bg-transparent text-xs text-brand-text-primary font-semibold border-none outline-none cursor-pointer"
+                >
+                  <option value="All">All Types</option>
+                  <option value="Retail">Retail</option>
+                  <option value="Wholesale">Wholesale</option>
+                  <option value="Distributor">Distributor</option>
+                  <option value="Customer Specific">Customer Specific</option>
+                  <option value="Promotional">Promotional</option>
+                  <option value="Internal Transfer">Internal Transfer</option>
+                </select>
+              </div>
+
+              {/* FILTER: STATUS */}
+              <div className="flex items-center gap-1 bg-white border border-brand-border rounded px-2 py-1 text-xs">
                 <select
                   value={statusFilter}
                   onChange={(e) => { setStatusFilter(e.target.value); setPageNumber(1); }}
@@ -455,6 +706,21 @@ export default function PricingModule({ onTriggerToast }: PricingModuleProps) {
                   <option value="Published">Published</option>
                   <option value="Archived">Archived</option>
                   <option value="Expired">Expired</option>
+                </select>
+              </div>
+
+              {/* FILTER: CURRENCY */}
+              <div className="flex items-center gap-1 bg-white border border-brand-border rounded px-2 py-1 text-xs">
+                <select
+                  value={currencyFilter}
+                  onChange={(e) => { setCurrencyFilter(e.target.value); setPageNumber(1); }}
+                  className="bg-transparent text-xs text-brand-text-primary font-semibold border-none outline-none cursor-pointer"
+                >
+                  <option value="All">All Currencies</option>
+                  <option value="INR">INR (₹)</option>
+                  <option value="USD">USD ($)</option>
+                  <option value="EUR">EUR (€)</option>
+                  <option value="AED">AED (د.إ)</option>
                 </select>
               </div>
 
@@ -471,7 +737,7 @@ export default function PricingModule({ onTriggerToast }: PricingModuleProps) {
               onClick={handleOpenCreateModal}
               className="px-3 py-1.5 bg-brand-primary hover:bg-blue-700 text-white text-xs font-semibold rounded flex items-center gap-1 cursor-pointer transition shadow-sm"
             >
-              <Plus size={14} /> Create Price Tariff
+              <Plus size={14} /> Create Price List
             </button>
           </div>
 
@@ -502,7 +768,7 @@ export default function PricingModule({ onTriggerToast }: PricingModuleProps) {
             <EmptyState
               icon={Tag}
               title="No Price Lists Found"
-              description="No price lists match your filter parameters. Click create to configure a new price list."
+              description="No price lists match your search parameters. Click Create Price List to configure a new price list."
             />
           )}
 
@@ -512,10 +778,11 @@ export default function PricingModule({ onTriggerToast }: PricingModuleProps) {
               <table className="w-full text-left text-xs border-collapse">
                 <thead className="bg-brand-bg-secondary border-b border-brand-border text-[10px] font-bold text-brand-text-secondary uppercase tracking-wider">
                   <tr>
-                    <th className="p-3">ID / Name</th>
-                    <th className="p-3">Effective From</th>
-                    <th className="p-3">Effective To</th>
-                    <th className="p-3 text-center">Version</th>
+                    <th className="p-3">Price List Name & Code</th>
+                    <th className="p-3">Type</th>
+                    <th className="p-3">Currency</th>
+                    <th className="p-3">Effective Period</th>
+                    <th className="p-3 text-center">Total Products</th>
                     <th className="p-3 text-center">Status</th>
                     <th className="p-3 text-right">Actions</th>
                   </tr>
@@ -524,19 +791,30 @@ export default function PricingModule({ onTriggerToast }: PricingModuleProps) {
                   {priceLists.map(list => (
                     <tr key={list.id} className="hover:bg-brand-bg-secondary/30 transition text-brand-text-primary">
                       <td className="p-3">
-                        <div className="font-mono font-bold text-brand-primary text-[11px]">{list.name}</div>
-                        {list.description && <div className="text-[10px] text-brand-text-secondary truncate max-w-xs">{list.description}</div>}
+                        <div className="font-bold text-brand-primary text-xs">{list.name}</div>
+                        <div className="font-mono text-[10px] text-brand-text-secondary">{list.code || 'PL-AUTO'}</div>
                       </td>
-                      <td className="p-3 text-brand-text-secondary font-mono">{list.effectiveFrom ? formatDate(list.effectiveFrom) : list.effectiveDate || '—'}</td>
-                      <td className="p-3 text-brand-text-secondary font-mono">{list.effectiveTo ? formatDate(list.effectiveTo) : list.expiryDate || 'Open'}</td>
-                      <td className="p-3 text-center font-mono font-bold">v{list.version}.0</td>
+                      <td className="p-3">
+                        <Badge variant={getTypeBadgeVariant(list.type) as any}>
+                          {list.type || 'Retail'}
+                        </Badge>
+                      </td>
+                      <td className="p-3 font-mono font-semibold">{list.currency || 'INR'}</td>
+                      <td className="p-3 text-brand-text-secondary font-mono text-[11px]">
+                        {list.effectiveFrom ? formatDate(list.effectiveFrom) : (list.effectiveDate || '—')}
+                        <span className="mx-1 text-gray-400">→</span>
+                        {list.effectiveTo ? formatDate(list.effectiveTo) : (list.expiryDate || 'Open')}
+                      </td>
+                      <td className="p-3 text-center font-mono font-bold text-xs">
+                        {list.itemsCount ?? (list.items ? list.items.length : 0)} Products
+                      </td>
                       <td className="p-3 text-center">
                         <Badge variant={getStatusBadgeVariant(list.status)}>
                           {list.status}
                         </Badge>
                       </td>
                       <td className="p-3 text-right space-x-1">
-                        {/* VIEW */}
+                        {/* VIEW DETAIL DRAWER */}
                         <button
                           onClick={() => handleViewPriceList(list.id)}
                           className="p-1 border border-brand-border rounded hover:bg-brand-bg-secondary text-brand-text-primary cursor-pointer"
@@ -554,12 +832,21 @@ export default function PricingModule({ onTriggerToast }: PricingModuleProps) {
                           <Edit2 size={13} />
                         </button>
 
+                        {/* DUPLICATE / CLONE */}
+                        <button
+                          onClick={() => handleDuplicatePriceList(list)}
+                          className="p-1 border border-brand-border rounded hover:bg-purple-50 text-purple-600 cursor-pointer"
+                          title="Duplicate / Copy Price List"
+                        >
+                          <Copy size={13} />
+                        </button>
+
                         {/* PUBLISH */}
                         {list.status === 'Draft' && (
                           <button
                             onClick={() => handlePublish(list)}
                             className="p-1 border border-brand-border rounded hover:bg-emerald-50 text-emerald-600 cursor-pointer"
-                            title="Publish Tariff (Increments Version)"
+                            title="Publish Price List"
                           >
                             <Send size={13} />
                           </button>
@@ -570,7 +857,7 @@ export default function PricingModule({ onTriggerToast }: PricingModuleProps) {
                           <button
                             onClick={() => handleArchive(list)}
                             className="p-1 border border-brand-border rounded hover:bg-amber-50 text-amber-600 cursor-pointer"
-                            title="Archive Tariff"
+                            title="Archive Price List"
                           >
                             <Archive size={13} />
                           </button>
@@ -580,7 +867,7 @@ export default function PricingModule({ onTriggerToast }: PricingModuleProps) {
                         <button
                           onClick={() => setIsDeletingId(list.id)}
                           className="p-1 border border-brand-border rounded hover:bg-red-50 text-red-600 cursor-pointer"
-                          title="Soft Delete Tariff"
+                          title="Soft Delete Price List"
                         >
                           <Trash2 size={13} />
                         </button>
@@ -602,15 +889,15 @@ export default function PricingModule({ onTriggerToast }: PricingModuleProps) {
                 <button
                   disabled={pageNumber <= 1}
                   onClick={() => setPageNumber(p => Math.max(1, p - 1))}
-                  className="p-1 border rounded disabled:opacity-40 cursor-pointer hover:bg-brand-bg-secondary"
+                  className="p-1 border border-brand-border rounded hover:bg-brand-bg-secondary disabled:opacity-40 cursor-pointer"
                 >
                   <ChevronLeft size={14} />
                 </button>
-                <span className="font-semibold text-brand-text-primary">Page {pageNumber} of {totalPages}</span>
+                <span className="font-mono text-brand-text-secondary">Page {pageNumber} of {totalPages}</span>
                 <button
                   disabled={pageNumber >= totalPages}
                   onClick={() => setPageNumber(p => p + 1)}
-                  className="p-1 border rounded disabled:opacity-40 cursor-pointer hover:bg-brand-bg-secondary"
+                  className="p-1 border border-brand-border rounded hover:bg-brand-bg-secondary disabled:opacity-40 cursor-pointer"
                 >
                   <ChevronRight size={14} />
                 </button>
@@ -620,266 +907,157 @@ export default function PricingModule({ onTriggerToast }: PricingModuleProps) {
         </div>
       )}
 
-      {/* TAB 2: CUSTOMER PRICING */}
-      {activeTab === 'customer' && (
-        <div className="bg-white rounded-lg border border-brand-border shadow-sm p-4 space-y-4">
-          <div className="flex justify-between items-center border-b pb-2">
-            <h4 className="text-xs font-bold text-brand-text-primary uppercase tracking-wider">Customer-Specific Contract Pricing</h4>
-            <Badge variant="primary">Priority Resolution Engine</Badge>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead className="bg-brand-bg-secondary border-b text-[10px] font-bold text-brand-text-secondary uppercase">
-                <tr>
-                  <th className="p-3">Customer</th>
-                  <th className="p-3">Product SKU</th>
-                  <th className="p-3 text-right">Contract Special Price</th>
-                  <th className="p-3 text-right">Discount Off MSRP</th>
-                  <th className="p-3 text-center">Priority Rule</th>
-                  <th className="p-3 text-center">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-brand-border">
-                {customerRules.map(rule => (
-                  <tr key={rule.id}>
-                    <td className="p-3 font-semibold">{rule.customerName}</td>
-                    <td className="p-3 text-brand-text-secondary">{rule.productName}</td>
-                    <td className="p-3 text-right font-mono font-bold text-brand-success">{formatINR(rule.specialPrice)}</td>
-                    <td className="p-3 text-right font-bold text-brand-primary">{rule.discountPercent}% OFF</td>
-                    <td className="p-3 text-center font-mono">P{rule.priority}</td>
-                    <td className="p-3 text-center"><Badge variant="success">{rule.status}</Badge></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 3: DISTRIBUTOR PRICING */}
-      {activeTab === 'distributor' && (
-        <div className="bg-white rounded-lg border border-brand-border shadow-sm p-4 space-y-4">
-          <div className="flex justify-between items-center border-b pb-2">
-            <h4 className="text-xs font-bold text-brand-text-primary uppercase tracking-wider">Region & Territory Distributor Matrix</h4>
-            <Badge variant="info">Geographic Pricing</Badge>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead className="bg-brand-bg-secondary border-b text-[10px] font-bold text-brand-text-secondary uppercase">
-                <tr>
-                  <th className="p-3">Distributor Node</th>
-                  <th className="p-3">Region</th>
-                  <th className="p-3">Territory</th>
-                  <th className="p-3">Product SKU</th>
-                  <th className="p-3 text-right">Agreed Price</th>
-                  <th className="p-3 text-center">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-brand-border">
-                {distributorRules.map(rule => (
-                  <tr key={rule.id}>
-                    <td className="p-3 font-semibold">{rule.distributorName}</td>
-                    <td className="p-3 font-mono">{rule.region}</td>
-                    <td className="p-3 text-brand-text-secondary">{rule.territory}</td>
-                    <td className="p-3 font-medium">{rule.productName}</td>
-                    <td className="p-3 text-right font-mono font-bold">{formatINR(rule.agreedPrice)}</td>
-                    <td className="p-3 text-center"><Badge variant="success">{rule.status}</Badge></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 4: DISCOUNT ENGINE */}
-      {activeTab === 'discounts' && (
-        <div className="bg-white rounded-lg border border-brand-border shadow-sm p-4 space-y-4">
-          <div className="flex justify-between items-center border-b pb-2">
-            <h4 className="text-xs font-bold text-brand-text-primary uppercase tracking-wider">Tiered & Quantity Discount Engine</h4>
-            <Badge variant="warning">Dynamic Calculations</Badge>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {discountRules.map(disc => (
-              <div key={disc.id} className="p-4 border rounded-lg bg-brand-bg-secondary/40 space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="font-mono font-bold text-brand-primary">{disc.code}</span>
-                  <Badge variant="success">{disc.type} Discount</Badge>
-                </div>
-                <h5 className="text-sm font-bold text-brand-text-primary">{disc.name}</h5>
-                <p className="text-xs text-brand-text-secondary">
-                  Value: <strong>{disc.type === 'Percentage' ? `${disc.value}%` : formatINR(disc.value)}</strong>
-                  {disc.minQuantity && ` (Min Qty: ${disc.minQuantity} Units)`}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* TAB 5: PROMOTIONS */}
-      {activeTab === 'promotions' && (
-        <div className="bg-white rounded-lg border border-brand-border shadow-sm p-4 space-y-4">
-          <div className="flex justify-between items-center border-b pb-2">
-            <h4 className="text-xs font-bold text-brand-text-primary uppercase tracking-wider">BOGO & Coupon Campaigns</h4>
-            <Badge variant="danger">Limited-Time Offers</Badge>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {promotions.map(prm => (
-              <div key={prm.id} className="p-4 border rounded-lg bg-amber-50/30 border-amber-200 space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="font-mono font-bold text-brand-warning">{prm.code}</span>
-                  <Badge variant="warning">{prm.type}</Badge>
-                </div>
-                <h5 className="text-sm font-bold text-brand-text-primary">{prm.name}</h5>
-                <div className="text-xs text-brand-text-secondary space-y-1">
-                  {prm.couponCode && <p>Coupon Code: <strong className="font-mono bg-white px-1.5 py-0.5 border rounded">{prm.couponCode}</strong></p>}
-                  {prm.buyQuantity && <p>Mechanic: Buy {prm.buyQuantity} Get {prm.getQuantity} Free</p>}
-                  <p>Validity: {prm.startDate} to {prm.endDate}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* TAB 6: TAX GROUPS */}
-      {activeTab === 'taxes' && (
-        <div className="bg-white rounded-lg border border-brand-border shadow-sm p-4 space-y-4">
-          <div className="flex justify-between items-center border-b pb-2">
-            <h4 className="text-xs font-bold text-brand-text-primary uppercase tracking-wider">GST & VAT Tax Categories</h4>
-            <Badge variant="info">Tax Matrix Active</Badge>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {taxConfigs.map(tax => (
-              <div key={tax.id} className="p-4 border rounded-lg bg-brand-bg-secondary/40 space-y-1">
-                <div className="flex justify-between items-center">
-                  <span className="font-mono font-bold text-brand-primary">{tax.code}</span>
-                  <span className="text-lg font-bold text-brand-success">{tax.ratePercent}%</span>
-                </div>
-                <h5 className="text-xs font-bold text-brand-text-primary">{tax.name}</h5>
-                <span className="text-[10px] text-brand-text-secondary font-semibold uppercase">{tax.type} Category: {tax.category}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* TAB 7: CURRENCIES */}
-      {activeTab === 'currencies' && (
-        <div className="bg-white rounded-lg border border-brand-border shadow-sm p-4 space-y-4">
-          <div className="flex justify-between items-center border-b pb-2">
-            <h4 className="text-xs font-bold text-brand-text-primary uppercase tracking-wider">Multi-Currency Exchange Rates</h4>
-            <Badge variant="success">Base Currency: INR</Badge>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {currencies.map(curr => (
-              <div key={curr.id} className="p-4 border rounded-lg bg-brand-bg-secondary/40 space-y-1">
-                <div className="flex justify-between items-center">
-                  <span className="font-mono font-bold text-brand-primary">{curr.code} ({curr.symbol})</span>
-                  {curr.isBase ? <Badge variant="success">Base Currency</Badge> : <Badge variant="neutral">Rate: {curr.exchangeRate}</Badge>}
-                </div>
-                <h5 className="text-xs font-bold text-brand-text-primary">{curr.name}</h5>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* VIEW DETAILS MODAL */}
-      {isViewModalOpen && selectedPriceList && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-lg border border-brand-border max-w-2xl w-full p-6 space-y-4 shadow-xl max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-start border-b pb-3">
+      {/* READ-ONLY VIEW PRICE LIST DRAWER */}
+      {isViewDrawerOpen && selectedPriceList && (
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-xs">
+          <div className="bg-white w-full max-w-2xl h-full flex flex-col shadow-2xl animate-fade-in border-l border-brand-border overflow-hidden">
+            {/* DRAWER HEADER */}
+            <div className="p-4 border-b border-brand-border bg-brand-bg-secondary/20 flex justify-between items-center">
               <div>
                 <div className="flex items-center gap-2">
                   <h3 className="text-base font-bold text-brand-text-primary">{selectedPriceList.name}</h3>
-                  <Badge variant={getStatusBadgeVariant(selectedPriceList.status)}>
-                    {selectedPriceList.status}
-                  </Badge>
-                  <span className="text-xs font-mono font-bold text-brand-primary">v{selectedPriceList.version}.0</span>
+                  <Badge variant={getStatusBadgeVariant(selectedPriceList.status)}>{selectedPriceList.status}</Badge>
                 </div>
-                <p className="text-xs text-brand-text-secondary mt-1">{selectedPriceList.description || 'No description provided.'}</p>
+                <p className="text-xs font-mono text-brand-text-secondary">Code: {selectedPriceList.code || 'PL-AUTO'}</p>
               </div>
               <button
-                onClick={() => setIsViewModalOpen(false)}
-                className="p-1 rounded text-brand-text-secondary hover:bg-brand-bg-secondary cursor-pointer"
+                onClick={() => setIsViewDrawerOpen(false)}
+                className="p-1.5 rounded-md text-brand-text-secondary hover:bg-brand-bg-secondary cursor-pointer"
               >
                 <X size={18} />
               </button>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-brand-bg-secondary/30 p-3 rounded text-xs">
-              <div>
-                <span className="text-[10px] uppercase font-bold text-brand-text-secondary block">Effective From</span>
-                <span className="font-mono font-semibold">{selectedPriceList.effectiveFrom ? formatDate(selectedPriceList.effectiveFrom) : '—'}</span>
-              </div>
-              <div>
-                <span className="text-[10px] uppercase font-bold text-brand-text-secondary block">Effective To</span>
-                <span className="font-mono font-semibold">{selectedPriceList.effectiveTo ? formatDate(selectedPriceList.effectiveTo) : 'Open'}</span>
-              </div>
-              <div>
-                <span className="text-[10px] uppercase font-bold text-brand-text-secondary block">Company ID</span>
-                <span className="font-mono font-semibold truncate block" title={selectedPriceList.companyId}>{selectedPriceList.companyId || 'Default'}</span>
-              </div>
-              <div>
-                <span className="text-[10px] uppercase font-bold text-brand-text-secondary block">Items Count</span>
-                <span className="font-mono font-bold text-brand-primary">{selectedPriceList.items ? selectedPriceList.items.length : 0} Lines</span>
-              </div>
-            </div>
-
-            <div>
-              <h4 className="text-xs font-bold text-brand-text-primary uppercase tracking-wider mb-2">Price List Line Items</h4>
-              {(!selectedPriceList.items || selectedPriceList.items.length === 0) ? (
-                <p className="text-xs text-brand-text-secondary italic">No line items configured in this tariff.</p>
-              ) : (
-                <div className="overflow-x-auto border rounded">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead className="bg-brand-bg-secondary text-[10px] font-bold text-brand-text-secondary uppercase">
-                      <tr>
-                        <th className="p-2">Product ID</th>
-                        <th className="p-2 text-right">Base Price</th>
-                        <th className="p-2 text-right">MSRP</th>
-                        <th className="p-2 text-right">Min Selling Price</th>
-                        <th className="p-2 text-center">Currency</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-brand-border">
-                      {selectedPriceList.items.map((item, idx) => (
-                        <tr key={item.id || idx}>
-                          <td className="p-2 font-mono text-[11px] font-semibold text-brand-primary">{item.productId}</td>
-                          <td className="p-2 text-right font-mono font-bold text-brand-success">{formatINR(item.basePrice)}</td>
-                          <td className="p-2 text-right font-mono text-brand-text-secondary">{formatINR(item.msrp || item.basePrice)}</td>
-                          <td className="p-2 text-right font-mono text-brand-text-secondary">{formatINR(item.minSellingPrice || item.basePrice)}</td>
-                          <td className="p-2 text-center font-mono">{item.currencyCode || 'INR'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+            {/* DRAWER BODY */}
+            <div className="p-6 flex-1 overflow-y-auto space-y-6 text-xs">
+              
+              {/* SECTION: GENERAL INFORMATION */}
+              <div className="space-y-3">
+                <h4 className="font-bold text-brand-text-primary uppercase tracking-wider text-[11px] flex items-center gap-1.5 border-b pb-1.5">
+                  <Tag size={14} className="text-brand-primary" /> General Information
+                </h4>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-3 bg-brand-bg-secondary/20 rounded-lg border border-brand-border/60">
+                  <div>
+                    <span className="block text-[10px] text-brand-text-secondary font-bold uppercase">Price List Type</span>
+                    <span className="font-semibold text-brand-text-primary">{selectedPriceList.type || 'Retail'}</span>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] text-brand-text-secondary font-bold uppercase">Currency</span>
+                    <span className="font-mono font-bold text-brand-primary">{selectedPriceList.currency || 'INR'}</span>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] text-brand-text-secondary font-bold uppercase">Effective From</span>
+                    <span className="font-mono text-brand-text-primary">{selectedPriceList.effectiveFrom ? formatDate(selectedPriceList.effectiveFrom) : '—'}</span>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] text-brand-text-secondary font-bold uppercase">Effective To</span>
+                    <span className="font-mono text-brand-text-primary">{selectedPriceList.effectiveTo ? formatDate(selectedPriceList.effectiveTo) : 'Open'}</span>
+                  </div>
                 </div>
-              )}
+                {selectedPriceList.description && (
+                  <div className="p-3 bg-gray-50 border rounded text-brand-text-secondary italic">
+                    {selectedPriceList.description}
+                  </div>
+                )}
+              </div>
+
+              {/* SECTION: PRODUCTS GRID */}
+              <div className="space-y-3">
+                <div className="flex justify-between items-center border-b pb-1.5">
+                  <h4 className="font-bold text-brand-text-primary uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                    <Boxes size={14} className="text-brand-primary" /> Products Configured ({selectedPriceList.items ? selectedPriceList.items.length : 0})
+                  </h4>
+                </div>
+
+                {!selectedPriceList.items || selectedPriceList.items.length === 0 ? (
+                  <p className="text-xs text-brand-text-secondary italic p-4 bg-gray-50 rounded text-center">No products configured in this price list.</p>
+                ) : (
+                  <div className="border border-brand-border rounded-lg overflow-hidden">
+                    <table className="w-full text-left text-[11px] border-collapse">
+                      <thead className="bg-brand-bg-secondary border-b text-[10px] font-bold text-brand-text-secondary uppercase">
+                        <tr>
+                          <th className="p-2">Product</th>
+                          <th className="p-2 text-center">UOM</th>
+                          <th className="p-2 text-right">Base Price</th>
+                          <th className="p-2 text-right">MRP</th>
+                          <th className="p-2 text-right">Min Allowed Price</th>
+                          <th className="p-2 text-center">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-brand-border">
+                        {selectedPriceList.items.map((item, i) => (
+                          <tr key={i} className="hover:bg-brand-bg-secondary/20">
+                            <td className="p-2">
+                              <div className="font-bold text-brand-text-primary">{item.productName || 'Product SKU'}</div>
+                              <div className="font-mono text-[10px] text-brand-text-secondary">{item.productCode || item.productId}</div>
+                            </td>
+                            <td className="p-2 text-center font-semibold text-brand-text-secondary">{item.uom || 'Pcs'}</td>
+                            <td className="p-2 text-right font-mono font-bold">{formatINR(item.basePrice)}</td>
+                            <td className="p-2 text-right font-mono font-bold text-emerald-700">{formatINR(item.msrp || item.basePrice)}</td>
+                            <td className="p-2 text-right font-mono font-semibold text-amber-700">{formatINR(item.minSellingPrice || item.basePrice)}</td>
+                            <td className="p-2 text-center">
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${item.status === 'Disabled' ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-800'}`}>
+                                {item.status || 'Active'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* SECTION: AUDIT INFORMATION */}
+              <div className="space-y-3 pt-2 border-t">
+                <h4 className="font-bold text-brand-text-primary uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                  <ShieldCheck size={14} className="text-brand-primary" /> Audit Trail Information
+                </h4>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3 bg-slate-50 border rounded-lg text-[11px]">
+                  <div>
+                    <span className="block text-[10px] text-gray-500 font-bold uppercase">Created By</span>
+                    <span className="font-semibold text-brand-text-primary">{selectedPriceList.createdBy || selectedPriceList.createdByEmail || 'System Administrator'}</span>
+                    <span className="block text-[10px] font-mono text-gray-400">{selectedPriceList.createdAtUtc ? formatDate(selectedPriceList.createdAtUtc) : '—'}</span>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] text-gray-500 font-bold uppercase">Last Modified</span>
+                    <span className="font-semibold text-brand-text-primary">{selectedPriceList.lastModifiedBy || 'System Administrator'}</span>
+                    <span className="block text-[10px] font-mono text-gray-400">{selectedPriceList.lastModifiedAtUtc ? formatDate(selectedPriceList.lastModifiedAtUtc) : '—'}</span>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] text-gray-500 font-bold uppercase">Published By</span>
+                    <span className="font-semibold text-brand-text-primary">{selectedPriceList.publishedBy || (selectedPriceList.status === 'Published' ? 'Admin' : 'Not Published')}</span>
+                    <span className="block text-[10px] font-mono text-gray-400">{selectedPriceList.publishedAtUtc ? formatDate(selectedPriceList.publishedAtUtc) : '—'}</span>
+                  </div>
+                </div>
+              </div>
+
             </div>
 
-            <div className="flex justify-end pt-2 border-t">
+            {/* DRAWER FOOTER */}
+            <div className="p-4 border-t border-brand-border bg-brand-bg-secondary/20 flex justify-end gap-2">
               <button
-                onClick={() => setIsViewModalOpen(false)}
-                className="px-4 py-1.5 bg-brand-primary text-white text-xs font-semibold rounded cursor-pointer"
+                onClick={() => setIsViewDrawerOpen(false)}
+                className="px-4 py-1.5 bg-brand-primary text-white text-xs font-semibold rounded hover:bg-blue-700 cursor-pointer shadow-xs"
               >
-                Close
+                Close Drawer
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* CREATE / EDIT FORM MODAL */}
+      {/* CREATE / EDIT / DUPLICATE FORM MODAL */}
       {isFormModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-lg border border-brand-border max-w-2xl w-full p-6 space-y-4 shadow-xl max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-lg border border-brand-border max-w-4xl w-full p-6 space-y-4 shadow-xl max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center border-b pb-3">
-              <h3 className="text-base font-bold text-brand-text-primary">
-                {editingPriceList ? 'Edit Price List Tariff' : 'Create New Price Tariff'}
-              </h3>
+              <div>
+                <h3 className="text-base font-bold text-brand-text-primary">
+                  {editingPriceList ? 'Edit Price List' : 'Create Price List'}
+                </h3>
+                <p className="text-xs text-brand-text-secondary">Configure reusable price engine attributes for ERP sales operations.</p>
+              </div>
               <button
                 onClick={() => setIsFormModalOpen(false)}
                 className="p-1 rounded text-brand-text-secondary hover:bg-brand-bg-secondary cursor-pointer"
@@ -889,130 +1067,262 @@ export default function PricingModule({ onTriggerToast }: PricingModuleProps) {
             </div>
 
             <form onSubmit={handleSubmitForm} className="space-y-4 text-xs">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-brand-text-primary mb-1">Price List Name *</label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.name}
-                    onChange={(e) => setFormData(p => ({ ...p, name: e.target.value }))}
-                    placeholder="e.g. Standard Pan-India Wholesale 2026"
-                    className="w-full p-2 border rounded border-brand-border outline-none focus:border-brand-primary"
-                  />
+              
+              {/* GENERAL INFORMATION SECTION */}
+              <div className="space-y-3">
+                <h4 className="font-bold text-brand-text-primary uppercase tracking-wider text-[11px]">General Information</h4>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-brand-text-primary mb-1">Price List Name *</label>
+                    <input
+                      type="text"
+                      value={formData.name}
+                      onChange={(e) => {
+                        setFormData(p => ({ ...p, name: e.target.value }));
+                        setFormValidationErrors(p => ({ ...p, name: '' }));
+                      }}
+                      placeholder="e.g. Retail Pan-India 2026"
+                      className={`w-full p-2 border rounded outline-none ${formValidationErrors.name ? 'border-red-500 bg-red-50/50' : 'border-brand-border'}`}
+                    />
+                    {formValidationErrors.name && <p className="text-[10px] text-red-500 font-semibold mt-0.5">{formValidationErrors.name}</p>}
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-brand-text-primary mb-1">
+                      Price List Code <span className="text-gray-400 font-normal">(Optional - Auto Generated if Empty)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.code}
+                      onChange={(e) => setFormData(p => ({ ...p, code: e.target.value.toUpperCase() }))}
+                      placeholder="e.g. PL-RETAIL-2026 (Leave blank for auto-code)"
+                      className="w-full p-2 border rounded border-brand-border uppercase font-mono text-[11px]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-brand-text-primary mb-1">Price List Type *</label>
+                    <select
+                      value={formData.type}
+                      onChange={(e) => setFormData(p => ({ ...p, type: e.target.value as any }))}
+                      className="w-full p-2 border rounded border-brand-border bg-white font-semibold"
+                    >
+                      <option value="Retail">Retail</option>
+                      <option value="Wholesale">Wholesale</option>
+                      <option value="Distributor">Distributor</option>
+                      <option value="Customer Specific">Customer Specific</option>
+                      <option value="Promotional">Promotional</option>
+                      <option value="Internal Transfer">Internal Transfer</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-brand-text-primary mb-1">Currency *</label>
+                    <select
+                      value={formData.currency}
+                      onChange={(e) => setFormData(p => ({ ...p, currency: e.target.value }))}
+                      className="w-full p-2 border rounded border-brand-border bg-white font-semibold"
+                    >
+                      <option value="INR">INR (₹ - Indian Rupee)</option>
+                      <option value="USD">USD ($ - US Dollar)</option>
+                      <option value="EUR">EUR (€ - Euro)</option>
+                      <option value="AED">AED (د.إ - UAE Dirham)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-brand-text-primary mb-1">Status *</label>
+                    <select
+                      value={formData.status}
+                      onChange={(e) => setFormData(p => ({ ...p, status: e.target.value as any }))}
+                      className="w-full p-2 border rounded border-brand-border bg-white font-semibold"
+                    >
+                      <option value="Draft">Draft</option>
+                      <option value="Published">Published (Sales Ready)</option>
+                      <option value="Expired">Expired</option>
+                      <option value="Archived">Archived</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-brand-text-primary mb-1">Effective From *</label>
+                    <input
+                      type="date"
+                      value={formData.effectiveFrom}
+                      onChange={(e) => setFormData(p => ({ ...p, effectiveFrom: e.target.value }))}
+                      className="w-full p-2 border rounded border-brand-border"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-brand-text-primary mb-1">Effective To (Optional)</label>
+                    <input
+                      type="date"
+                      value={formData.effectiveTo}
+                      onChange={(e) => setFormData(p => ({ ...p, effectiveTo: e.target.value }))}
+                      className="w-full p-2 border rounded border-brand-border"
+                    />
+                  </div>
                 </div>
+
                 <div>
-                  <label className="block font-bold text-brand-text-primary mb-1">Company ID</label>
-                  <input
-                    type="text"
-                    value={formData.companyId}
-                    onChange={(e) => setFormData(p => ({ ...p, companyId: e.target.value }))}
-                    className="w-full p-2 border rounded border-brand-border font-mono text-[11px]"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-brand-text-primary mb-1">Effective From *</label>
-                  <input
-                    type="date"
-                    required
-                    value={formData.effectiveFrom}
-                    onChange={(e) => setFormData(p => ({ ...p, effectiveFrom: e.target.value }))}
-                    className="w-full p-2 border rounded border-brand-border"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-brand-text-primary mb-1">Effective To (Optional)</label>
-                  <input
-                    type="date"
-                    value={formData.effectiveTo}
-                    onChange={(e) => setFormData(p => ({ ...p, effectiveTo: e.target.value }))}
-                    className="w-full p-2 border rounded border-brand-border"
+                  <label className="block font-bold text-brand-text-primary mb-1">Description</label>
+                  <textarea
+                    rows={2}
+                    value={formData.description}
+                    onChange={(e) => setFormData(p => ({ ...p, description: e.target.value }))}
+                    placeholder="Price List Description..."
+                    className="w-full p-2 border rounded border-brand-border outline-none"
                   />
                 </div>
               </div>
 
-              <div>
-                <label className="block font-bold text-brand-text-primary mb-1">Description</label>
-                <textarea
-                  rows={2}
-                  value={formData.description}
-                  onChange={(e) => setFormData(p => ({ ...p, description: e.target.value }))}
-                  placeholder="Additional tariff description or notes..."
-                  className="w-full p-2 border rounded border-brand-border outline-none"
-                />
-              </div>
-
-              {/* LINE ITEMS FORM SECTION */}
+              {/* PRODUCTS GRID SECTION */}
               <div className="space-y-2 border-t pt-3">
                 <div className="flex justify-between items-center">
-                  <h4 className="font-bold text-brand-text-primary uppercase tracking-wider">Line Items Configuration</h4>
+                  <h4 className="font-bold text-brand-text-primary uppercase tracking-wider text-[11px]">Products</h4>
                   <button
                     type="button"
-                    onClick={handleAddLineItem}
-                    className="px-2 py-1 bg-brand-bg-secondary text-brand-text-primary font-semibold rounded text-[11px] flex items-center gap-1 cursor-pointer"
+                    onClick={handleAddProductRow}
+                    className="px-2.5 py-1 bg-brand-primary text-white font-bold rounded text-[11px] flex items-center gap-1 cursor-pointer hover:bg-blue-700 transition"
                   >
-                    <Plus size={12} /> Add Line Item
+                    <Plus size={12} /> Add Product
                   </button>
                 </div>
 
-                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                  {formData.items.map((item, idx) => (
-                    <div key={idx} className="p-2 border rounded bg-brand-bg-secondary/20 grid grid-cols-1 sm:grid-cols-5 gap-2 items-center text-[11px]">
-                      <div className="sm:col-span-2">
-                        <label className="block font-bold text-brand-text-secondary">Product ID</label>
-                        <input
-                          type="text"
-                          value={item.productId}
-                          onChange={(e) => handleLineItemChange(idx, 'productId', e.target.value)}
-                          className="w-full p-1 border rounded font-mono text-[10px]"
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-bold text-brand-text-secondary">Base Price</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={item.basePrice}
-                          onChange={(e) => handleLineItemChange(idx, 'basePrice', parseFloat(e.target.value) || 0)}
-                          className="w-full p-1 border rounded font-mono"
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-bold text-brand-text-secondary">MSRP</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={item.msrp || item.basePrice}
-                          onChange={(e) => handleLineItemChange(idx, 'msrp', parseFloat(e.target.value) || 0)}
-                          className="w-full p-1 border rounded font-mono"
-                        />
-                      </div>
-                      <div className="flex items-end gap-1">
-                        <div className="flex-1">
-                          <label className="block font-bold text-brand-text-secondary">Min Price</label>
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={item.minSellingPrice || item.basePrice}
-                            onChange={(e) => handleLineItemChange(idx, 'minSellingPrice', parseFloat(e.target.value) || 0)}
-                            className="w-full p-1 border rounded font-mono"
-                          />
+                {formData.items.length === 0 ? (
+                  <div className="p-4 border border-dashed rounded text-center text-gray-500 bg-gray-50">
+                    No products added. Click "+ Add Product" to add items to this price list.
+                  </div>
+                ) : (
+                  <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
+                    {formData.items.map((item, idx) => {
+                      const filteredProds = availableProducts.filter(p => {
+                        if (!item.searchInput) return true;
+                        const q = item.searchInput.toLowerCase();
+                        return (
+                          (p.code && p.code.toLowerCase().includes(q)) ||
+                          (p.name && p.name.toLowerCase().includes(q)) ||
+                          (p.sku && p.sku.toLowerCase().includes(q))
+                        );
+                      });
+
+                      const errBasePrice = formValidationErrors[`item_${idx}_basePrice`];
+                      const errMrp = formValidationErrors[`item_${idx}_mrp`];
+                      const errMinSelling = formValidationErrors[`item_${idx}_minSelling`];
+
+                      return (
+                        <div key={idx} className="p-3 border rounded-lg bg-brand-bg-secondary/20 grid grid-cols-1 sm:grid-cols-12 gap-2 items-start text-[11px]">
+                          
+                          {/* PRODUCT AUTOCOMPLETE SEARCH */}
+                          <div className="sm:col-span-4 relative">
+                            <label className="block font-bold text-brand-text-secondary mb-0.5">Search Product</label>
+                            <input
+                              type="text"
+                              value={item.searchInput || ''}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                handleProductRowChange(idx, 'searchInput', val);
+                                handleProductRowChange(idx, 'isSearching', true);
+                              }}
+                              onFocus={() => handleProductRowChange(idx, 'isSearching', true)}
+                              placeholder="Type Code, Name, SKU..."
+                              className="w-full p-1.5 border rounded border-brand-border bg-white font-medium text-xs"
+                            />
+
+                            {/* AUTOCOMPLETE DROPDOWN */}
+                            {item.isSearching && (
+                              <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white border border-brand-border rounded-md shadow-lg max-h-40 overflow-y-auto text-[11px]">
+                                {filteredProds.length === 0 ? (
+                                  <div className="p-2 text-gray-400 italic">No matching products</div>
+                                ) : (
+                                  filteredProds.map(p => (
+                                    <div
+                                      key={p.id}
+                                      onClick={() => handleSelectProductForLine(idx, p)}
+                                      className="p-2 hover:bg-brand-primary/10 cursor-pointer border-b border-gray-100 last:border-none"
+                                    >
+                                      <div className="font-bold text-brand-primary">{p.code} - {p.name}</div>
+                                      <div className="text-[10px] text-gray-500">SKU: {p.sku || p.code} | UOM: {p.baseUom || p.uom || 'Pcs'}</div>
+                                    </div>
+                                  ))
+                                )}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* UOM READ ONLY */}
+                          <div className="sm:col-span-1">
+                            <label className="block font-bold text-brand-text-secondary mb-0.5">UOM</label>
+                            <input
+                              type="text"
+                              readOnly
+                              value={item.uom || 'Pcs'}
+                              className="w-full p-1.5 border rounded bg-gray-100 font-semibold text-center text-brand-text-secondary"
+                            />
+                          </div>
+
+                          {/* BASE PRICE */}
+                          <div className="sm:col-span-2">
+                            <label className="block font-bold text-brand-text-secondary mb-0.5">Base Price (₹)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={item.basePrice}
+                              onChange={(e) => handleProductRowChange(idx, 'basePrice', parseFloat(e.target.value) || 0)}
+                              className={`w-full p-1.5 border rounded font-mono font-bold ${errBasePrice ? 'border-red-500 bg-red-50' : 'border-brand-border bg-white'}`}
+                            />
+                            {errBasePrice && <p className="text-[9px] text-red-500 mt-0.5">{errBasePrice}</p>}
+                          </div>
+
+                          {/* MRP */}
+                          <div className="sm:col-span-2">
+                            <label className="block font-bold text-brand-text-secondary mb-0.5">MRP (₹)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={item.msrp ?? item.basePrice}
+                              onChange={(e) => handleProductRowChange(idx, 'msrp', parseFloat(e.target.value) || 0)}
+                              className={`w-full p-1.5 border rounded font-mono font-bold text-emerald-700 ${errMrp ? 'border-red-500 bg-red-50' : 'border-brand-border bg-white'}`}
+                            />
+                            {errMrp && <p className="text-[9px] text-red-500 mt-0.5">{errMrp}</p>}
+                          </div>
+
+                          {/* MINIMUM ALLOWED PRICE */}
+                          <div className="sm:col-span-2">
+                            <label className="block font-bold text-brand-text-secondary mb-0.5">Min Allowed (₹)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={item.minSellingPrice ?? item.basePrice}
+                              onChange={(e) => handleProductRowChange(idx, 'minSellingPrice', parseFloat(e.target.value) || 0)}
+                              className={`w-full p-1.5 border rounded font-mono font-bold text-amber-700 ${errMinSelling ? 'border-red-500 bg-red-50' : 'border-brand-border bg-white'}`}
+                            />
+                            {errMinSelling && <p className="text-[9px] text-red-500 mt-0.5">{errMinSelling}</p>}
+                          </div>
+
+                          {/* REMOVE BUTTON */}
+                          <div className="sm:col-span-1 pt-4 text-right">
+                            {formData.items.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveProductRow(idx)}
+                                className="p-1.5 text-red-600 hover:bg-red-50 rounded cursor-pointer"
+                                title="Remove Product"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            )}
+                          </div>
                         </div>
-                        {formData.items.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveLineItem(idx)}
-                            className="p-1.5 text-red-600 hover:bg-red-50 rounded cursor-pointer"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
+              {/* MODAL FOOTER */}
               <div className="flex justify-end gap-2 pt-3 border-t">
                 <button
                   type="button"
@@ -1027,7 +1337,7 @@ export default function PricingModule({ onTriggerToast }: PricingModuleProps) {
                   className="px-4 py-2 bg-brand-primary text-white text-xs font-semibold rounded hover:bg-blue-700 cursor-pointer shadow-sm disabled:opacity-50 flex items-center gap-1"
                 >
                   {isSubmitting && <Loader2 size={14} className="animate-spin" />}
-                  {editingPriceList ? 'Update Tariff' : 'Create Tariff'}
+                  {editingPriceList ? 'Update Price List' : 'Create Price List'}
                 </button>
               </div>
             </form>
@@ -1038,15 +1348,15 @@ export default function PricingModule({ onTriggerToast }: PricingModuleProps) {
       {/* DELETE CONFIRMATION MODAL */}
       {isDeletingId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-lg border border-brand-border max-w-sm w-full p-6 space-y-4 shadow-xl">
-            <div className="flex items-center gap-3 text-red-600">
-              <AlertCircle size={24} />
-              <h3 className="text-base font-bold text-brand-text-primary">Delete Price List</h3>
+          <div className="bg-white rounded-lg border border-brand-border max-w-sm w-full p-5 space-y-4 shadow-xl">
+            <div className="flex items-center gap-2 text-red-600 font-bold text-sm">
+              <AlertCircle size={18} />
+              <span>Confirm Delete</span>
             </div>
             <p className="text-xs text-brand-text-secondary">
-              Are you sure you want to soft-delete this price list? This action will mark the tariff and its line items as deleted.
+              Are you sure you want to soft-delete this price list? This action will mark the price list and its product lines as deleted.
             </p>
-            <div className="flex justify-end gap-2 pt-2 border-t">
+            <div className="flex justify-end gap-2 pt-2">
               <button
                 onClick={() => setIsDeletingId(null)}
                 className="px-3 py-1.5 border border-brand-border text-brand-text-primary text-xs font-semibold rounded hover:bg-brand-bg-secondary cursor-pointer"
@@ -1055,9 +1365,9 @@ export default function PricingModule({ onTriggerToast }: PricingModuleProps) {
               </button>
               <button
                 onClick={() => handleDelete(isDeletingId)}
-                className="px-3 py-1.5 bg-red-600 text-white text-xs font-semibold rounded hover:bg-red-700 cursor-pointer shadow-sm"
+                className="px-3 py-1.5 bg-red-600 text-white text-xs font-semibold rounded hover:bg-red-700 cursor-pointer"
               >
-                Confirm Delete
+                Delete Price List
               </button>
             </div>
           </div>
